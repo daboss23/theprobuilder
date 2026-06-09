@@ -6,6 +6,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
 
     const saved = await saveCreativeOutput({
+      builder_id: body.builderId ?? null,
       campaign_angle: body.campaignAngle,
       campaign_goal: body.campaignGoal,
       hooks: body.copy.hooks,

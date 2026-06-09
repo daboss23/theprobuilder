@@ -1,4 +1,5 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
+import type { Builder } from '@/types'
 
 let anonClient: SupabaseClient | null = null
 let adminClient: SupabaseClient | null = null
@@ -9,26 +10,93 @@ function requireUrl(): string {
   return url
 }
 
-// Anon client — read operations. Lazily constructed on first use.
+// Accept either the classic anon key or the newer publishable key name.
+function anonKey(): string {
+  return (
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ??
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ??
+    ''
+  )
+}
+
+// Accept either the classic service_role key or the newer secret key name.
+function serviceKey(): string | undefined {
+  return process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.SUPABASE_SECRET_KEY
+}
+
+// Anon/publishable client. Lazily constructed on first use.
 export function getSupabase(): SupabaseClient {
   if (!anonClient) {
-    anonClient = createClient(requireUrl(), process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? '')
+    anonClient = createClient(requireUrl(), anonKey())
   }
   return anonClient
 }
 
-// Service-role client — write operations only (server side).
+// Service-role client - privileged, server side only. Lazily constructed.
 export function getSupabaseAdmin(): SupabaseClient {
   if (!adminClient) {
-    if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    const key = serviceKey()
+    if (!key) {
       throw new Error('SUPABASE_SERVICE_ROLE_KEY is not configured')
     }
-    adminClient = createClient(requireUrl(), process.env.SUPABASE_SERVICE_ROLE_KEY)
+    adminClient = createClient(requireUrl(), key)
   }
   return adminClient
 }
 
+/* -------------------------------------------------------------------------- */
+/* Builders (tenants)                                                          */
+/* -------------------------------------------------------------------------- */
+
+export interface BuilderInsert {
+  name: string
+  website?: string | null
+  region?: string | null
+  brand_voice?: string | null
+  serves?: string | null
+  offer?: string | null
+  proof_points?: string[] | null
+  visual_style?: string | null
+}
+
+export async function createBuilder(input: BuilderInsert): Promise<Builder> {
+  const { data, error } = await getSupabaseAdmin()
+    .from('builders')
+    .insert([input])
+    .select()
+    .single()
+
+  if (error) throw error
+  return data as Builder
+}
+
+export async function listBuilders(): Promise<Builder[]> {
+  const { data, error } = await getSupabaseAdmin()
+    .from('builders')
+    .select('*')
+    .order('created_at', { ascending: false })
+
+  if (error) throw error
+  return (data ?? []) as Builder[]
+}
+
+export async function getBuilder(id: string): Promise<Builder> {
+  const { data, error } = await getSupabaseAdmin()
+    .from('builders')
+    .select('*')
+    .eq('id', id)
+    .single()
+
+  if (error) throw error
+  return data as Builder
+}
+
+/* -------------------------------------------------------------------------- */
+/* Creative outputs                                                            */
+/* -------------------------------------------------------------------------- */
+
 export interface CreativeOutputInsert {
+  builder_id: string | null
   campaign_angle: string
   campaign_goal: string
   hooks: string[]
@@ -55,7 +123,7 @@ export async function saveCreativeOutput(output: CreativeOutputInsert) {
 }
 
 export async function getRecentOutputs(limit = 10) {
-  const { data, error } = await getSupabase()
+  const { data, error } = await getSupabaseAdmin()
     .from('creative_outputs')
     .select('*')
     .order('created_at', { ascending: false })

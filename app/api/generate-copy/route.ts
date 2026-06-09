@@ -3,6 +3,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getBrandMemory } from '@/lib/brand-memory'
 import { getSkills } from '@/lib/skills'
 import { parseModelJson } from '@/lib/parse'
+import { getBuilder } from '@/lib/supabase'
+import { buildBrandContext } from '@/lib/brand-context'
 import type { CopyOutput } from '@/types'
 
 export const runtime = 'nodejs'
@@ -18,8 +20,24 @@ export async function POST(request: NextRequest) {
 
     const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
-    const { brief } = await request.json()
-    const brandMemory = getBrandMemory()
+    const { brief, builderId } = await request.json()
+
+    // Use the selected builder's profile, or fall back to the static brand file.
+    let brandMemory = ''
+    let brandName = 'Summit Build Co'
+    if (builderId) {
+      try {
+        const builder = await getBuilder(builderId)
+        brandMemory = buildBrandContext(builder)
+        brandName = builder.name
+      } catch (e) {
+        console.error('Builder load failed, using static brand memory:', e)
+        brandMemory = getBrandMemory()
+      }
+    } else {
+      brandMemory = getBrandMemory()
+    }
+
     const skills = getSkills(['meta-frameworks', 'hooks-library'])
 
     const systemPrompt = `${brandMemory}
@@ -31,7 +49,7 @@ ${skills}
 
 ---
 
-You are the AI Creative System for Summit Build Co. You have just read your
+You are the AI Creative System for ${brandName}. You have just read your
 brand memory and creative frameworks above.
 
 Your task is to generate Meta ad copy for the campaign brief you receive.
@@ -47,16 +65,16 @@ Output this exact JSON structure:
   "finalHook": "the strongest hook",
   "finalBody": "the strongest body copy",
   "finalCta": "the strongest CTA",
-  "imagePrompt": "A detailed image-generation prompt that matches this campaign angle and follows the Summit Build Co visual style guide from your brand memory"
+  "imagePrompt": "A detailed image-generation prompt that matches this campaign angle and follows the ${brandName} visual style guide from your brand memory"
 }`
 
-    const userMessage = `Generate Meta ad copy for Summit Build Co with this campaign brief:
+    const userMessage = `Generate Meta ad copy for ${brandName} with this campaign brief:
 
 Campaign Angle: ${brief.angle}
 Campaign Goal: ${brief.goal}
 
 Apply the brand voice, hook frameworks and creative guidelines from your brand
-memory. Make every line specific to Summit Build Co — it should be impossible
+memory. Make every line specific to ${brandName} - it should be impossible
 to swap the brand name out and use this for any other builder.`
 
     const message = await anthropic.messages.create({

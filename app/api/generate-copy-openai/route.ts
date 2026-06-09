@@ -3,6 +3,8 @@ import { getOpenAI } from '@/lib/openai'
 import { getBrandMemory } from '@/lib/brand-memory'
 import { getSkills } from '@/lib/skills'
 import { parseModelJson } from '@/lib/parse'
+import { getBuilder } from '@/lib/supabase'
+import { buildBrandContext } from '@/lib/brand-context'
 import type { CopyOutput } from '@/types'
 
 export const runtime = 'nodejs'
@@ -15,8 +17,23 @@ export async function POST(request: NextRequest) {
   try {
     const openai = getOpenAI()
 
-    const { brief } = await request.json()
-    const brandMemory = getBrandMemory()
+    const { brief, builderId } = await request.json()
+
+    let brandMemory = ''
+    let brandName = 'Summit Build Co'
+    if (builderId) {
+      try {
+        const builder = await getBuilder(builderId)
+        brandMemory = buildBrandContext(builder)
+        brandName = builder.name
+      } catch (e) {
+        console.error('Builder load failed, using static brand memory:', e)
+        brandMemory = getBrandMemory()
+      }
+    } else {
+      brandMemory = getBrandMemory()
+    }
+
     const skills = getSkills(['meta-frameworks', 'hooks-library'])
 
     const systemPrompt = `${brandMemory}
@@ -28,7 +45,7 @@ ${skills}
 
 ---
 
-You are the AI Creative System for Summit Build Co.
+You are the AI Creative System for ${brandName}.
 Respond ONLY with valid JSON. No preamble, no markdown fences. Pure JSON.
 
 Output this exact structure:
@@ -39,7 +56,7 @@ Output this exact structure:
   "finalHook": "strongest hook",
   "finalBody": "strongest body",
   "finalCta": "strongest CTA",
-  "imagePrompt": "image-generation prompt matching the campaign angle and Summit Build Co visual style"
+  "imagePrompt": "image-generation prompt matching the campaign angle and ${brandName} visual style"
 }`
 
     const completion = await openai.chat.completions.create({
@@ -49,11 +66,11 @@ Output this exact structure:
         { role: 'system', content: systemPrompt },
         {
           role: 'user',
-          content: `Generate Meta ad copy for Summit Build Co.
+          content: `Generate Meta ad copy for ${brandName}.
 Campaign Angle: ${brief.angle}
 Campaign Goal: ${brief.goal}
 
-Make every line specific to Summit Build Co — never generic.`,
+Make every line specific to ${brandName} - never generic.`,
         },
       ],
     })

@@ -38,9 +38,25 @@ export interface GenerateImageResponse {
   error?: string
 }
 
+// A building company onboarded into the platform (multi-tenant).
+export interface Builder {
+  id: string
+  created_at?: string
+  name: string
+  website: string | null
+  region: string | null
+  brand_voice: string | null
+  serves: string | null
+  offer: string | null
+  proof_points: string[] | null
+  visual_style: string | null
+  status: string
+}
+
 export interface CreativeRecord {
   id: string
   created_at: string
+  builder_id: string | null
   campaign_angle: string
   campaign_goal: string
   hooks: string[]
