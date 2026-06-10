@@ -1,31 +1,19 @@
 'use client'
 
-import { useState } from 'react'
-import { Atom, Zap, Check, Loader2, Copy as CopyIcon } from 'lucide-react'
+import { useRef, useState } from 'react'
+import { Atom, Zap, Check, Loader2, Copy as CopyIcon, Radar } from 'lucide-react'
 import { Panel, PanelHeader, Pill } from '@/components/reactor/ui'
 import { reactorInputs, reactorOutputTypes, winningAngles } from '@/lib/reactor-data'
 
 interface Concept {
   type: string
   text: string
+  basis?: string
 }
 
-// Deterministic demo synthesis from the intelligence layer.
-function synthesize(angle: string): Concept[] {
-  const a = angle.toLowerCase()
-  return [
-    { type: 'Hook', text: `Most builders don't have a ${a} problem. They have a ${a} leak hiding in plain sight.` },
-    { type: 'Hook', text: `The builders winning on ${angle} aren't working harder. They're working different.` },
-    { type: 'Headline', text: `From struggling to systemized — how ${angle} became TPB's unfair advantage.` },
-    { type: 'Primary Text', text: `You didn't get into building to babysit jobs. This is the ${angle} system that gave 500+ builders their margin — and their weekends — back.` },
-    { type: 'VSL Opener', text: `In the next few minutes I'm going to show you the exact ${angle} mechanism most builders never see until it's too late.` },
-    { type: 'Static Concept', text: `Dark background, one bold profit figure, member name underneath. Single cyan accent. Angle: ${angle}.` },
-    { type: 'Video Concept', text: `Founder direct-to-camera on-site. Pattern interrupt in 1.5s, contrarian ${a} belief, member proof, soft CTA.` },
-    { type: 'Founder Concept', text: `Handheld walk-through of a finished site while founder breaks down the ${angle} turning point.` },
-    { type: 'Testimonial Concept', text: `Member states their old hours/margin, the ${a} turning point, then the after. B-roll of their jobs.` },
-    { type: 'Event Concept', text: `High-energy room montage tied to a single ${angle} insight and community proof.` },
-    { type: 'Campaign Concept', text: `The ${angle} Reactor: founder video + static proof ad + member testimonial, sequenced cold → warm → apply.` },
-  ]
+interface TelemetryLine {
+  text: string
+  kind: 'step' | 'retrieval'
 }
 
 export function Workbench() {
@@ -34,18 +22,66 @@ export function Workbench() {
   const [outputs, setOutputs] = useState<string[]>(reactorOutputTypes)
   const [phase, setPhase] = useState<'idle' | 'firing' | 'done'>('idle')
   const [concepts, setConcepts] = useState<Concept[]>([])
+  const [telemetry, setTelemetry] = useState<TelemetryLine[]>([])
+  const [error, setError] = useState<string | null>(null)
   const [copied, setCopied] = useState<string | null>(null)
+  const feedRef = useRef<HTMLDivElement>(null)
 
   const toggle = (arr: string[], set: (v: string[]) => void, val: string) =>
     set(arr.includes(val) ? arr.filter((v) => v !== val) : [...arr, val])
 
-  const fire = () => {
+  const pushTelemetry = (line: TelemetryLine) => {
+    setTelemetry((prev) => [...prev, line])
+    requestAnimationFrame(() => feedRef.current?.scrollTo({ top: 1e9, behavior: 'smooth' }))
+  }
+
+  const fire = async () => {
     setPhase('firing')
     setConcepts([])
-    setTimeout(() => {
-      setConcepts(synthesize(angle).filter((c) => outputs.includes(c.type)))
+    setTelemetry([])
+    setError(null)
+
+    try {
+      const res = await fetch('/api/campaign-reactor', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ angle, inputs: activeInputs, outputs }),
+      })
+      if (!res.body) throw new Error('No response stream')
+
+      const reader = res.body.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+
+      // Parse the SSE stream line by line.
+      for (;;) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buffer += decoder.decode(value, { stream: true })
+        const parts = buffer.split('\n\n')
+        buffer = parts.pop() ?? ''
+        for (const part of parts) {
+          const line = part.replace(/^data: /, '').trim()
+          if (!line) continue
+          let ev: { type: string; [k: string]: unknown }
+          try {
+            ev = JSON.parse(line)
+          } catch {
+            continue
+          }
+          if (ev.type === 'step') pushTelemetry({ text: ev.text as string, kind: 'step' })
+          else if (ev.type === 'retrieval')
+            pushTelemetry({ text: `${ev.system} · ${ev.title}`, kind: 'retrieval' })
+          else if (ev.type === 'concept') setConcepts((p) => [...p, ev.concept as Concept])
+          else if (ev.type === 'error') setError(ev.message as string)
+          else if (ev.type === 'done') setPhase('done')
+        }
+      }
       setPhase('done')
-    }, 1400)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Reactor failed')
+      setPhase('done')
+    }
   }
 
   const copy = (text: string) => {
@@ -159,22 +195,46 @@ export function Workbench() {
           <div className="grid place-items-center px-6 py-24 text-center">
             <Atom size={40} className="mb-4 text-white/15" />
             <p className="max-w-sm text-sm text-white/40">
-              Select your intelligence inputs and angle, then fire the reactor to synthesize
-              campaign concepts from everything that has already worked.
+              Select your intelligence inputs and angle, then fire the reactor. The agent walks
+              your frameworks, retrieves what has already worked, and drafts grounded concepts.
             </p>
           </div>
         )}
 
-        {phase === 'firing' && (
-          <div className="space-y-3 p-5">
-            {[...Array(5)].map((_, i) => (
-              <div key={i} className="h-16 animate-pulse rounded-xl bg-white/[0.03]" />
-            ))}
-          </div>
-        )}
+        {phase !== 'idle' && (
+          <div className="space-y-4 p-5">
+            {/* Live telemetry feed */}
+            {(telemetry.length > 0 || phase === 'firing') && (
+              <div className="rounded-xl border border-border bg-background/40 p-3">
+                <div className="mb-2 flex items-center gap-2 text-[10px] font-medium uppercase tracking-widest text-white/35">
+                  <Radar size={12} className={phase === 'firing' ? 'animate-spin text-glow' : ''} />
+                  Reactor Telemetry
+                </div>
+                <div ref={feedRef} className="max-h-40 space-y-1 overflow-y-auto font-mono text-[11px]">
+                  {telemetry.map((t, i) => (
+                    <div
+                      key={i}
+                      className={`flex gap-2 ${t.kind === 'retrieval' ? 'text-cyan/80' : 'text-white/55'}`}
+                    >
+                      <span className="text-white/25">{t.kind === 'retrieval' ? '└▸' : '›'}</span>
+                      <span>{t.text}</span>
+                    </div>
+                  ))}
+                  {phase === 'firing' && (
+                    <div className="flex items-center gap-2 text-glow">
+                      <Loader2 size={11} className="animate-spin" /> working…
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
 
-        {phase === 'done' && (
-          <div className="space-y-3 p-5">
+            {error && (
+              <div className="rounded-lg border border-danger/30 bg-danger/[0.06] p-3 text-sm text-danger">
+                {error}
+              </div>
+            )}
+
             {concepts.map((c, i) => (
               <div
                 key={i}
@@ -193,6 +253,11 @@ export function Workbench() {
                   </button>
                 </div>
                 <p className="text-sm text-white/80">{c.text}</p>
+                {c.basis && (
+                  <p className="mt-2 border-t border-border pt-2 text-[11px] text-white/40">
+                    <span className="text-glow/70">Grounded in:</span> {c.basis}
+                  </p>
+                )}
               </div>
             ))}
           </div>
