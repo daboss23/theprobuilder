@@ -141,7 +141,11 @@ async function runDemo(
     { type: 'Campaign Concept', text: `The ${a} Reactor: founder video + static proof ad + member testimonial, sequenced cold → warm → apply.`, basis: 'Strategic Recommendation', learningCheck: 'Stacks the three highest-win formats', score: 9 },
   ]
   sse(controller, { type: 'step', text: 'Scoring concepts against the Creative Learnings rubric…' })
-  for (const c of pool.filter((c) => outputs.includes(c.type) && (c.score ?? 0) >= 7)) {
+  // Match the plural chip labels (e.g. "Static Concepts") against singular
+  // concept types (e.g. "Static Concept").
+  const norm = (s: string) => s.toLowerCase().replace(/s$/, '').trim()
+  const wanted = outputs.map(norm)
+  for (const c of pool.filter((c) => wanted.includes(norm(c.type)) && (c.score ?? 0) >= 7)) {
     sse(controller, { type: 'concept', concept: c })
   }
   sse(controller, { type: 'done' })

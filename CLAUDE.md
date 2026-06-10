@@ -1,13 +1,23 @@
-# CLAUDE.md — Summit Build Co AI Creative System
+# CLAUDE.md — TPB Creative Reactor
 ## Claude Code Project Rules — Read This First Every Session
 
 ---
 
 ## PROJECT OVERVIEW
 
-This is a Next.js MVP demo of a brand-trained AI creative system for residential construction marketing. It generates Meta ad copy via the Claude API and image creatives via the Higgsfield API, stores outputs in Supabase, and deploys to Vercel.
+This is a Next.js app: **TPB Creative Reactor** — a premium AI-powered Creative
+Intelligence Command Center for The Professional Builder. It turns 20+ years of
+winning creative assets, member wins, frameworks, SOPs, research, and
+performance data into the next winning campaign, answering one question:
+"What should TPB create next, based on everything that has already worked?"
 
-This is a demo build for a job interview. Quality, polish, and reliability matter above all else.
+It is built around nine intelligence systems (Reactor Dashboard, Knowledge
+Vault, Research, Creative, Copy, Pattern Intelligence, Campaign Reactor,
+Creative Learnings, Recommendations). The Campaign Reactor runs an **agentic
+orchestrator** (a Claude tool-use loop) over a RAG knowledge layer. See
+`SYSTEM_DESIGN.md` for the full architecture.
+
+Tagline: **Engineered For Performance.**
 
 ---
 
@@ -32,8 +42,10 @@ This is a demo build for a job interview. Quality, polish, and reliability matte
 | Styling | Tailwind CSS |
 | Components | shadcn/ui exclusively |
 | Database | Supabase |
-| Copy AI | Anthropic Claude API — model: `claude-sonnet-4-6` |
-| Image AI | Higgsfield API |
+| Copy AI | Anthropic Claude API — orchestrator `claude-opus-4-8`, bulk `claude-sonnet-4-6` |
+| Embeddings | Voyage AI `voyage-3` (RAG retrieval) |
+| Vector store | Supabase `pgvector` (`knowledge_chunks`) |
+| Image AI | Google Gemini (Nano Banana 2 — `gemini-3.1-flash-image-preview`) + Higgsfield |
 | Deployment | Vercel |
 
 ---
@@ -76,25 +88,36 @@ summit-build-creative/
 These live in `.env.local` — never commit this file.
 
 ```
-ANTHROPIC_API_KEY
+ANTHROPIC_API_KEY            # Campaign Reactor agent + copy generation
+VOYAGE_API_KEY               # Embeddings for the RAG knowledge layer
+OPENAI_API_KEY               # Comparison copy / image
 HIGGSFIELD_API_KEY
 NEXT_PUBLIC_SUPABASE_URL
 NEXT_PUBLIC_SUPABASE_ANON_KEY
 SUPABASE_SERVICE_ROLE_KEY
 ```
 
-Always check these exist before building any API route. If missing, throw a clear error message — do not silently fail.
+Always check these exist before building any API route. For the Reactor agent
+and retrieval specifically, **do not throw on missing keys** — fall back to the
+curated demo intelligence / demo agent mode so the platform always works end to
+end. For destructive writes (Supabase inserts), surface errors clearly.
 
 ---
 
 ## API CONVENTIONS
 
 ### Claude API calls
-- Model: `claude-sonnet-4-6` always
-- Max tokens: 2000 for copy generation
+- **Orchestrator / strategy (Campaign Reactor agent): `claude-opus-4-8`** — multi-step reasoning over retrieved evidence. Single constant `ORCHESTRATOR_MODEL` in `app/api/campaign-reactor/route.ts`.
+- **High-volume / single-shot copy: `claude-sonnet-4-6`** — cheaper and faster for bulk drafting and the legacy generate-copy route.
+- Max tokens: 2000–4000 for copy/concept generation
 - Always wrap in try/catch
-- Always strip markdown fences before JSON.parse
-- System prompt must always inject brand memory + skills content
+- Always strip markdown fences before JSON.parse (use `lib/parse.ts`)
+- System prompt must always inject brand memory + skills/frameworks content
+
+### Embeddings (RAG knowledge layer)
+- Provider: **Voyage AI**, model `voyage-3` (1024-dim) — Anthropic has no embeddings model. See `lib/embeddings.ts`.
+- Stored in Supabase `pgvector` (`knowledge_chunks`); retrieved via `match_knowledge()`. See `lib/knowledge.ts` and `supabase/schema.reactor.sql`.
+- All retrieval degrades gracefully to a curated demo corpus when keys/DB are absent.
 
 ### Higgsfield API calls
 - Always check response status before parsing
@@ -179,22 +202,53 @@ At the start of every session:
 
 ---
 
+## TESTING THE AGENT
+
+You can't "see" the agent as a person — you see it work through the **Reactor
+Telemetry** feed on the Campaign Reactor page. How to verify it's there:
+
+**A. In the UI (easiest)**
+1. Run `npm run dev`, open `/campaign-reactor`.
+2. Pick a Campaign Angle, choose output types, hit **Fire Reactor**.
+3. Watch the **Reactor Telemetry** panel stream the agent's steps:
+   "Searching pattern: …", "└▸ pattern · Profit Pattern", "Loading Creative
+   Learnings rubric…", "Scoring concepts…". Each concept shows a rubric score
+   and a "Grounded in" basis.
+   - **No `ANTHROPIC_API_KEY`** → demo mode: the feed shows the same step-by-step
+     flow using the curated demo intelligence. Proves the wiring/UX.
+   - **With `ANTHROPIC_API_KEY`** (+ optional `VOYAGE_API_KEY` + Supabase) → the
+     feed shows the agent's *real* tool calls and retrievals.
+
+**B. Hit the endpoint directly (proves the agent loop)**
+```bash
+curl -N -X POST http://localhost:3000/api/campaign-reactor \
+  -H 'Content-Type: application/json' \
+  -d '{"angle":"Profit","outputs":["Hook","Founder Concept"]}'
+```
+You'll see the SSE stream of `step` / `retrieval` / `concept` / `done` events —
+that *is* the agent thinking out loud.
+
+**C. Prove the learning loop**
+- Mark a concept a **winner** in the UI (or POST `/api/campaign-reactor/outcome`).
+  With Supabase + Voyage configured, it's re-ingested as a new `pattern` chunk and
+  the next run can retrieve it.
+
+To run the *real* agent end to end: set `ANTHROPIC_API_KEY` (agent),
+`VOYAGE_API_KEY` (embeddings), and the Supabase keys (vector store), then run
+`supabase/schema.reactor.sql` in Supabase.
+
+---
+
 ## CURRENT BUILD STATUS
 
-Track progress here as the build progresses:
-
-- [ ] Project initialised (Next.js + Tailwind + shadcn)
-- [ ] TypeScript types created
-- [ ] Supabase client set up
-- [ ] Brand memory reader working
-- [ ] Skills reader working
-- [ ] Generate copy API route working
-- [ ] Generate image API route working
-- [ ] Save output API route working
-- [ ] BriefForm component complete
-- [ ] CopyOutput component complete
-- [ ] ImageOutput component complete
-- [ ] AdPreview component complete
-- [ ] Main page wired up end to end
-- [ ] Deployed to Vercel
-- [ ] Demo tested end to end
+- [x] Platform redesigned as TPB Creative Reactor (9 intelligence systems)
+- [x] Dark glass command-center UI + logo + sidebar/topbar shell
+- [x] RAG knowledge layer: pgvector schema + Voyage embeddings + ingest route
+- [x] Agentic Campaign Reactor (Claude Opus 4.8 tool-use loop, streamed)
+- [x] Learnings-as-rubric self-critique
+- [x] Outcome logging + winner re-ingest (learning loop)
+- [ ] Wire Knowledge Vault uploads → `/api/vault/ingest`
+- [ ] Dashboards reading live `knowledge_chunks` counts
+- [ ] Specialist sub-agents / Managed Agents coordinator
+- [ ] Performance ingest (Meta API) → `campaign_outcomes`
+- [ ] Deployed + tested end to end with real keys

@@ -1,7 +1,7 @@
 'use client'
 
 import { useRef, useState } from 'react'
-import { Atom, Zap, Check, Loader2, Copy as CopyIcon, Radar, Trophy } from 'lucide-react'
+import { Atom, Zap, Check, Loader2, Copy as CopyIcon, Radar, Trophy, ImageIcon } from 'lucide-react'
 import { Panel, PanelHeader, Pill } from '@/components/reactor/ui'
 import { reactorInputs, reactorOutputTypes, winningAngles } from '@/lib/reactor-data'
 
@@ -28,6 +28,9 @@ export function Workbench() {
   const [error, setError] = useState<string | null>(null)
   const [copied, setCopied] = useState<string | null>(null)
   const [logged, setLogged] = useState<Set<string>>(new Set())
+  const [creatives, setCreatives] = useState<
+    Record<string, { status: 'working' | 'done' | 'error'; url?: string; message?: string }>
+  >({})
   const feedRef = useRef<HTMLDivElement>(null)
 
   const toggle = (arr: string[], set: (v: string[]) => void, val: string) =>
@@ -91,6 +94,37 @@ export function Workbench() {
     navigator.clipboard?.writeText(text)
     setCopied(text)
     setTimeout(() => setCopied(null), 1500)
+  }
+
+  // Generate a Meta image creative from a concept (Nano Banana 2 / Gemini).
+  const generateCreative = async (c: Concept) => {
+    setCreatives((p) => ({ ...p, [c.text]: { status: 'working' } }))
+    try {
+      const res = await fetch('/api/generate-creative', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          prompt: `Meta ad creative for The Professional Builder. ${c.text} Photographic, on-site builder context, premium, high contrast, leave room for text overlay.`,
+          placement: 'feed',
+        }),
+      }).then((r) => r.json())
+
+      if (res.success && res.imageUrl) {
+        setCreatives((p) => ({ ...p, [c.text]: { status: 'done', url: res.imageUrl } }))
+      } else {
+        setCreatives((p) => ({
+          ...p,
+          [c.text]: {
+            status: 'error',
+            message: res.demo
+              ? 'Add GEMINI_API_KEY to generate live creatives'
+              : res.error || 'Generation failed',
+          },
+        }))
+      }
+    } catch {
+      setCreatives((p) => ({ ...p, [c.text]: { status: 'error', message: 'Generation failed' } }))
+    }
   }
 
   // Log a winner — feeds it back into the knowledge layer as a new pattern.
@@ -266,6 +300,21 @@ export function Workbench() {
                     )}
                   </div>
                   <div className="flex items-center gap-3">
+                    {c.type.includes('Concept') && (
+                      <button
+                        type="button"
+                        onClick={() => generateCreative(c)}
+                        disabled={creatives[c.text]?.status === 'working'}
+                        className="flex items-center gap-1 text-[11px] text-white/40 hover:text-cyan disabled:opacity-60"
+                      >
+                        {creatives[c.text]?.status === 'working' ? (
+                          <Loader2 size={12} className="animate-spin" />
+                        ) : (
+                          <ImageIcon size={12} />
+                        )}
+                        Generate creative
+                      </button>
+                    )}
                     <button
                       type="button"
                       onClick={() => markWinner(c)}
@@ -299,6 +348,28 @@ export function Workbench() {
                       </p>
                     )}
                   </div>
+                )}
+
+                {/* Generated creative */}
+                {creatives[c.text]?.status === 'done' && creatives[c.text].url && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={creatives[c.text].url}
+                    alt={c.type}
+                    className="mt-3 w-full rounded-lg border border-border"
+                  />
+                )}
+                {creatives[c.text]?.status === 'working' && (
+                  <div className="mt-3 grid aspect-square w-full place-items-center rounded-lg border border-border bg-background/40">
+                    <span className="flex items-center gap-2 text-xs text-cyan">
+                      <Loader2 size={14} className="animate-spin" /> Rendering creative…
+                    </span>
+                  </div>
+                )}
+                {creatives[c.text]?.status === 'error' && (
+                  <p className="mt-3 rounded-lg border border-warning/30 bg-warning/[0.06] p-2 text-[11px] text-warning">
+                    {creatives[c.text].message}
+                  </p>
                 )}
               </div>
             ))}
