@@ -104,7 +104,7 @@ export function Workbench() {
     setTimeout(() => setCopied(null), 1500)
   }
 
-  // Generate a Meta image creative from a concept (Nano Banana 2 / Gemini).
+  // Generate a Meta image creative from a concept (OpenAI gpt-image-1).
   const generateCreative = async (c: Concept) => {
     setCreatives((p) => ({ ...p, [c.text]: { status: 'working' } }))
     try {
@@ -125,7 +125,7 @@ export function Workbench() {
           [c.text]: {
             status: 'error',
             message: res.demo
-              ? 'Add GEMINI_API_KEY to generate live creatives'
+              ? 'Add OPENAI_API_KEY to generate live creatives'
               : res.error || 'Generation failed',
           },
         }))
