@@ -45,7 +45,7 @@ Tagline: **Engineered For Performance.**
 | Copy AI | Anthropic Claude API — orchestrator `claude-opus-4-8`, bulk `claude-sonnet-4-6` |
 | Embeddings | Voyage AI `voyage-3` (RAG retrieval) |
 | Vector store | Supabase `pgvector` (`knowledge_chunks`) |
-| Image AI | Higgsfield API |
+| Image AI | Google Gemini (Nano Banana 2 — `gemini-3.1-flash-image-preview`) + Higgsfield |
 | Deployment | Vercel |
 
 ---
