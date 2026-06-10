@@ -15,7 +15,7 @@ interface Concept {
 
 interface TelemetryLine {
   text: string
-  kind: 'step' | 'retrieval'
+  kind: 'step' | 'retrieval' | 'specialist'
 }
 
 export function Workbench() {
@@ -78,6 +78,14 @@ export function Workbench() {
           if (ev.type === 'step') pushTelemetry({ text: ev.text as string, kind: 'step' })
           else if (ev.type === 'retrieval')
             pushTelemetry({ text: `${ev.system} · ${ev.title}`, kind: 'retrieval' })
+          else if (ev.type === 'delegate')
+            pushTelemetry({
+              text:
+                ev.status === 'start'
+                  ? `${ev.specialist} — analyzing…`
+                  : `${ev.specialist} — ${ev.summary}`,
+              kind: 'specialist',
+            })
           else if (ev.type === 'concept') setConcepts((p) => [...p, ev.concept as Concept])
           else if (ev.type === 'error') setError(ev.message as string)
           else if (ev.type === 'done') setPhase('done')
@@ -265,9 +273,17 @@ export function Workbench() {
                   {telemetry.map((t, i) => (
                     <div
                       key={i}
-                      className={`flex gap-2 ${t.kind === 'retrieval' ? 'text-cyan/80' : 'text-white/55'}`}
+                      className={`flex gap-2 ${
+                        t.kind === 'retrieval'
+                          ? 'text-cyan/80'
+                          : t.kind === 'specialist'
+                            ? 'text-warning'
+                            : 'text-white/55'
+                      }`}
                     >
-                      <span className="text-white/25">{t.kind === 'retrieval' ? '└▸' : '›'}</span>
+                      <span className="text-white/25">
+                        {t.kind === 'retrieval' ? '└▸' : t.kind === 'specialist' ? '▣' : '›'}
+                      </span>
                       <span>{t.text}</span>
                     </div>
                   ))}

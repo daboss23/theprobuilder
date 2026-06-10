@@ -4,11 +4,12 @@ import { searchKnowledge, type KnowledgeSystem } from '@/lib/knowledge'
 import { learnings } from '@/lib/reactor-data'
 
 export const runtime = 'nodejs'
-export const maxDuration = 60
+export const maxDuration = 90
 
-// The orchestrator brain. Opus for strategy-grade reasoning over the retrieved
-// knowledge; high-volume copy can move to Sonnet later.
-const ORCHESTRATOR_MODEL = 'claude-opus-4-8'
+// Coordinator brain (strategy + synthesis) and the cheaper specialists it
+// delegates to. Single source of truth for both models.
+const COORDINATOR_MODEL = 'claude-opus-4-8'
+const SPECIALIST_MODEL = 'claude-sonnet-4-6'
 const MAX_TURNS = 8
 
 interface ReactorRequest {
@@ -26,6 +27,32 @@ interface Concept {
   score?: number
 }
 
+/* ----------------------------- Specialists -------------------------------- */
+
+type SpecialistId = 'research' | 'creative' | 'copy'
+
+const SPECIALISTS: Record<
+  SpecialistId,
+  { name: string; systems: KnowledgeSystem[]; focus: string }
+> = {
+  research: {
+    name: 'Research Analyst',
+    systems: ['research', 'transformation'],
+    focus:
+      'market pains, desires, objections, beliefs, and the member transformations that prove change is possible',
+  },
+  creative: {
+    name: 'Creative Analyst',
+    systems: ['creative', 'pattern'],
+    focus: 'winning creative structures, formats, opening patterns, and repeatable winning patterns',
+  },
+  copy: {
+    name: 'Copy Specialist',
+    systems: ['copy'],
+    focus: 'high-performing hooks, headlines, primary text, and offers',
+  },
+}
+
 /* ------------------------------ SSE plumbing ------------------------------ */
 
 function sse(controller: ReadableStreamDefaultController, event: unknown) {
@@ -36,32 +63,32 @@ function sse(controller: ReadableStreamDefaultController, event: unknown) {
 
 const tools: Anthropic.Tool[] = [
   {
-    name: 'search_knowledge',
+    name: 'consult_specialist',
     description:
-      "Search The Professional Builder's knowledge layer (20+ years of winning ads, hooks, frameworks, member transformations, research, and documented learnings). Call this repeatedly to pull the evidence you need before drafting. Optionally scope to one intelligence system.",
+      'Delegate a focused question to a specialist sub-agent who searches their slice of the knowledge layer and reports findings. Consult the research specialist plus at least one of creative/copy before drafting.',
     input_schema: {
       type: 'object',
       properties: {
-        query: { type: 'string', description: 'What to retrieve, in natural language' },
-        system: {
+        specialist: {
           type: 'string',
-          enum: ['research', 'transformation', 'creative', 'copy', 'pattern', 'learning'],
-          description: 'Optional: restrict to one intelligence system',
+          enum: ['research', 'creative', 'copy'],
+          description: 'research = pains/desires/transformations; creative = formats/patterns; copy = hooks/headlines/offers',
         },
+        question: { type: 'string', description: 'The focused question for the specialist' },
       },
-      required: ['query'],
+      required: ['specialist', 'question'],
     },
   },
   {
     name: 'get_learnings',
     description:
-      'Retrieve the documented Creative Learnings — the rubric of what consistently works for TPB. Call this before submitting so you can self-score each concept against proven principles.',
+      'Retrieve the documented Creative Learnings rubric. Call this before submitting so you can self-score each concept against proven principles.',
     input_schema: { type: 'object', properties: {} },
   },
   {
     name: 'submit_concepts',
     description:
-      'Submit the final campaign concepts once you have gathered evidence AND self-scored each concept against the Creative Learnings rubric (call get_learnings first). Each concept must cite its evidence and pass the rubric check.',
+      'Submit the final campaign concepts once specialists have reported AND you have self-scored each concept against the Creative Learnings rubric. Each concept must cite its evidence and pass the rubric.',
     input_schema: {
       type: 'object',
       properties: {
@@ -72,15 +99,9 @@ const tools: Anthropic.Tool[] = [
             properties: {
               type: { type: 'string', description: 'Output type, e.g. Hook, Headline, Founder Concept' },
               text: { type: 'string' },
-              basis: { type: 'string', description: 'Which winning asset / pattern / learning this draws from' },
-              learningCheck: {
-                type: 'string',
-                description: 'How this concept satisfies the Creative Learnings rubric (e.g. "uses a specific profit figure; founder-led")',
-              },
-              score: {
-                type: 'integer',
-                description: 'Self-assessed strength 1-10 against the learnings rubric. Only submit concepts scoring 7+.',
-              },
+              basis: { type: 'string', description: 'Which specialist finding / asset / pattern this draws from' },
+              learningCheck: { type: 'string', description: 'How it satisfies the rubric' },
+              score: { type: 'integer', description: 'Self-assessed 1-10. Only submit 7+.' },
             },
             required: ['type', 'text'],
           },
@@ -91,58 +112,104 @@ const tools: Anthropic.Tool[] = [
   },
 ]
 
-function systemPrompt(outputs: string[]): string {
-  return `You are the Campaign Reactor — the orchestrator of The Professional Builder's Creative Intelligence Command Center.
+function coordinatorPrompt(outputs: string[]): string {
+  return `You are the Campaign Reactor Coordinator — the lead strategist of The Professional Builder's Creative Intelligence Command Center. You direct a team of specialist sub-agents.
 
-Your job: design the next winning campaign based on everything that has already worked for TPB.
+Your team:
+- Research Analyst — market pains, desires, objections, and member transformations.
+- Creative Analyst — winning creative structures, formats, and repeatable patterns.
+- Copy Specialist — high-performing hooks, headlines, and offers.
 
-Process — follow it like an engineer, not a copywriter guessing:
-1. Use search_knowledge to pull the relevant research (pain points, desires, objections), member transformations, winning creatives, top-performing copy, repeatable patterns, and documented learnings for the requested angle. Make several focused searches across systems.
-2. Ground every concept in retrieved evidence. Specific member numbers and named patterns beat vague claims.
-3. Before submitting, call get_learnings and score every concept against that rubric. Revise or drop anything scoring below 7. Record the rubric check and score on each concept.
-4. Call submit_concepts exactly once with concepts ONLY for these requested output types: ${outputs.join(', ')}.
+Process:
+1. Delegate focused questions to your specialists with consult_specialist. Always consult the Research Analyst plus at least one of Creative/Copy. Use their findings as evidence — don't guess.
+2. Call get_learnings and self-score every concept against that rubric. Revise or drop anything below 7.
+3. Call submit_concepts exactly once, with concepts ONLY for these requested output types: ${outputs.join(', ')}. Each concept cites which specialist finding it came from.
 
 Voice: confident, specific, builder-native. Engineered for performance.`
 }
 
-/* --------------------------- Demo fallback flow --------------------------- */
+/* --------------------------- Specialist runner ---------------------------- */
 
-async function runDemo(
+async function runSpecialist(
+  anthropic: Anthropic,
   controller: ReadableStreamDefaultController,
-  body: ReactorRequest,
-) {
-  const outputs = body.outputs ?? ['Hook', 'Headline', 'Campaign Concept']
-  sse(controller, { type: 'step', text: 'Reactor online (demo mode — no ANTHROPIC_API_KEY set)' })
+  id: SpecialistId,
+  question: string,
+  builderId: string | null,
+): Promise<string> {
+  const spec = SPECIALISTS[id]
+  sse(controller, { type: 'delegate', specialist: spec.name, status: 'start' })
 
-  const systems: KnowledgeSystem[] = ['research', 'transformation', 'pattern', 'copy', 'learning']
-  const gathered: string[] = []
-  for (const system of systems) {
-    sse(controller, { type: 'step', text: `Retrieving ${system} intelligence for "${body.angle}"…` })
-    const hits = await searchKnowledge(body.angle, { system, k: 2 })
-    for (const h of hits) {
-      gathered.push(`${h.title}: ${h.content}`)
-      sse(controller, { type: 'retrieval', system, title: h.title })
-    }
+  // Gather scoped evidence across the specialist's systems.
+  const hits = (
+    await Promise.all(
+      spec.systems.map((system) => searchKnowledge(question, { system, k: 4, builderId })),
+    )
+  ).flat()
+  for (const h of hits.slice(0, 5)) {
+    sse(controller, { type: 'retrieval', system: h.system, title: h.title })
   }
 
-  sse(controller, { type: 'step', text: 'Synthesizing concepts from retrieved evidence…' })
+  const evidence = hits.length
+    ? hits.map((h) => `[${h.system}] ${h.title}: ${h.content}`).join('\n\n')
+    : 'No stored knowledge yet — reason from builder-industry first principles.'
+
+  const response = await anthropic.messages.create({
+    model: SPECIALIST_MODEL,
+    max_tokens: 700,
+    system: `You are the ${spec.name} for The Professional Builder. You specialise in ${spec.focus}. Given retrieved evidence, return 3-5 tight, specific bullet findings the strategist can build a campaign on. Cite the asset/pattern names. No preamble.`,
+    messages: [
+      { role: 'user', content: `Question: ${question}\n\nRetrieved evidence:\n${evidence}` },
+    ],
+  })
+
+  const block = response.content.find((b): b is Anthropic.TextBlock => b.type === 'text')
+  const findings = block?.text ?? 'No findings.'
+  const summary = findings.split('\n').find((l) => l.trim())?.replace(/^[-•*\s]+/, '').slice(0, 80) ?? 'findings ready'
+  sse(controller, { type: 'delegate', specialist: spec.name, status: 'done', summary })
+
+  return findings
+}
+
+/* --------------------------- Demo fallback flow --------------------------- */
+
+async function runDemo(controller: ReadableStreamDefaultController, body: ReactorRequest) {
+  const outputs = body.outputs ?? ['Hook', 'Headline', 'Campaign Concept']
+  sse(controller, { type: 'step', text: 'Coordinator online (demo mode — set ANTHROPIC_API_KEY for the live team)' })
+
+  const demoSummaries: Record<SpecialistId, string> = {
+    research: 'Builders fear margin erosion despite record revenue; "profit leak" language resonates',
+    creative: 'Founder videos (71% win) + static proof ads outperform; specific figures beat claims',
+    copy: 'Top hook: "Most builders don\'t have a revenue problem. They have a profit leak."',
+  }
+
+  for (const id of ['research', 'creative', 'copy'] as SpecialistId[]) {
+    const spec = SPECIALISTS[id]
+    sse(controller, { type: 'delegate', specialist: spec.name, status: 'start' })
+    const hits = (
+      await Promise.all(spec.systems.map((s) => searchKnowledge(body.angle, { system: s, k: 2 })))
+    ).flat()
+    for (const h of hits.slice(0, 3)) sse(controller, { type: 'retrieval', system: h.system, title: h.title })
+    sse(controller, { type: 'delegate', specialist: spec.name, status: 'done', summary: demoSummaries[id] })
+  }
+
+  sse(controller, { type: 'step', text: 'Loading Creative Learnings rubric for self-critique…' })
+  sse(controller, { type: 'step', text: 'Coordinator synthesizing + scoring concepts…' })
+
   const a = body.angle
   const al = a.toLowerCase()
   const pool: Concept[] = [
-    { type: 'Hook', text: `Most builders don't have a ${al} problem. They have a ${al} leak hiding in plain sight.`, basis: 'Profit Pattern + research pain points', learningCheck: 'Specific, contrarian framing', score: 9 },
-    { type: 'Headline', text: `From struggling to systemized — how ${a} became TPB's unfair advantage.`, basis: 'Transformation Intelligence (member wins)', learningCheck: 'Transformation arc over feature messaging', score: 8 },
-    { type: 'Primary Text', text: `You didn't get into building to babysit jobs. This is the ${a} system that gave 500+ builders their margin — and their weekends — back.`, basis: 'Member transformations + Time Freedom pattern', learningCheck: 'Concrete proof (500+ builders)', score: 8 },
-    { type: 'VSL Opener', text: `In the next few minutes I'll show you the exact ${a} mechanism most builders never see until it's too late.`, basis: 'VSL framework', learningCheck: 'Mechanism + curiosity', score: 7 },
-    { type: 'Static Concept', text: `Dark background, one bold profit figure, named member underneath, single cyan accent. Angle: ${a}.`, basis: 'Creative Intelligence: Static Proof Ad', learningCheck: 'Specific $ numbers outperform vague claims', score: 9 },
-    { type: 'Video Concept', text: `Founder direct-to-camera on-site: 1.5s pattern interrupt, contrarian ${al} belief, member proof, soft CTA.`, basis: 'Creative Intelligence: Founder Video (71% win)', learningCheck: 'Founder videos outperform talking heads', score: 9 },
-    { type: 'Founder Concept', text: `Handheld walk-through of a finished site while the founder breaks down the ${a} turning point.`, basis: 'Creative Intelligence: Founder Video (71% win)', learningCheck: 'Founder-led, on-site, real proof', score: 9 },
-    { type: 'Testimonial Concept', text: `Member states old hours/margin, the ${al} turning point, then the after. B-roll of their jobs.`, basis: 'Transformation Intelligence', learningCheck: 'Named member win over generic promise', score: 8 },
-    { type: 'Event Concept', text: `High-energy room montage tied to one ${a} insight and community proof.`, basis: 'Authority Pattern', learningCheck: 'Community proof', score: 7 },
-    { type: 'Campaign Concept', text: `The ${a} Reactor: founder video + static proof ad + member testimonial, sequenced cold → warm → apply.`, basis: 'Strategic Recommendation', learningCheck: 'Stacks the three highest-win formats', score: 9 },
+    { type: 'Hook', text: `Most builders don't have a ${al} problem. They have a ${al} leak hiding in plain sight.`, basis: 'Copy Specialist + Research Analyst', learningCheck: 'Specific, contrarian framing', score: 9 },
+    { type: 'Headline', text: `From struggling to systemized — how ${a} became TPB's unfair advantage.`, basis: 'Research Analyst (member transformations)', learningCheck: 'Transformation arc over features', score: 8 },
+    { type: 'Primary Text', text: `You didn't get into building to babysit jobs. This is the ${a} system that gave 500+ builders their margin — and their weekends — back.`, basis: 'Research Analyst + Copy Specialist', learningCheck: 'Concrete proof (500+ builders)', score: 8 },
+    { type: 'VSL Opener', text: `In the next few minutes I'll show you the exact ${a} mechanism most builders never see until it's too late.`, basis: 'Copy Specialist (VSL openers)', learningCheck: 'Mechanism + curiosity', score: 7 },
+    { type: 'Static Concept', text: `Dark background, one bold profit figure, named member underneath, single cyan accent. Angle: ${a}.`, basis: 'Creative Analyst (static proof ad)', learningCheck: 'Specific $ numbers beat vague claims', score: 9 },
+    { type: 'Video Concept', text: `Founder direct-to-camera on-site: 1.5s pattern interrupt, contrarian ${al} belief, member proof, soft CTA.`, basis: 'Creative Analyst (Founder Video, 71% win)', learningCheck: 'Founder videos beat talking heads', score: 9 },
+    { type: 'Founder Concept', text: `Handheld walk-through of a finished site while the founder breaks down the ${a} turning point.`, basis: 'Creative Analyst (Founder Video, 71% win)', learningCheck: 'Founder-led, on-site, real proof', score: 9 },
+    { type: 'Testimonial Concept', text: `Member states old hours/margin, the ${al} turning point, then the after. B-roll of their jobs.`, basis: 'Research Analyst (transformations)', learningCheck: 'Named member win over generic promise', score: 8 },
+    { type: 'Event Concept', text: `High-energy room montage tied to one ${a} insight and community proof.`, basis: 'Creative Analyst (Authority Pattern)', learningCheck: 'Community proof', score: 7 },
+    { type: 'Campaign Concept', text: `The ${a} Reactor: founder video + static proof ad + member testimonial, sequenced cold → warm → apply.`, basis: 'Coordinator (stacks highest-win formats)', learningCheck: 'Stacks the three highest-win formats', score: 9 },
   ]
-  sse(controller, { type: 'step', text: 'Scoring concepts against the Creative Learnings rubric…' })
-  // Match the plural chip labels (e.g. "Static Concepts") against singular
-  // concept types (e.g. "Static Concept").
   const norm = (s: string) => s.toLowerCase().replace(/s$/, '').trim()
   const wanted = outputs.map(norm)
   for (const c of pool.filter((c) => wanted.includes(norm(c.type)) && (c.score ?? 0) >= 7)) {
@@ -167,7 +234,7 @@ export async function POST(request: NextRequest) {
         }
 
         const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
-        sse(controller, { type: 'step', text: 'Reactor online. Planning retrieval…' })
+        sse(controller, { type: 'step', text: 'Coordinator online. Briefing the specialist team…' })
 
         const messages: Anthropic.MessageParam[] = [
           {
@@ -178,19 +245,17 @@ export async function POST(request: NextRequest) {
 
         for (let turn = 0; turn < MAX_TURNS; turn++) {
           const response = await anthropic.messages.create({
-            model: ORCHESTRATOR_MODEL,
+            model: COORDINATOR_MODEL,
             max_tokens: 4000,
-            system: systemPrompt(outputs),
+            system: coordinatorPrompt(outputs),
             tools,
             messages,
           })
-
           messages.push({ role: 'assistant', content: response.content })
 
           const toolUses = response.content.filter(
             (b): b is Anthropic.ToolUseBlock => b.type === 'tool_use',
           )
-
           if (toolUses.length === 0) break
 
           const submit = toolUses.find((t) => t.name === 'submit_concepts')
@@ -204,28 +269,22 @@ export async function POST(request: NextRequest) {
 
           const results: Anthropic.ToolResultBlockParam[] = []
           for (const tu of toolUses) {
-            if (tu.name === 'get_learnings') {
+            if (tu.name === 'consult_specialist') {
+              const { specialist, question } = tu.input as { specialist: SpecialistId; question: string }
+              const findings = await runSpecialist(
+                anthropic,
+                controller,
+                specialist,
+                question,
+                body.builderId ?? null,
+              )
+              results.push({ type: 'tool_result', tool_use_id: tu.id, content: findings })
+            } else if (tu.name === 'get_learnings') {
               sse(controller, { type: 'step', text: 'Loading Creative Learnings rubric for self-critique…' })
               results.push({
                 type: 'tool_result',
                 tool_use_id: tu.id,
-                content: learnings
-                  .map((l) => `• ${l.insight} — ${l.recommendation} (evidence: ${l.evidence})`)
-                  .join('\n'),
-              })
-            } else if (tu.name === 'search_knowledge') {
-              const { query, system } = tu.input as { query: string; system?: KnowledgeSystem }
-              sse(controller, { type: 'step', text: `Searching ${system ?? 'all systems'}: "${query}"` })
-              const hits = await searchKnowledge(query, { system, k: 6, builderId: body.builderId ?? null })
-              for (const h of hits.slice(0, 4)) {
-                sse(controller, { type: 'retrieval', system: h.system, title: h.title })
-              }
-              results.push({
-                type: 'tool_result',
-                tool_use_id: tu.id,
-                content: hits.length
-                  ? hits.map((h) => `[${h.system}] ${h.title}: ${h.content}`).join('\n\n')
-                  : 'No matching knowledge found.',
+                content: learnings.map((l) => `• ${l.insight} — ${l.recommendation} (evidence: ${l.evidence})`).join('\n'),
               })
             } else {
               results.push({ type: 'tool_result', tool_use_id: tu.id, content: 'Unknown tool', is_error: true })
@@ -234,15 +293,12 @@ export async function POST(request: NextRequest) {
           messages.push({ role: 'user', content: results })
         }
 
-        sse(controller, { type: 'step', text: 'Reactor reached its turn limit without submitting concepts.' })
+        sse(controller, { type: 'step', text: 'Coordinator reached its turn limit without submitting concepts.' })
         sse(controller, { type: 'done' })
         controller.close()
       } catch (err) {
         console.error('Campaign Reactor error:', err)
-        sse(controller, {
-          type: 'error',
-          message: err instanceof Error ? err.message : 'Reactor failed',
-        })
+        sse(controller, { type: 'error', message: err instanceof Error ? err.message : 'Reactor failed' })
         controller.close()
       }
     },
