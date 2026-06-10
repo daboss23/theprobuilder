@@ -14,7 +14,10 @@ export function Panel({
   hover?: boolean
 }) {
   return (
-    <div className={cn('glass shadow-panel', hover && 'glass-hover', className)}>{children}</div>
+    <div className={cn('glass shadow-panel', hover && 'glass-hover', className)}>
+      <div className="panel-sheen" aria-hidden="true" />
+      {children}
+    </div>
   )
 }
 
@@ -30,10 +33,10 @@ export function PanelHeader({
   accessory?: ReactNode
 }) {
   return (
-    <div className="flex items-start justify-between gap-3 border-b border-border px-5 py-4">
+    <div className="panel-header flex items-start justify-between gap-3 border-b border-border px-5 py-4">
       <div className="flex items-center gap-3">
         {icon && (
-          <span className="grid h-9 w-9 place-items-center rounded-lg border border-border bg-surface/60 text-glow">
+          <span className="panel-icon grid h-9 w-9 place-items-center rounded-lg border border-border bg-surface/60 text-glow">
             {icon}
           </span>
         )}
@@ -110,7 +113,7 @@ export function TrendBadge({
 
 /* ------------------------------- KPI card --------------------------------- */
 
-// Soft pastel glass tints, matching the reference dashboard's frosted KPI panels.
+// Restrained channel tints for the dashboard's performance telemetry modules.
 export type KpiTint = 'blue' | 'green' | 'purple' | 'teal' | 'amber' | 'rose'
 
 const kpiTints: Record<KpiTint, { wash: string; ring: string; glow: string }> = {
@@ -162,18 +165,19 @@ export function KpiCard({
   const t = kpiTints[tint]
   return (
     <div
-      className="group relative overflow-hidden rounded-2xl p-4 backdrop-blur-xl transition-all duration-300 hover:-translate-y-0.5"
+      className="kpi-instrument group relative overflow-hidden rounded-2xl p-4 backdrop-blur-xl transition-all duration-300 hover:-translate-y-0.5"
       style={{
         background: t.wash,
         boxShadow: `inset 0 1px 0 0 rgba(255,255,255,0.10), inset 0 0 0 1px ${t.ring}, 0 18px 40px -24px rgba(0,0,0,0.85)`,
       }}
     >
       {/* soft top sheen + corner bloom */}
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-white/25" />
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-white/30" />
       <div
         className="pointer-events-none absolute -right-8 -top-10 h-24 w-24 rounded-full blur-2xl transition-opacity duration-300 group-hover:opacity-100"
         style={{ background: t.glow, opacity: 0.5 }}
       />
+      <div className="kpi-scanline" aria-hidden="true" />
       <p className="relative text-[11px] font-medium uppercase tracking-wider text-white/55">
         {label}
       </p>
@@ -192,7 +196,7 @@ export function KpiCard({
 export function ProgressBar({ value, max = 100 }: { value: number; max?: number }) {
   const pct = Math.min(100, Math.round((value / max) * 100))
   return (
-    <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/5">
+    <div className="progress-track h-1.5 w-full overflow-hidden rounded-full bg-white/5">
       <div
         className="h-full rounded-full bg-gradient-to-r from-primary to-cyan shadow-[0_0_12px_0_rgba(46,168,255,0.6)]"
         style={{ width: `${pct}%` }}
