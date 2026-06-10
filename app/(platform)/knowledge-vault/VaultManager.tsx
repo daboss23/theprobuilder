@@ -12,6 +12,11 @@ import {
   FileText,
   FolderOpen,
   Sparkles,
+  Type,
+  Link2,
+  Clapperboard,
+  UploadCloud,
+  Download,
 } from 'lucide-react'
 import { Panel, PanelHeader, Pill } from '@/components/reactor/ui'
 import { vaultCategories } from '@/lib/reactor-data'
@@ -84,6 +89,39 @@ type IngestStatus =
   | { kind: 'done'; chunks: number; stored: boolean }
   | { kind: 'error'; message: string }
 
+// Which input mode the "Add Knowledge" panel is in.
+type SourceMode = 'text' | 'website' | 'document' | 'youtube'
+
+const SOURCES: { value: SourceMode; label: string; icon: typeof Type }[] = [
+  { value: 'text', label: 'Paste Text', icon: Type },
+  { value: 'website', label: 'Website Link', icon: Link2 },
+  { value: 'document', label: 'Doc / PDF', icon: UploadCloud },
+  { value: 'youtube', label: 'YouTube', icon: Clapperboard },
+]
+
+// Status while pulling content from an external source into the content box.
+type FetchStatus =
+  | { kind: 'idle' }
+  | { kind: 'fetching' }
+  | { kind: 'fetched'; chars: number }
+  | { kind: 'error'; message: string }
+
+// Best-effort human title from a URL (last meaningful path segment or host).
+function titleFromUrl(raw: string): string {
+  try {
+    const u = new URL(raw)
+    const seg = u.pathname.split('/').filter(Boolean).pop()
+    const base = (seg ?? u.hostname)
+      .replace(/\.(html?|php|aspx?)$/i, '')
+      .replace(/[-_]+/g, ' ')
+      .trim()
+    if (!base) return u.hostname
+    return base.charAt(0).toUpperCase() + base.slice(1)
+  } catch {
+    return ''
+  }
+}
+
 export function VaultManager({ initialStats }: { initialStats: Stats }) {
   const [stats, setStats] = useState<Stats>(initialStats)
   const [items, setItems] = useState<VaultItem[]>([])
@@ -94,12 +132,19 @@ export function VaultManager({ initialStats }: { initialStats: Stats }) {
   const [query, setQuery] = useState('')
   const [systemFilter, setSystemFilter] = useState<'' | KnowledgeSystem>('')
 
-  // Paste-text ingest form
+  // Ingest form
+  const [sourceMode, setSourceMode] = useState<SourceMode>('text')
   const [title, setTitle] = useState('')
   const [system, setSystem] = useState<KnowledgeSystem>('vault')
   const [category, setCategory] = useState('')
   const [content, setContent] = useState('')
   const [status, setStatus] = useState<IngestStatus>({ kind: 'idle' })
+
+  // Source-fetch state (website / youtube / document)
+  const [sourceUrl, setSourceUrl] = useState('')
+  const [fetchStatus, setFetchStatus] = useState<FetchStatus>({ kind: 'idle' })
+  const [dragActive, setDragActive] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const debounce = useRef<ReturnType<typeof setTimeout>>()
 
@@ -136,6 +181,70 @@ export function VaultManager({ initialStats }: { initialStats: Stats }) {
     }
   }, [query, systemFilter, load])
 
+  // Switching source mode clears any in-progress fetch state, keeps editable content.
+  const switchMode = (mode: SourceMode) => {
+    setSourceMode(mode)
+    setSourceUrl('')
+    setFetchStatus({ kind: 'idle' })
+    setStatus({ kind: 'idle' })
+  }
+
+  // Pull text content from the chosen external source into the content box.
+  const fetchSource = async (endpoint: string, body: BodyInit, headers?: HeadersInit) => {
+    setFetchStatus({ kind: 'fetching' })
+    setStatus({ kind: 'idle' })
+    try {
+      const res = await fetch(endpoint, { method: 'POST', headers, body }).then((r) => r.json())
+      if (!res.success) throw new Error(res.error || 'Could not extract content')
+      const text: string = res.content ?? ''
+      setContent(text)
+      setFetchStatus({ kind: 'fetched', chars: text.length })
+      return true
+    } catch (err) {
+      setFetchStatus({
+        kind: 'error',
+        message: err instanceof Error ? err.message : 'Could not extract content',
+      })
+      return false
+    }
+  }
+
+  const fetchWebsite = async () => {
+    if (!sourceUrl.trim()) return
+    const ok = await fetchSource(
+      '/api/frameworks/scrape-url',
+      JSON.stringify({ url: sourceUrl.trim() }),
+      { 'Content-Type': 'application/json' }
+    )
+    if (ok && !title.trim()) setTitle(titleFromUrl(sourceUrl.trim()))
+  }
+
+  const fetchYoutube = async () => {
+    if (!sourceUrl.trim()) return
+    const ok = await fetchSource(
+      '/api/frameworks/scrape-youtube',
+      JSON.stringify({ url: sourceUrl.trim() }),
+      { 'Content-Type': 'application/json' }
+    )
+    if (ok && !title.trim()) setTitle('YouTube Transcript')
+  }
+
+  const handleFile = async (file: File) => {
+    const form = new FormData()
+    form.append('file', file)
+    const ok = await fetchSource('/api/frameworks/parse-file', form)
+    if (ok && !title.trim()) {
+      setTitle(file.name.replace(/\.[^.]+$/, '').replace(/[-_]+/g, ' ').trim())
+    }
+  }
+
+  const onDrop = (e: React.DragEvent) => {
+    e.preventDefault()
+    setDragActive(false)
+    const file = e.dataTransfer.files?.[0]
+    if (file) handleFile(file)
+  }
+
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!title.trim() || !content.trim()) return
@@ -149,6 +258,10 @@ export function VaultManager({ initialStats }: { initialStats: Stats }) {
           title: title.trim(),
           category: category.trim() || null,
           content: content.trim(),
+          metadata:
+            sourceMode === 'text'
+              ? undefined
+              : { source: sourceMode, sourceUrl: sourceUrl.trim() || undefined },
         }),
       }).then((r) => r.json())
       if (!res.success) throw new Error(res.error || 'Ingest failed')
@@ -156,6 +269,8 @@ export function VaultManager({ initialStats }: { initialStats: Stats }) {
       setTitle('')
       setCategory('')
       setContent('')
+      setSourceUrl('')
+      setFetchStatus({ kind: 'idle' })
       load(query, systemFilter)
     } catch (err) {
       setStatus({ kind: 'error', message: err instanceof Error ? err.message : 'Ingest failed' })
@@ -176,16 +291,194 @@ export function VaultManager({ initialStats }: { initialStats: Stats }) {
     ? liveCategoryGroups(stats.groups)
     : vaultCategories
 
+  const fetching = fetchStatus.kind === 'fetching'
+
   return (
     <>
-      {/* ----------------------------- Paste ingest ---------------------------- */}
+      {/* ----------------------------- Add knowledge --------------------------- */}
       <Panel>
         <PanelHeader
           icon={<Plus size={16} />}
-          title="Add Knowledge as Text"
-          subtitle="Paste a framework, hook, SOP, or member win — embedded into the reactor's brain in seconds"
+          title="Add Knowledge"
+          subtitle="Paste text, pull a website, drop a doc or PDF, or transcribe a YouTube video — embedded into the reactor's brain in seconds"
         />
         <form onSubmit={submit} className="space-y-4 p-5">
+          {/* Source picker */}
+          <div className="flex flex-wrap gap-2">
+            {SOURCES.map((s) => {
+              const Icon = s.icon
+              const active = sourceMode === s.value
+              return (
+                <button
+                  key={s.value}
+                  type="button"
+                  onClick={() => switchMode(s.value)}
+                  className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-medium transition-all ${
+                    active
+                      ? 'border-primary/40 bg-primary/15 text-glow shadow-glow'
+                      : 'border-border bg-surface/40 text-white/50 hover:border-white/20 hover:text-white/80'
+                  }`}
+                >
+                  <Icon size={14} />
+                  {s.label}
+                </button>
+              )
+            })}
+          </div>
+
+          {/* Source-specific input */}
+          {sourceMode === 'website' && (
+            <div>
+              <label className="mb-1.5 block text-[11px] font-medium uppercase tracking-wider text-white/40">
+                Website URL
+              </label>
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <div className="relative flex-1">
+                  <Link2
+                    size={15}
+                    className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-white/30"
+                  />
+                  <input
+                    type="url"
+                    value={sourceUrl}
+                    onChange={(e) => setSourceUrl(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault()
+                        fetchWebsite()
+                      }
+                    }}
+                    placeholder="https://example.com/winning-article"
+                    className={`${inputCls} pl-9`}
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={fetchWebsite}
+                  disabled={fetching || !sourceUrl.trim()}
+                  className="inline-flex items-center justify-center gap-2 rounded-lg border border-border bg-surface/60 px-4 py-2 text-sm font-medium text-white/80 transition-all hover:border-white/20 hover:text-white disabled:cursor-not-allowed disabled:opacity-40 sm:w-40"
+                >
+                  {fetching ? (
+                    <>
+                      <Loader2 size={15} className="animate-spin" /> Fetching…
+                    </>
+                  ) : (
+                    <>
+                      <Download size={15} /> Fetch page
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {sourceMode === 'youtube' && (
+            <div>
+              <label className="mb-1.5 block text-[11px] font-medium uppercase tracking-wider text-white/40">
+                YouTube URL
+              </label>
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <div className="relative flex-1">
+                  <Clapperboard
+                    size={15}
+                    className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-white/30"
+                  />
+                  <input
+                    type="url"
+                    value={sourceUrl}
+                    onChange={(e) => setSourceUrl(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault()
+                        fetchYoutube()
+                      }
+                    }}
+                    placeholder="https://youtube.com/watch?v=…"
+                    className={`${inputCls} pl-9`}
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={fetchYoutube}
+                  disabled={fetching || !sourceUrl.trim()}
+                  className="inline-flex items-center justify-center gap-2 rounded-lg border border-border bg-surface/60 px-4 py-2 text-sm font-medium text-white/80 transition-all hover:border-white/20 hover:text-white disabled:cursor-not-allowed disabled:opacity-40 sm:w-40"
+                >
+                  {fetching ? (
+                    <>
+                      <Loader2 size={15} className="animate-spin" /> Transcribing…
+                    </>
+                  ) : (
+                    <>
+                      <Download size={15} /> Transcribe
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {sourceMode === 'document' && (
+            <div>
+              <label className="mb-1.5 block text-[11px] font-medium uppercase tracking-wider text-white/40">
+                Document
+              </label>
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                onDragOver={(e) => {
+                  e.preventDefault()
+                  setDragActive(true)
+                }}
+                onDragLeave={() => setDragActive(false)}
+                onDrop={onDrop}
+                className={`flex w-full flex-col items-center justify-center gap-2 rounded-xl border border-dashed px-4 py-8 text-center transition-all ${
+                  dragActive
+                    ? 'border-glow bg-primary/10'
+                    : 'border-border bg-surface/40 hover:border-white/25'
+                }`}
+              >
+                {fetching ? (
+                  <Loader2 size={22} className="animate-spin text-glow" />
+                ) : (
+                  <UploadCloud size={22} className="text-white/40" />
+                )}
+                <span className="text-sm text-white/70">
+                  {fetching ? 'Extracting text…' : 'Drag & drop a file, or click to browse'}
+                </span>
+                <span className="text-[11px] text-white/30">PDF, Markdown, or TXT</span>
+              </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".pdf,.md,.txt"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0]
+                  if (file) handleFile(file)
+                  e.target.value = ''
+                }}
+              />
+            </div>
+          )}
+
+          {/* Source fetch status */}
+          {sourceMode !== 'text' && fetchStatus.kind !== 'idle' && (
+            <div className="text-[11px]">
+              {fetchStatus.kind === 'fetched' && (
+                <span className="flex items-center gap-1.5 text-success">
+                  <Check size={13} /> Pulled {fetchStatus.chars.toLocaleString()} characters — review
+                  below, then ingest
+                </span>
+              )}
+              {fetchStatus.kind === 'error' && (
+                <span className="flex items-center gap-1.5 text-danger">
+                  <AlertCircle size={13} /> {fetchStatus.message}
+                </span>
+              )}
+            </div>
+          )}
+
+          {/* Title / system / category */}
           <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
             <div className="md:col-span-1">
               <label className="mb-1.5 block text-[11px] font-medium uppercase tracking-wider text-white/40">
@@ -229,12 +522,16 @@ export function VaultManager({ initialStats }: { initialStats: Stats }) {
 
           <div>
             <label className="mb-1.5 block text-[11px] font-medium uppercase tracking-wider text-white/40">
-              Content
+              {sourceMode === 'text' ? 'Content' : 'Extracted Content'}
             </label>
             <textarea
               value={content}
               onChange={(e) => setContent(e.target.value)}
-              placeholder="Paste the full framework, hook, SOP, transcript, or member story here…"
+              placeholder={
+                sourceMode === 'text'
+                  ? 'Paste the full framework, hook, SOP, transcript, or member story here…'
+                  : 'Pulled content appears here for review — edit before ingesting if you like…'
+              }
               rows={6}
               className={`${inputCls} resize-y leading-relaxed`}
             />
@@ -258,7 +555,7 @@ export function VaultManager({ initialStats }: { initialStats: Stats }) {
             </div>
             <button
               type="submit"
-              disabled={status.kind === 'working' || !title.trim() || !content.trim()}
+              disabled={status.kind === 'working' || fetching || !title.trim() || !content.trim()}
               className="inline-flex items-center gap-2 rounded-lg border border-primary/30 bg-primary/10 px-4 py-2 text-sm font-medium text-glow transition-all hover:bg-primary/20 hover:shadow-glow disabled:cursor-not-allowed disabled:opacity-40"
             >
               {status.kind === 'working' ? (
