@@ -10,10 +10,12 @@ import {
   Trash2,
   Database,
   FileText,
+  FolderOpen,
   Sparkles,
 } from 'lucide-react'
 import { Panel, PanelHeader, Pill } from '@/components/reactor/ui'
-import type { KnowledgeSystem } from '@/lib/knowledge'
+import { vaultCategories } from '@/lib/reactor-data'
+import type { KnowledgeSystem, VaultStatGroup } from '@/lib/knowledge'
 
 interface VaultItem {
   id: string | null
@@ -28,6 +30,39 @@ interface VaultItem {
 interface Stats {
   live: boolean
   total: number
+  groups: VaultStatGroup[]
+}
+
+// Friendly labels for each intelligence system in the live category breakdown.
+const SYSTEM_LABELS: Record<string, string> = {
+  vault: 'Frameworks & SOPs',
+  copy: 'Copy Assets',
+  creative: 'Creative Assets',
+  transformation: 'Transformation Assets',
+  research: 'Research Intelligence',
+  pattern: 'Patterns',
+  learning: 'Learnings',
+}
+
+interface CategoryGroup {
+  group: string
+  items: { name: string; count: number }[]
+}
+
+// Roll the flat stat groups up into per-system cards for the categories panel.
+function liveCategoryGroups(groups: VaultStatGroup[]): CategoryGroup[] {
+  const bySystem = new Map<string, { name: string; count: number }[]>()
+  for (const g of groups) {
+    const items = bySystem.get(g.system) ?? []
+    items.push({ name: g.category ?? 'Uncategorized', count: g.count })
+    bySystem.set(g.system, items)
+  }
+  return Array.from(bySystem.entries())
+    .map(([system, items]) => ({
+      group: SYSTEM_LABELS[system] ?? system,
+      items: items.sort((a, b) => b.count - a.count),
+    }))
+    .sort((a, b) => a.group.localeCompare(b.group))
 }
 
 const SYSTEMS: { value: KnowledgeSystem; label: string }[] = [
@@ -75,14 +110,16 @@ export function VaultManager({ initialStats }: { initialStats: Stats }) {
       if (q.trim()) params.set('q', q.trim())
       if (sys) params.set('system', sys)
       const [listRes, statsRes] = await Promise.all([
-        fetch(`/api/vault/list?${params.toString()}`).then((r) => r.json()),
-        fetch('/api/vault/stats').then((r) => r.json()),
+        fetch(`/api/vault/list?${params.toString()}`, { cache: 'no-store' }).then((r) => r.json()),
+        fetch('/api/vault/stats', { cache: 'no-store' }).then((r) => r.json()),
       ])
       if (listRes.success) {
         setItems(listRes.items)
         setLive(listRes.live)
       }
-      if (statsRes.success) setStats({ live: statsRes.live, total: statsRes.total })
+      if (statsRes.success) {
+        setStats({ live: statsRes.live, total: statsRes.total, groups: statsRes.groups ?? [] })
+      }
     } catch {
       /* network error — leave existing state, surface nothing destructive */
     } finally {
@@ -133,6 +170,11 @@ export function VaultManager({ initialStats }: { initialStats: Stats }) {
       load(query, systemFilter)
     }
   }
+
+  const categoriesLive = live && stats.groups.length > 0
+  const categoryGroups: CategoryGroup[] = categoriesLive
+    ? liveCategoryGroups(stats.groups)
+    : vaultCategories
 
   return (
     <>
@@ -334,6 +376,49 @@ export function VaultManager({ initialStats }: { initialStats: Stats }) {
               ))}
             </ul>
           )}
+        </div>
+      </Panel>
+
+      {/* ---------------------------- Vault categories ------------------------- */}
+      <Panel>
+        <PanelHeader
+          icon={<FolderOpen size={16} />}
+          title="Vault Categories"
+          subtitle={
+            categoriesLive
+              ? "Live breakdown of what's actually stored in the reactor"
+              : 'Everything TPB knows, organized for the reactor'
+          }
+          accessory={
+            <Pill tone={categoriesLive ? 'success' : 'default'}>
+              {categoriesLive ? `${stats.total.toLocaleString()} stored` : 'Demo map'}
+            </Pill>
+          }
+        />
+        <div className="grid grid-cols-1 gap-4 p-5 md:grid-cols-2 xl:grid-cols-3">
+          {categoryGroups.map((cat) => (
+            <div key={cat.group} className="rounded-xl border border-border bg-surface/40 p-4">
+              <div className="mb-3 flex items-center justify-between">
+                <h3 className="font-display text-sm font-semibold text-white">{cat.group}</h3>
+                <span className="font-mono text-[11px] text-white/30">
+                  {cat.items.reduce((s, i) => s + i.count, 0).toLocaleString()}
+                </span>
+              </div>
+              <ul className="space-y-1.5">
+                {cat.items.map((item) => (
+                  <li
+                    key={item.name}
+                    className="flex items-center justify-between rounded-lg px-2 py-1.5 text-sm text-white/60 transition-colors hover:bg-white/[0.03]"
+                  >
+                    <span>{item.name}</span>
+                    <span className="font-display text-xs font-semibold tabular text-glow">
+                      {item.count.toLocaleString()}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
         </div>
       </Panel>
     </>

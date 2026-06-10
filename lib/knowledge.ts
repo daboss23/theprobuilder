@@ -169,15 +169,27 @@ export function curatedVaultTotal(): number {
 export async function vaultStats(): Promise<VaultStats> {
   if (supabaseReady()) {
     try {
-      const { data, error } = await getSupabaseAdmin().rpc('knowledge_stats')
-      if (error) throw error
-      const groups: VaultStatGroup[] = (data ?? []).map((r: { system: string; category: string | null; count: number }) => ({
-        system: r.system,
-        category: r.category ?? null,
-        count: Number(r.count),
-      }))
-      const total = groups.reduce((s, g) => s + g.count, 0)
-      return { live: true, total, groups }
+      const admin = getSupabaseAdmin()
+
+      // Authoritative total via a direct count — never depends on the RPC, so the
+      // "stored" badge can't read 0 while rows exist.
+      const { count, error: countErr } = await admin
+        .from('knowledge_chunks')
+        .select('id', { count: 'exact', head: true })
+      if (countErr) throw countErr
+
+      // Per-system / per-category breakdown for the categories panel.
+      let groups: VaultStatGroup[] = []
+      const { data, error: rpcErr } = await admin.rpc('knowledge_stats')
+      if (!rpcErr && data) {
+        groups = (data as { system: string; category: string | null; count: number }[]).map((r) => ({
+          system: r.system,
+          category: r.category ?? null,
+          count: Number(r.count),
+        }))
+      }
+
+      return { live: true, total: count ?? 0, groups }
     } catch (err) {
       console.error('Vault stats query failed, using demo counts:', err)
     }
