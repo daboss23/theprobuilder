@@ -3,7 +3,7 @@
 // if Supabase or Voyage isn't configured, retrieval falls back to the curated
 // demo intelligence so the platform still works end to end.
 
-import { getSupabaseAdmin } from '@/lib/supabase'
+import { getSupabaseAdmin, supabaseUrl } from '@/lib/supabase'
 import { embed, embedOne, hasEmbeddings } from '@/lib/embeddings'
 import {
   patterns,
@@ -54,13 +54,13 @@ export function chunkText(text: string, maxChars = 1000): string[] {
 }
 
 function dbReady(): boolean {
-  return Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL) && hasEmbeddings()
+  return Boolean(supabaseUrl()) && hasEmbeddings()
 }
 
 // Reading/browsing/deleting only needs Supabase — not Voyage embeddings.
 function supabaseReady(): boolean {
   return (
-    Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL) &&
+    Boolean(supabaseUrl()) &&
     Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SECRET_KEY)
   )
 }

@@ -4,8 +4,15 @@ import type { Builder, Framework, FrameworkInsert, FrameworkUpdate } from '@/typ
 let anonClient: SupabaseClient | null = null
 let adminClient: SupabaseClient | null = null
 
+// NEXT_PUBLIC_SUPABASE_URL is inlined at build time. Also accept a runtime-read
+// SUPABASE_URL so server code keeps working even if the public var wasn't present
+// at build time (e.g. added to Vercel after the live build was created).
+export function supabaseUrl(): string | undefined {
+  return process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL
+}
+
 function requireUrl(): string {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const url = supabaseUrl()
   if (!url) throw new Error('NEXT_PUBLIC_SUPABASE_URL is not configured')
   return url
 }

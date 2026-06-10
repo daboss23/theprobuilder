@@ -86,3 +86,15 @@ create table if not exists campaign_outcomes (
   verdict text default 'pending',  -- pending | winner | loser
   notes text
 );
+
+-- Grants: the app talks to these tables/functions server-side as `service_role`.
+-- Supabase usually applies these automatically, but apply them explicitly so a
+-- fresh project never hits "permission denied for table ... (code 42501)".
+grant usage on schema public to service_role;
+grant all on all tables in schema public to service_role;
+grant all on all sequences in schema public to service_role;
+grant all on all routines in schema public to service_role;
+
+alter default privileges in schema public grant all on tables to service_role;
+alter default privileges in schema public grant all on sequences to service_role;
+alter default privileges in schema public grant all on routines to service_role;
