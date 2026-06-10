@@ -57,6 +57,22 @@ as $$
   limit match_count;
 $$;
 
+-- Live counts of stored knowledge, grouped by system + category. Powers the
+-- Vault library view and the dashboard "assets stored" telemetry.
+create or replace function knowledge_stats ()
+returns table (
+  system text,
+  category text,
+  count bigint
+)
+language sql stable
+as $$
+  select kc.system, kc.category, count(*)::bigint as count
+  from knowledge_chunks kc
+  group by kc.system, kc.category
+  order by count(*) desc;
+$$;
+
 -- Closed-loop learning: log how generated campaigns actually performed so winners
 -- can be re-ingested as new patterns and feed future retrieval.
 create table if not exists campaign_outcomes (

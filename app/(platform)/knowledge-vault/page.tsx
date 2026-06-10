@@ -1,13 +1,14 @@
 import { Database, FolderOpen } from 'lucide-react'
 import { PageHeader, Panel, PanelHeader, Pill } from '@/components/reactor/ui'
 import { vaultCategories } from '@/lib/reactor-data'
+import { vaultStats } from '@/lib/knowledge'
 import { UploadGrid } from './UploadGrid'
+import { VaultManager } from './VaultManager'
 
-export default function KnowledgeVaultPage() {
-  const total = vaultCategories.reduce(
-    (sum, g) => sum + g.items.reduce((s, i) => s + i.count, 0),
-    0,
-  )
+export const dynamic = 'force-dynamic'
+
+export default async function KnowledgeVaultPage() {
+  const stats = await vaultStats()
 
   return (
     <>
@@ -17,8 +18,9 @@ export default function KnowledgeVaultPage() {
           title="Knowledge Vault"
           subtitle="The heart of the platform. Ingest and store 20+ years of TPB's creative knowledge, frameworks, SOPs, and member wins."
         />
-        <Pill tone="primary">
-          <Database size={12} /> {total.toLocaleString()} assets stored
+        <Pill tone={stats.live ? 'success' : 'primary'}>
+          <Database size={12} /> {stats.total.toLocaleString()}{' '}
+          {stats.live ? 'assets stored' : 'assets mapped'}
         </Pill>
       </div>
 
@@ -32,6 +34,8 @@ export default function KnowledgeVaultPage() {
           <UploadGrid />
         </div>
       </Panel>
+
+      <VaultManager initialStats={{ live: stats.live, total: stats.total }} />
 
       <Panel>
         <PanelHeader
