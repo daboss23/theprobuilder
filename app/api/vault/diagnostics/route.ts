@@ -5,9 +5,28 @@ import { embed } from '@/lib/embeddings'
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
+// Surface a useful message from any thrown value. Supabase/PostgREST errors are
+// plain objects ({ message, code, hint, details }), not Error instances, so an
+// `instanceof Error` check alone loses the real cause.
+function describe(err: unknown): string {
+  if (!err) return 'unknown error'
+  if (err instanceof Error) return err.message
+  if (typeof err === 'object') {
+    const e = err as Record<string, unknown>
+    const parts = [
+      e.message,
+      e.code ? `code ${e.code}` : null,
+      e.hint,
+      e.details,
+    ].filter(Boolean)
+    return parts.length ? parts.join(' | ') : JSON.stringify(err)
+  }
+  return String(err)
+}
+
 // Read-only health check for the knowledge loop. Reports which env vars the
-// running server actually sees (booleans only — never the values) and whether
-// Supabase, the schema, and Voyage respond. Safe to expose: leaks no secrets.
+// running server sees (booleans only — never the values) and whether Supabase,
+// the schema, and Voyage respond. Safe to expose: leaks no secrets.
 export async function GET() {
   const env = {
     NEXT_PUBLIC_SUPABASE_URL: Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL),
@@ -25,25 +44,21 @@ export async function GET() {
     const { count, error } = await getSupabaseAdmin()
       .from('knowledge_chunks')
       .select('id', { count: 'exact', head: true })
-    if (error) throw error
-    checks.knowledgeChunksTable = { ok: true, detail: `${count ?? 0} rows` }
+    checks.knowledgeChunksTable = error
+      ? { ok: false, detail: describe(error) }
+      : { ok: true, detail: `${count ?? 0} rows` }
   } catch (err) {
-    checks.knowledgeChunksTable = {
-      ok: false,
-      detail: err instanceof Error ? err.message : 'unknown error',
-    }
+    checks.knowledgeChunksTable = { ok: false, detail: describe(err) }
   }
 
   // Does the knowledge_stats() RPC exist + run?
   try {
     const { error } = await getSupabaseAdmin().rpc('knowledge_stats')
-    if (error) throw error
-    checks.knowledgeStatsRpc = { ok: true }
+    checks.knowledgeStatsRpc = error
+      ? { ok: false, detail: describe(error) }
+      : { ok: true }
   } catch (err) {
-    checks.knowledgeStatsRpc = {
-      ok: false,
-      detail: err instanceof Error ? err.message : 'unknown error',
-    }
+    checks.knowledgeStatsRpc = { ok: false, detail: describe(err) }
   }
 
   // Does Voyage return an embedding of the expected dimension?
@@ -54,10 +69,7 @@ export async function GET() {
       detail: `dim ${Array.isArray(vec) ? vec.length : 'n/a'}`,
     }
   } catch (err) {
-    checks.voyageEmbeddings = {
-      ok: false,
-      detail: err instanceof Error ? err.message : 'unknown error',
-    }
+    checks.voyageEmbeddings = { ok: false, detail: describe(err) }
   }
 
   const ready =
