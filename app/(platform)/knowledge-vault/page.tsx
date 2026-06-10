@@ -1,6 +1,5 @@
-import { Database, FolderOpen } from 'lucide-react'
+import { Database } from 'lucide-react'
 import { PageHeader, Panel, PanelHeader, Pill } from '@/components/reactor/ui'
-import { vaultCategories } from '@/lib/reactor-data'
 import { vaultStats } from '@/lib/knowledge'
 import { UploadGrid } from './UploadGrid'
 import { VaultManager } from './VaultManager'
@@ -35,40 +34,9 @@ export default async function KnowledgeVaultPage() {
         </div>
       </Panel>
 
-      <VaultManager initialStats={{ live: stats.live, total: stats.total }} />
-
-      <Panel>
-        <PanelHeader
-          icon={<FolderOpen size={16} />}
-          title="Vault Categories"
-          subtitle="Everything TPB knows, organized for the reactor"
-        />
-        <div className="grid grid-cols-1 gap-4 p-5 md:grid-cols-2 xl:grid-cols-3">
-          {vaultCategories.map((cat) => (
-            <div key={cat.group} className="rounded-xl border border-border bg-surface/40 p-4">
-              <div className="mb-3 flex items-center justify-between">
-                <h3 className="font-display text-sm font-semibold text-white">{cat.group}</h3>
-                <span className="font-mono text-[11px] text-white/30">
-                  {cat.items.reduce((s, i) => s + i.count, 0).toLocaleString()}
-                </span>
-              </div>
-              <ul className="space-y-1.5">
-                {cat.items.map((item) => (
-                  <li
-                    key={item.name}
-                    className="flex items-center justify-between rounded-lg px-2 py-1.5 text-sm text-white/60 transition-colors hover:bg-white/[0.03]"
-                  >
-                    <span>{item.name}</span>
-                    <span className="font-display text-xs font-semibold tabular text-glow">
-                      {item.count.toLocaleString()}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))}
-        </div>
-      </Panel>
+      <VaultManager
+        initialStats={{ live: stats.live, total: stats.total, groups: stats.groups }}
+      />
     </>
   )
 }
