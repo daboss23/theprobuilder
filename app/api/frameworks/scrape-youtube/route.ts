@@ -1,7 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { fetch as undiciFetch, ProxyAgent } from 'undici'
 
 export const runtime = 'nodejs'
 export const maxDuration = 30
+
+// Optional outbound proxy. YouTube blocks transcript requests from datacenter
+// IPs (Vercel/AWS), so set PROXY_URL to a residential/rotating proxy
+// (e.g. http://user:pass@host:port) to route these requests through it. When
+// unset, requests go out directly — best-effort, often blocked from the server.
+const proxyAgent = process.env.PROXY_URL ? new ProxyAgent(process.env.PROXY_URL) : null
+
+// fetch wrapper that routes through the proxy when one is configured.
+async function pfetch(url: string, opts: Record<string, unknown>) {
+  if (proxyAgent) {
+    return undiciFetch(url, { ...opts, dispatcher: proxyAgent } as never)
+  }
+  return fetch(url, opts as RequestInit)
+}
 
 function extractVideoId(url: string): string | null {
   const patterns = [
@@ -96,7 +111,7 @@ async function tracksViaClient(
   client: (typeof CLIENTS)[number]
 ): Promise<CaptionTrack[]> {
   try {
-    const res = await fetch(`https://www.youtube.com/youtubei/v1/player?key=${INNERTUBE_KEY}`, {
+    const res = await pfetch(`https://www.youtube.com/youtubei/v1/player?key=${INNERTUBE_KEY}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -120,7 +135,7 @@ async function tracksViaClient(
 // out of the embedded ytInitialPlayerResponse JSON.
 async function tracksViaWatchPage(videoId: string): Promise<CaptionTrack[]> {
   try {
-    const res = await fetch(
+    const res = await pfetch(
       `https://www.youtube.com/watch?v=${videoId}&hl=en&bpctr=9999999999&has_verified=1`,
       {
         headers: {
@@ -173,7 +188,7 @@ async function fetchTranscriptText(track: CaptionTrack): Promise<string> {
 
   // json3
   try {
-    const res = await fetch(`${track.baseUrl}${sep}fmt=json3`, {
+    const res = await pfetch(`${track.baseUrl}${sep}fmt=json3`, {
       headers,
       signal: AbortSignal.timeout(12000),
     })
@@ -192,7 +207,7 @@ async function fetchTranscriptText(track: CaptionTrack): Promise<string> {
 
   // XML fallback
   try {
-    const res = await fetch(track.baseUrl, { headers, signal: AbortSignal.timeout(12000) })
+    const res = await pfetch(track.baseUrl, { headers, signal: AbortSignal.timeout(12000) })
     if (res.ok) {
       const xml = await res.text()
       const text = (xml.match(/<text[^>]*>([\s\S]*?)<\/text>/g) ?? [])
