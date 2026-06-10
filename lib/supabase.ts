@@ -1,5 +1,5 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
-import type { Builder } from '@/types'
+import type { Builder, Framework, FrameworkInsert, FrameworkUpdate } from '@/types'
 
 let anonClient: SupabaseClient | null = null
 let adminClient: SupabaseClient | null = null
@@ -143,4 +143,92 @@ export async function approveOutput(id: string) {
 
   if (error) throw error
   return data
+}
+
+/* -------------------------------------------------------------------------- */
+/* Frameworks library (P2)                                                     */
+/* -------------------------------------------------------------------------- */
+
+export interface ListFrameworksOptions {
+  category?: string
+  // 'all' = everything, 'global' = builder_id IS NULL, string uuid = exact builder only
+  builderScope?: 'all' | 'global' | string
+}
+
+export async function listFrameworks(opts: ListFrameworksOptions = {}): Promise<Framework[]> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let query: any = getSupabaseAdmin()
+    .from('frameworks')
+    .select('*')
+    .order('category', { ascending: true })
+    .order('created_at', { ascending: true })
+
+  if (opts.category) {
+    query = query.eq('category', opts.category)
+  }
+
+  const scope = opts.builderScope ?? 'all'
+  if (scope === 'all') {
+    // No filter
+  } else if (scope === 'global') {
+    query = query.is('builder_id', null)
+  } else {
+    query = query.eq('builder_id', scope)
+  }
+
+  const { data, error } = await query
+  if (error) throw error
+  return (data ?? []) as Framework[]
+}
+
+// For generation: returns global frameworks + builder-specific if builderId provided.
+export async function getFrameworksForBuilder(builderId: string | null): Promise<Framework[]> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let query: any = getSupabaseAdmin()
+    .from('frameworks')
+    .select('*')
+    .order('category', { ascending: true })
+    .order('created_at', { ascending: true })
+
+  if (builderId) {
+    query = query.or(`builder_id.is.null,builder_id.eq.${builderId}`)
+  } else {
+    query = query.is('builder_id', null)
+  }
+
+  const { data, error } = await query
+  if (error) throw error
+  return (data ?? []) as Framework[]
+}
+
+export async function createFramework(input: FrameworkInsert): Promise<Framework> {
+  const { data, error } = await getSupabaseAdmin()
+    .from('frameworks')
+    .insert([input])
+    .select()
+    .single()
+
+  if (error) throw error
+  return data as Framework
+}
+
+export async function updateFramework(id: string, updates: FrameworkUpdate): Promise<Framework> {
+  const { data, error } = await getSupabaseAdmin()
+    .from('frameworks')
+    .update(updates)
+    .eq('id', id)
+    .select()
+    .single()
+
+  if (error) throw error
+  return data as Framework
+}
+
+export async function deleteFramework(id: string): Promise<void> {
+  const { error } = await getSupabaseAdmin()
+    .from('frameworks')
+    .delete()
+    .eq('id', id)
+
+  if (error) throw error
 }

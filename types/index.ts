@@ -72,3 +72,32 @@ export interface CreativeRecord {
   status: string
   approved: boolean
 }
+
+// P2: Frameworks library
+export type FrameworkCategory = 'copy' | 'hook' | 'image' | 'video'
+
+export interface Framework {
+  id: string
+  created_at?: string
+  title: string
+  category: FrameworkCategory
+  content: string
+  builder_id: string | null
+  tags: string[] | null
+}
+
+export interface FrameworkInsert {
+  title: string
+  category: FrameworkCategory
+  content: string
+  builder_id?: string | null
+  tags?: string[] | null
+}
+
+export interface FrameworkUpdate {
+  title?: string
+  category?: FrameworkCategory
+  content?: string
+  builder_id?: string | null
+  tags?: string[] | null
+}

@@ -6,6 +6,7 @@ import { CopyOutput } from '@/components/CopyOutput'
 import { ImageOutput } from '@/components/ImageOutput'
 import { AdPreview } from '@/components/AdPreview'
 import { BuilderBar } from '@/components/BuilderBar'
+import { FrameworksLibrary } from '@/components/FrameworksLibrary'
 import type {
   Builder,
   CampaignBrief,
@@ -16,6 +17,7 @@ import type {
 } from '@/types'
 
 type AppState = 'idle' | 'generating-copy' | 'generating-image' | 'complete' | 'error'
+type NavTab = 'generate' | 'frameworks'
 
 const MODEL_LABELS: Record<CopyModel, string> = {
   claude: 'Claude · claude-sonnet-4-6',
@@ -39,6 +41,7 @@ async function postJson(url: string, body: unknown) {
 }
 
 export default function Home() {
+  const [activeTab, setActiveTab] = useState<NavTab>('generate')
   const [appState, setAppState] = useState<AppState>('idle')
   const [selectedBuilder, setSelectedBuilder] = useState<Builder | null>(null)
   const [brief, setBrief] = useState<CampaignBrief>({ angle: '', goal: '' })
@@ -178,99 +181,128 @@ export default function Home() {
         </div>
       </header>
 
+      {/* Tab navigation */}
+      <div className="border-b border-white/10 px-8">
+        <div className="max-w-7xl mx-auto flex gap-1">
+          {([
+            { id: 'generate', label: 'Generate' },
+            { id: 'frameworks', label: 'Frameworks' },
+          ] as const).map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setActiveTab(tab.id)}
+              className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
+                activeTab === tab.id
+                  ? 'border-amber-500 text-white'
+                  : 'border-transparent text-white/40 hover:text-white/70'
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
       <div className="max-w-7xl mx-auto px-8 py-10 space-y-6">
         <BuilderBar selectedBuilder={selectedBuilder} onSelect={setSelectedBuilder} />
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          <div className="lg:col-span-1">
-            <BriefForm onGenerate={handleGenerate} isGenerating={isGenerating} appState={appState} />
-          </div>
+        {activeTab === 'frameworks' && (
+          <FrameworksLibrary selectedBuilder={selectedBuilder} />
+        )}
 
-          <div className="lg:col-span-2 space-y-6">
-            {appState === 'idle' && (
-              <div className="rounded-xl border border-white/10 bg-white/[0.02] p-12 text-center">
-                <p className="text-white/30 text-sm">
-                  {selectedBuilder
-                    ? `Enter a campaign brief to generate creative for ${selectedBuilder.name}`
-                    : 'Onboard or select a builder, then enter a campaign brief to generate'}
-                </p>
-              </div>
-            )}
+        {activeTab === 'generate' && (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <div className="lg:col-span-1">
+              <BriefForm onGenerate={handleGenerate} isGenerating={isGenerating} appState={appState} />
+            </div>
 
-            {errorMsg && (
-              <div className="rounded-xl border border-red-500/20 bg-red-500/[0.04] p-4">
-                <p className="text-sm text-red-400">{errorMsg}</p>
-              </div>
-            )}
-
-            {copyModelsShown && (
-              <section className="space-y-3">
-                <div>
-                  <h2 className="text-sm font-semibold">Ad Copy — Model Comparison</h2>
-                  <p className="text-xs text-white/30 mt-0.5">
-                    Two models, one brief. Pick the winner for the final ad.
+            <div className="lg:col-span-2 space-y-6">
+              {appState === 'idle' && (
+                <div className="rounded-xl border border-white/10 bg-white/[0.02] p-12 text-center">
+                  <p className="text-white/30 text-sm">
+                    {selectedBuilder
+                      ? `Enter a campaign brief to generate creative for ${selectedBuilder.name}`
+                      : 'Onboard or select a builder, then enter a campaign brief to generate'}
                   </p>
                 </div>
+              )}
 
-                <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 items-start">
-                  {(['claude', 'openai'] as const).map((model) => {
-                    const copy = model === 'claude' ? copyClaude : copyOpenai
-                    if (copy) {
+              {errorMsg && (
+                <div className="rounded-xl border border-red-500/20 bg-red-500/[0.04] p-4">
+                  <p className="text-sm text-red-400">{errorMsg}</p>
+                </div>
+              )}
+
+              {copyModelsShown && (
+                <section className="space-y-3">
+                  <div>
+                    <h2 className="text-sm font-semibold">Ad Copy — Model Comparison</h2>
+                    <p className="text-xs text-white/30 mt-0.5">
+                      Two models, one brief. Pick the winner for the final ad.
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 items-start">
+                    {(['claude', 'openai'] as const).map((model) => {
+                      const copy = model === 'claude' ? copyClaude : copyOpenai
+                      if (copy) {
+                        return (
+                          <CopyOutput
+                            key={model}
+                            output={copy}
+                            modelLabel={MODEL_LABELS[model]}
+                            selected={selectedModel === model}
+                            onSelect={() => setSelectedModel(model)}
+                          />
+                        )
+                      }
                       return (
-                        <CopyOutput
+                        <div
                           key={model}
-                          output={copy}
-                          modelLabel={MODEL_LABELS[model]}
-                          selected={selectedModel === model}
-                          onSelect={() => setSelectedModel(model)}
-                        />
+                          className="rounded-xl border border-white/10 bg-white/[0.02] p-5 min-h-[160px] flex items-center justify-center text-center"
+                        >
+                          {appState === 'generating-copy' ? (
+                            <span className="flex items-center gap-2 text-xs text-white/40">
+                              <span className="w-3 h-3 border border-white/30 border-t-transparent rounded-full animate-spin"></span>
+                              {MODEL_LABELS[model]} writing…
+                            </span>
+                          ) : (
+                            <span className="text-xs text-white/30">{MODEL_LABELS[model]} unavailable</span>
+                          )}
+                        </div>
                       )
-                    }
-                    return (
-                      <div
-                        key={model}
-                        className="rounded-xl border border-white/10 bg-white/[0.02] p-5 min-h-[160px] flex items-center justify-center text-center"
-                      >
-                        {appState === 'generating-copy' ? (
-                          <span className="flex items-center gap-2 text-xs text-white/40">
-                            <span className="w-3 h-3 border border-white/30 border-t-transparent rounded-full animate-spin"></span>
-                            {MODEL_LABELS[model]} writing…
-                          </span>
-                        ) : (
-                          <span className="text-xs text-white/30">{MODEL_LABELS[model]} unavailable</span>
-                        )}
-                      </div>
-                    )
-                  })}
-                </div>
-              </section>
-            )}
+                    })}
+                  </div>
+                </section>
+              )}
 
-            {(appState === 'generating-image' || appState === 'complete') && (
-              <ImageOutput higgsfield={imgHiggsfield} openai={imgOpenai} />
-            )}
+              {(appState === 'generating-image' || appState === 'complete') && (
+                <ImageOutput higgsfield={imgHiggsfield} openai={imgOpenai} />
+              )}
 
-            {appState === 'complete' && selectedCopy && (
-              <>
-                <AdPreview copy={selectedCopy} image={previewImage} modelLabel={MODEL_LABELS[selectedModel]} />
-                <div className="flex justify-end">
-                  <button
-                    type="button"
-                    onClick={handleSave}
-                    disabled={saved}
-                    className={`px-6 py-2.5 rounded-lg text-sm font-medium transition-all ${
-                      saved
-                        ? 'bg-emerald-500/20 text-emerald-400 cursor-default'
-                        : 'bg-amber-500 hover:bg-amber-400 text-black'
-                    }`}
-                  >
-                    {saved ? '✓ Saved to Library' : 'Save to Library'}
-                  </button>
-                </div>
-              </>
-            )}
+              {appState === 'complete' && selectedCopy && (
+                <>
+                  <AdPreview copy={selectedCopy} image={previewImage} modelLabel={MODEL_LABELS[selectedModel]} />
+                  <div className="flex justify-end">
+                    <button
+                      type="button"
+                      onClick={handleSave}
+                      disabled={saved}
+                      className={`px-6 py-2.5 rounded-lg text-sm font-medium transition-all ${
+                        saved
+                          ? 'bg-emerald-500/20 text-emerald-400 cursor-default'
+                          : 'bg-amber-500 hover:bg-amber-400 text-black'
+                      }`}
+                    >
+                      {saved ? '✓ Saved to Library' : 'Save to Library'}
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </main>
   )

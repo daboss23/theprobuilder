@@ -5,6 +5,7 @@ import { getSkills } from '@/lib/skills'
 import { parseModelJson } from '@/lib/parse'
 import { getBuilder } from '@/lib/supabase'
 import { buildBrandContext } from '@/lib/brand-context'
+import { buildFrameworksContext } from '@/lib/frameworks'
 import type { CopyOutput } from '@/types'
 
 export const runtime = 'nodejs'
@@ -39,13 +40,15 @@ export async function POST(request: NextRequest) {
     }
 
     const skills = getSkills(['meta-frameworks', 'hooks-library'])
+    const dbFrameworks = await buildFrameworksContext(builderId ?? null)
+    const frameworksSection = [skills, dbFrameworks].filter(Boolean).join('\n\n---\n\n')
 
     const systemPrompt = `${brandMemory}
 
 ---
 
 ## YOUR CREATIVE SKILLS & FRAMEWORKS
-${skills}
+${frameworksSection}
 
 ---
 
