@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { getSupabaseAdmin } from '@/lib/supabase'
+import { getSupabaseAdmin, supabaseUrl } from '@/lib/supabase'
 import { embed } from '@/lib/embeddings'
 
 export const runtime = 'nodejs'
@@ -30,6 +30,8 @@ function describe(err: unknown): string {
 export async function GET() {
   const env = {
     NEXT_PUBLIC_SUPABASE_URL: Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL),
+    SUPABASE_URL_runtime: Boolean(process.env.SUPABASE_URL),
+    supabaseUrlResolved: Boolean(supabaseUrl()),
     SUPABASE_SERVICE_ROLE_KEY: Boolean(
       process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SECRET_KEY,
     ),
