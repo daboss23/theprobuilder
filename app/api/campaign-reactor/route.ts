@@ -42,7 +42,7 @@ const SPECIALISTS: Record<
       'market pains, desires, objections, beliefs, and the member transformations that prove change is possible',
   },
   creative: {
-    name: 'Creative Analyst',
+    name: 'Creative Strategist',
     systems: ['creative', 'pattern'],
     focus: 'winning creative structures, formats, opening patterns, and repeatable winning patterns',
   },
@@ -117,7 +117,7 @@ function coordinatorPrompt(outputs: string[]): string {
 
 Your team:
 - Research Analyst — market pains, desires, objections, and member transformations.
-- Creative Analyst — winning creative structures, formats, and repeatable patterns.
+- Creative Strategist — winning creative structures, formats, and repeatable patterns.
 - Copy Specialist — high-performing hooks, headlines, and offers.
 
 Process:
@@ -203,11 +203,11 @@ async function runDemo(controller: ReadableStreamDefaultController, body: Reacto
     { type: 'Headline', text: `From struggling to systemized — how ${a} became TPB's unfair advantage.`, basis: 'Research Analyst (member transformations)', learningCheck: 'Transformation arc over features', score: 8 },
     { type: 'Primary Text', text: `You didn't get into building to babysit jobs. This is the ${a} system that gave 500+ builders their margin — and their weekends — back.`, basis: 'Research Analyst + Copy Specialist', learningCheck: 'Concrete proof (500+ builders)', score: 8 },
     { type: 'VSL Opener', text: `In the next few minutes I'll show you the exact ${a} mechanism most builders never see until it's too late.`, basis: 'Copy Specialist (VSL openers)', learningCheck: 'Mechanism + curiosity', score: 7 },
-    { type: 'Static Concept', text: `Dark background, one bold profit figure, named member underneath, single cyan accent. Angle: ${a}.`, basis: 'Creative Analyst (static proof ad)', learningCheck: 'Specific $ numbers beat vague claims', score: 9 },
-    { type: 'Video Concept', text: `Founder direct-to-camera on-site: 1.5s pattern interrupt, contrarian ${al} belief, member proof, soft CTA.`, basis: 'Creative Analyst (Founder Video, 71% win)', learningCheck: 'Founder videos beat talking heads', score: 9 },
-    { type: 'Founder Concept', text: `Handheld walk-through of a finished site while the founder breaks down the ${a} turning point.`, basis: 'Creative Analyst (Founder Video, 71% win)', learningCheck: 'Founder-led, on-site, real proof', score: 9 },
+    { type: 'Static Concept', text: `Dark background, one bold profit figure, named member underneath, single cyan accent. Angle: ${a}.`, basis: 'Creative Strategist (static proof ad)', learningCheck: 'Specific $ numbers beat vague claims', score: 9 },
+    { type: 'Video Concept', text: `Founder direct-to-camera on-site: 1.5s pattern interrupt, contrarian ${al} belief, member proof, soft CTA.`, basis: 'Creative Strategist (Founder Video, 71% win)', learningCheck: 'Founder videos beat talking heads', score: 9 },
+    { type: 'Founder Concept', text: `Handheld walk-through of a finished site while the founder breaks down the ${a} turning point.`, basis: 'Creative Strategist (Founder Video, 71% win)', learningCheck: 'Founder-led, on-site, real proof', score: 9 },
     { type: 'Testimonial Concept', text: `Member states old hours/margin, the ${al} turning point, then the after. B-roll of their jobs.`, basis: 'Research Analyst (transformations)', learningCheck: 'Named member win over generic promise', score: 8 },
-    { type: 'Event Concept', text: `High-energy room montage tied to one ${a} insight and community proof.`, basis: 'Creative Analyst (Authority Pattern)', learningCheck: 'Community proof', score: 7 },
+    { type: 'Event Concept', text: `High-energy room montage tied to one ${a} insight and community proof.`, basis: 'Creative Strategist (Authority Pattern)', learningCheck: 'Community proof', score: 7 },
     { type: 'Campaign Concept', text: `The ${a} Reactor: founder video + static proof ad + member testimonial, sequenced cold → warm → apply.`, basis: 'Coordinator (stacks highest-win formats)', learningCheck: 'Stacks the three highest-win formats', score: 9 },
   ]
   const norm = (s: string) => s.toLowerCase().replace(/s$/, '').trim()
