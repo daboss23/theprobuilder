@@ -3,8 +3,10 @@
 @tailwind utilities;
 
 :root {
-  --background: #0a0a0a;
-  --foreground: #ededed;
+  --background: #05070a;
+  --foreground: #e6edf6;
+  --font-inter: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-space-grotesk: 'Space Grotesk', 'Inter', system-ui, sans-serif;
 }
 
 html {
@@ -13,22 +15,64 @@ html {
 
 body {
   color: var(--foreground);
-  background: var(--background);
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  background: #05070a;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
-/* Thin custom scrollbar to suit the dark command-centre aesthetic */
+/* Ambient command-center backdrop */
+.reactor-bg {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background:
+    radial-gradient(1200px 600px at 70% -10%, rgba(10, 132, 255, 0.12), transparent 60%),
+    radial-gradient(900px 500px at 0% 100%, rgba(0, 212, 255, 0.06), transparent 55%),
+    #05070a;
+}
+.reactor-bg::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: linear-gradient(to right, rgba(28, 36, 51, 0.35) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(28, 36, 51, 0.35) 1px, transparent 1px);
+  background-size: 44px 44px;
+  mask-image: radial-gradient(circle at 50% 30%, black, transparent 80%);
+  opacity: 0.5;
+}
+
+/* Glass panel primitive */
+.glass {
+  background: linear-gradient(180deg, rgba(17, 24, 39, 0.55), rgba(11, 15, 23, 0.65));
+  border: 1px solid #1c2433;
+  backdrop-filter: blur(10px);
+  border-radius: 0.875rem;
+}
+.glass-hover {
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+}
+.glass-hover:hover {
+  border-color: rgba(46, 168, 255, 0.4);
+  box-shadow: 0 0 0 1px rgba(46, 168, 255, 0.12), 0 0 32px -8px rgba(10, 132, 255, 0.4);
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+
+/* Thin command-center scrollbar */
 ::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
+  width: 9px;
+  height: 9px;
 }
 ::-webkit-scrollbar-track {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(46, 168, 255, 0.18);
   border-radius: 9999px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.16);
+  background: rgba(46, 168, 255, 0.32);
 }
