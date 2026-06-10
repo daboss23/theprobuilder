@@ -414,6 +414,28 @@ export function VaultManager({ initialStats }: { initialStats: Stats }) {
                   )}
                 </button>
               </div>
+
+              {fetchStatus.kind === 'error' && sourceUrl.trim() && (
+                <div className="mt-3 rounded-lg border border-amber-500/25 bg-amber-500/[0.06] p-3 text-[12px] leading-relaxed text-amber-200/80">
+                  <p className="mb-2 font-medium text-amber-200">
+                    YouTube is blocking the automatic pull from our server. Grab it manually in 10
+                    seconds:
+                  </p>
+                  <ol className="ml-4 list-decimal space-y-0.5 text-amber-100/70">
+                    <li>Open the video and click the “…more” menu → “Show transcript”.</li>
+                    <li>Select the transcript text and copy it.</li>
+                    <li>Paste it into the content box below, then ingest.</li>
+                  </ol>
+                  <a
+                    href={sourceUrl.trim()}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mt-2 inline-flex items-center gap-1.5 rounded-md border border-amber-500/30 bg-amber-500/10 px-2.5 py-1.5 text-[11px] font-medium text-amber-100 transition-colors hover:bg-amber-500/20"
+                  >
+                    <Clapperboard size={12} /> Open video on YouTube
+                  </a>
+                </div>
+              )}
             </div>
           )}
 
