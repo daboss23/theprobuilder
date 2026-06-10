@@ -13,7 +13,11 @@ import {
   ProgressBar,
   Pill,
   TrendBadge,
+  type KpiTint,
 } from '@/components/reactor/ui'
+
+// Pastel rotation across the 8 KPI cards, echoing the reference dashboard.
+const kpiTintCycle: KpiTint[] = ['blue', 'green', 'purple', 'teal', 'teal', 'rose', 'amber', 'blue']
 import {
   reactorKpis,
   winningAngles,
@@ -52,8 +56,8 @@ export default function ReactorDashboard() {
 
       {/* KPI grid */}
       <section className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        {reactorKpis.map((k) => (
-          <KpiCard key={k.label} {...k} />
+        {reactorKpis.map((k, i) => (
+          <KpiCard key={k.label} {...k} tint={kpiTintCycle[i % kpiTintCycle.length]} />
         ))}
       </section>
 

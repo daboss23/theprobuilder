@@ -6,7 +6,7 @@ export default function CreativePage() {
   return (
     <>
       <PageHeader
-        system="04"
+        system="03"
         title="Creative Intelligence"
         subtitle="Study winning creatives. Reverse-engineer the structure, visual style, opening pattern, and CTA pattern behind every creative that has performed."
       />

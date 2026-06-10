@@ -6,7 +6,7 @@ export default function PatternsPage() {
   return (
     <>
       <PageHeader
-        system="06"
+        system="05"
         title="Pattern Intelligence"
         subtitle="Store repeatable winning patterns. Each pattern is a reusable blueprint — hook, headline, creative style, transformation, offer, and CTA that wins on repeat."
       />

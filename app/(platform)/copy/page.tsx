@@ -32,7 +32,7 @@ export default function CopyPage() {
   return (
     <>
       <PageHeader
-        system="05"
+        system="04"
         title="Copy Intelligence"
         subtitle="Study winning copy. Decode the angle, emotion, belief, desire, objection, and offer inside every hook, headline, and primary text that converted."
       />

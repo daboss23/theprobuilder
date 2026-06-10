@@ -6,7 +6,7 @@ export default function LearningsPage() {
   return (
     <>
       <PageHeader
-        system="08"
+        system="07"
         title="Creative Learnings"
         subtitle="Document what works. Every insight is backed by evidence and turned into a recommendation the reactor applies to future campaigns."
       />
