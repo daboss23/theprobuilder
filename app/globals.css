@@ -1,196 +1,299 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
-
-:root {
-  --background: #05070a;
-  --foreground: #e6edf6;
-  --font-inter: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-  --font-space-grotesk: 'Space Grotesk', 'Inter', system-ui, sans-serif;
-}
-
-html {
-  color-scheme: dark;
-}
-
-body {
-  color: var(--foreground);
-  background: #05070a;
-  -webkit-font-smoothing: antialiased;
-  text-rendering: optimizeLegibility;
-}
-
-/* Ambient command-center backdrop */
-.reactor-bg {
-  position: fixed;
-  inset: 0;
-  z-index: -1;
-  background:
-    radial-gradient(1200px 600px at 70% -10%, rgba(10, 132, 255, 0.12), transparent 60%),
-    radial-gradient(900px 500px at 0% 100%, rgba(0, 212, 255, 0.06), transparent 55%),
-    #05070a;
-}
-.reactor-bg::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background-image: linear-gradient(to right, rgba(28, 36, 51, 0.35) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(28, 36, 51, 0.35) 1px, transparent 1px);
-  background-size: 44px 44px;
-  mask-image: radial-gradient(circle at 50% 30%, black, transparent 80%);
-  opacity: 0.5;
-}
-
-/* Glass panel primitive */
-.glass {
-  background: linear-gradient(180deg, rgba(17, 24, 39, 0.55), rgba(11, 15, 23, 0.65));
-  border: 1px solid #1c2433;
-  backdrop-filter: blur(10px);
-  border-radius: 0.875rem;
-}
-.glass-hover {
-  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
-}
-.glass-hover:hover {
-  border-color: rgba(46, 168, 255, 0.4);
-  box-shadow: 0 0 0 1px rgba(46, 168, 255, 0.12), 0 0 32px -8px rgba(10, 132, 255, 0.4);
-}
-
-.tabular {
-  font-variant-numeric: tabular-nums;
-  letter-spacing: -0.02em;
-}
-
-/* Thin command-center scrollbar */
-::-webkit-scrollbar {
-  width: 9px;
-  height: 9px;
-}
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-::-webkit-scrollbar-thumb {
-  background: rgba(46, 168, 255, 0.18);
-  border-radius: 9999px;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: rgba(46, 168, 255, 0.32);
-}
-
-/* Reactor dashboard: a single machined glass telemetry console */
-.dashboard-console {
-  position: relative;
-  isolation: isolate;
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-  padding: clamp(0.55rem, 1.2vw, 0.9rem);
-  border: 1px solid rgba(122, 169, 214, 0.18);
-  border-radius: 1.45rem;
-  background:
-    radial-gradient(900px 380px at 82% -10%, rgba(35, 146, 217, 0.12), transparent 60%),
-    linear-gradient(145deg, rgba(22, 32, 45, 0.72), rgba(5, 9, 15, 0.86) 48%, rgba(10, 18, 27, 0.76));
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.12),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.75),
-    0 34px 90px -42px rgba(0, 0, 0, 0.95),
-    0 0 0 1px rgba(0, 0, 0, 0.55);
-}
-.dashboard-console::before,
-.dashboard-console::after {
-  content: '';
-  position: absolute;
-  pointer-events: none;
-  z-index: -1;
-}
-.dashboard-console::before {
-  inset: 0.45rem;
-  border: 1px solid rgba(170, 211, 240, 0.05);
-  border-radius: 1.1rem;
-  background-image: linear-gradient(rgba(104, 158, 198, 0.025) 1px, transparent 1px), linear-gradient(90deg, rgba(104, 158, 198, 0.025) 1px, transparent 1px);
-  background-size: 28px 28px;
-}
-.dashboard-console::after {
-  inset: -1px 14% auto;
-  height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(130, 207, 255, 0.7), transparent);
-  filter: blur(0.2px);
-}
-.dashboard-console .glass {
-  border-color: rgba(126, 161, 196, 0.2);
-  border-radius: 1rem;
-  background:
-    linear-gradient(112deg, rgba(255, 255, 255, 0.035), transparent 24%),
-    linear-gradient(180deg, rgba(13, 22, 33, 0.82), rgba(5, 10, 17, 0.88));
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.065), inset 0 -18px 42px rgba(0, 0, 0, 0.15), 0 12px 28px -22px rgba(0, 0, 0, 0.9);
-}
-.dashboard-console .glass::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  border-radius: inherit;
-  background: radial-gradient(420px 110px at 18% 0%, rgba(89, 188, 255, 0.055), transparent 70%);
-}
-.glass { position: relative; overflow: hidden; }
-.glass > *:not(.panel-sheen) { position: relative; z-index: 1; }
-.panel-sheen {
-  position: absolute;
-  inset: 0 0 auto;
-  height: 38%;
-  pointer-events: none;
-  background: linear-gradient(172deg, rgba(255,255,255,0.035), transparent 55%);
-}
-.panel-header { background: linear-gradient(90deg, rgba(255,255,255,0.018), transparent 55%); border-color: rgba(135, 174, 209, 0.13); }
-.panel-icon { box-shadow: inset 0 1px 0 rgba(255,255,255,0.08), 0 0 18px -7px rgba(46,168,255,0.8); }
-.dashboard-kpi-grid { perspective: 1000px; }
-.kpi-instrument { min-height: 7.25rem; border: 1px solid transparent; }
-.kpi-instrument::before {
-  content: '';
-  position: absolute;
-  inset: 1px;
-  border-radius: calc(1rem - 1px);
-  border: 1px solid rgba(255,255,255,0.04);
-  pointer-events: none;
-}
-.kpi-instrument::after {
-  content: '';
-  position: absolute;
-  inset: auto 10% 0;
-  height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
-  opacity: 0.65;
-}
-.kpi-scanline {
-  position: absolute;
-  inset: 42% 0 auto;
-  height: 1px;
-  opacity: 0.16;
-  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.7), transparent);
-}
-.telemetry-row {
-  margin-inline: -0.45rem;
-  padding: 0.45rem;
-  border-radius: 0.55rem;
-  background: linear-gradient(90deg, rgba(255,255,255,0.018), transparent);
-  transition: background 180ms ease;
-}
-.telemetry-row:hover { background: linear-gradient(90deg, rgba(46,168,255,0.07), transparent 88%); }
-.progress-track { box-shadow: inset 0 1px 3px rgba(0,0,0,0.75), 0 1px 0 rgba(255,255,255,0.025); }
-.heat-cell { border: 1px solid rgba(170,220,255,0.11); box-shadow: inset 0 1px 0 rgba(255,255,255,0.13), inset 0 -10px 16px rgba(0,0,0,0.18); }
-.recommendation-card {
-  position: relative;
-  background: linear-gradient(145deg, rgba(22,35,50,0.6), rgba(7,13,21,0.72));
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.055), 0 14px 28px -24px #000;
-}
-.recommendation-card::before {
-  content: '';
-  position: absolute;
-  inset: 0 auto 0 0;
-  width: 1px;
-  background: linear-gradient(transparent, rgba(46,168,255,0.5), transparent);
-}
-@media (max-width: 767px) {
-  .dashboard-console { margin-inline: -0.3rem; padding: 0.45rem; border-radius: 1.1rem; }
-  .kpi-instrument { min-height: 6.7rem; }
-}
+diff --git a/app/globals.css b/app/globals.css
+index 9a7ca9b02cc1f7cf2fd56dbb002d9497a136a211..966f9dffdbbf85bcc112ae34ba363375accf9235 100644
+--- a/app/globals.css
++++ b/app/globals.css
+@@ -1,78 +1,253 @@
+ @tailwind base;
+ @tailwind components;
+ @tailwind utilities;
+ 
+ :root {
+-  --background: #05070a;
+-  --foreground: #e6edf6;
++  --background: #02060b;
++  --foreground: #e9f2ff;
++  --line: rgba(91, 166, 224, 0.18);
++  --line-hot: rgba(64, 181, 255, 0.55);
+   --font-inter: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+   --font-space-grotesk: 'Space Grotesk', 'Inter', system-ui, sans-serif;
+ }
+ 
+-html {
+-  color-scheme: dark;
+-}
+-
++html { color-scheme: dark; }
+ body {
+   color: var(--foreground);
+-  background: #05070a;
++  background: #02060b;
+   -webkit-font-smoothing: antialiased;
+   text-rendering: optimizeLegibility;
+ }
+ 
+-/* Ambient command-center backdrop */
++/* Deep performance-lab environment */
+ .reactor-bg {
+   position: fixed;
+   inset: 0;
+-  z-index: -1;
++  z-index: -2;
++  overflow: hidden;
+   background:
+-    radial-gradient(1200px 600px at 70% -10%, rgba(10, 132, 255, 0.12), transparent 60%),
+-    radial-gradient(900px 500px at 0% 100%, rgba(0, 212, 255, 0.06), transparent 55%),
+-    #05070a;
++    radial-gradient(1100px 620px at 72% -12%, rgba(12, 112, 214, 0.18), transparent 62%),
++    radial-gradient(850px 600px at 5% 100%, rgba(0, 214, 255, 0.08), transparent 58%),
++    linear-gradient(145deg, #02050a, #040a12 48%, #02060b);
+ }
++.reactor-bg::before,
+ .reactor-bg::after {
+   content: '';
+   position: absolute;
+   inset: 0;
+-  background-image: linear-gradient(to right, rgba(28, 36, 51, 0.35) 1px, transparent 1px),
+-    linear-gradient(to bottom, rgba(28, 36, 51, 0.35) 1px, transparent 1px);
+-  background-size: 44px 44px;
+-  mask-image: radial-gradient(circle at 50% 30%, black, transparent 80%);
+-  opacity: 0.5;
++}
++.reactor-bg::before {
++  background-image: linear-gradient(to right, rgba(61, 126, 177, 0.08) 1px, transparent 1px),
++    linear-gradient(to bottom, rgba(61, 126, 177, 0.08) 1px, transparent 1px);
++  background-size: 42px 42px;
++  mask-image: radial-gradient(circle at 60% 32%, black, transparent 82%);
++}
++.reactor-bg::after {
++  background: repeating-linear-gradient(0deg, transparent 0 3px, rgba(255,255,255,0.008) 3px 4px);
++  opacity: 0.3;
++}
++
++.reactor-platform { min-height: 100vh; }
++.reactor-stage { min-height: 100vh; }
++.reactor-main { position: relative; }
++.command-surface {
++  position: relative;
++  isolation: isolate;
++  min-height: calc(100vh - 104px);
++  padding: clamp(1rem, 2vw, 1.75rem);
++  border: 1px solid rgba(74, 151, 211, 0.28);
++  border-radius: 1.45rem;
++  background:
++    radial-gradient(900px 320px at 48% -10%, rgba(20, 125, 221, 0.09), transparent 65%),
++    linear-gradient(145deg, rgba(5, 13, 23, 0.82), rgba(2, 8, 14, 0.93));
++  box-shadow: inset 0 1px 0 rgba(160, 220, 255, 0.09), 0 26px 70px -42px #000, 0 0 60px -48px rgba(0, 153, 255, 0.9);
++}
++.command-surface::before {
++  content: '';
++  position: absolute;
++  z-index: -1;
++  inset: 0;
++  pointer-events: none;
++  border-radius: inherit;
++  background-image: linear-gradient(rgba(72, 138, 188, 0.025) 1px, transparent 1px), linear-gradient(90deg, rgba(72, 138, 188, 0.025) 1px, transparent 1px);
++  background-size: 26px 26px;
++  mask-image: linear-gradient(black, transparent 80%);
++}
++.command-surface::after {
++  content: '';
++  position: absolute;
++  inset: -1px 20% auto;
++  height: 1px;
++  background: linear-gradient(90deg, transparent, #54baff, transparent);
++  box-shadow: 0 0 18px rgba(46,168,255,0.7);
++}
++
++/* Left control console */
++.reactor-sidebar {
++  position: sticky;
++  top: 0;
++  height: 100vh;
++  border-right: 1px solid rgba(68, 145, 204, 0.25);
++  background: linear-gradient(180deg, rgba(3,10,18,0.96), rgba(2,7,13,0.98));
++  box-shadow: inset -1px 0 0 rgba(119,194,245,0.04), 18px 0 50px -42px rgba(0,157,255,0.9);
++}
++.reactor-brand { border-bottom: 1px solid rgba(74,147,201,0.15); background: radial-gradient(circle at 40% 35%, rgba(22,129,220,0.1), transparent 60%); }
++.reactor-logo { animation: reactor-breathe 3.8s ease-in-out infinite; transform-origin: 31% 48%; }
++.reactor-nav-item {
++  border: 1px solid transparent;
++  background: linear-gradient(90deg, rgba(11,25,39,0.28), rgba(5,13,22,0.12));
++}
++.reactor-nav-item:hover {
++  border-color: rgba(65,154,220,0.2);
++  background: linear-gradient(90deg, rgba(14,61,99,0.36), rgba(7,22,36,0.32));
++  box-shadow: inset 0 1px 0 rgba(255,255,255,0.025);
++}
++.reactor-nav-item.is-active {
++  border-color: rgba(36,148,235,0.58);
++  background: radial-gradient(circle at 12% 50%, rgba(20,121,220,0.2), transparent 55%), linear-gradient(90deg, rgba(10,51,88,0.78), rgba(4,17,29,0.68));
++  box-shadow: inset 0 1px 0 rgba(151,218,255,0.08), 0 0 24px -14px rgba(20,153,255,0.9);
++}
++.reactor-status-wrap { border-top: 1px solid rgba(74,147,201,0.15); }
++.reactor-status-module {
++  padding: 0.8rem;
++  border: 1px solid rgba(32,201,151,0.22);
++  border-radius: 0.85rem;
++  background: linear-gradient(145deg, rgba(6,41,44,0.45), rgba(4,18,27,0.72));
++  box-shadow: inset 0 1px 0 rgba(159,255,225,0.05), 0 0 22px -16px rgba(32,201,151,0.9);
+ }
+ 
+-/* Glass panel primitive */
+-.glass {
+-  background: linear-gradient(180deg, rgba(17, 24, 39, 0.55), rgba(11, 15, 23, 0.65));
+-  border: 1px solid #1c2433;
+-  backdrop-filter: blur(10px);
+-  border-radius: 0.875rem;
++/* Top command rail */
++.reactor-topbar {
++  border-bottom: 1px solid rgba(73, 149, 207, 0.18);
++  background: rgba(2, 8, 15, 0.82);
++  backdrop-filter: blur(22px) saturate(130%);
++  box-shadow: 0 10px 32px -28px rgba(0, 162, 255, 0.9);
++}
++.topbar-control {
++  background: linear-gradient(180deg, rgba(15,31,47,0.68), rgba(5,14,23,0.7));
++  border-color: rgba(82,151,204,0.22);
++  box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
+ }
+-.glass-hover {
+-  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
++.topbar-avatar { box-shadow: inset 0 1px 0 rgba(255,255,255,0.3), 0 0 20px -6px rgba(0,174,255,0.8); }
++.mobile-reactor-nav { backdrop-filter: blur(20px); }
++
++/* Shared cybernetic glass modules */
++.glass,
++.reactor-panel {
++  position: relative;
++  overflow: hidden;
++  border: 1px solid rgba(76, 154, 214, 0.28);
++  border-radius: 1.1rem;
++  background:
++    linear-gradient(112deg, rgba(255,255,255,0.035), transparent 24%),
++    radial-gradient(420px 150px at 10% 0%, rgba(33,138,220,0.08), transparent 72%),
++    linear-gradient(180deg, rgba(7,20,33,0.86), rgba(3,11,19,0.92));
++  backdrop-filter: blur(18px) saturate(130%);
++  box-shadow: inset 0 1px 0 rgba(166,222,255,0.08), inset 0 -22px 44px rgba(0,0,0,0.14), 0 18px 42px -32px #000;
+ }
++.glass::after,
++.reactor-panel::after {
++  content: '';
++  position: absolute;
++  inset: 0;
++  z-index: 0;
++  pointer-events: none;
++  border-radius: inherit;
++  background: linear-gradient(135deg, rgba(98,190,255,0.055), transparent 18%, transparent 76%, rgba(72,140,190,0.025));
++}
++.glass > *, .reactor-panel > * { position: relative; z-index: 1; }
++.glass-hover { transition: border-color .22s ease, box-shadow .22s ease, transform .22s ease; }
+ .glass-hover:hover {
+-  border-color: rgba(46, 168, 255, 0.4);
+-  box-shadow: 0 0 0 1px rgba(46, 168, 255, 0.12), 0 0 32px -8px rgba(10, 132, 255, 0.4);
++  transform: translateY(-2px);
++  border-color: rgba(54, 175, 255, 0.52);
++  box-shadow: inset 0 1px 0 rgba(255,255,255,0.09), 0 0 0 1px rgba(46,168,255,0.08), 0 22px 46px -30px rgba(0,137,255,0.8);
++}
++.panel-sheen { position: absolute; inset: 0 0 auto; height: 42%; pointer-events: none; background: linear-gradient(172deg, rgba(255,255,255,0.045), transparent 55%); }
++.panel-header {
++  border-color: rgba(100,174,228,0.14);
++  background: linear-gradient(90deg, rgba(16,49,75,0.2), transparent 65%);
++}
++.panel-icon {
++  border-color: rgba(68,175,248,0.28);
++  background: radial-gradient(circle, rgba(35,159,239,0.18), rgba(4,20,33,0.7));
++  box-shadow: inset 0 1px 0 rgba(255,255,255,0.1), 0 0 20px -5px rgba(46,168,255,0.85);
+ }
+ 
+-.tabular {
+-  font-variant-numeric: tabular-nums;
+-  letter-spacing: -0.02em;
++/* Nested modules across every intelligence system */
++.command-surface [class*='border-border'][class*='bg-surface'],
++.command-surface [class*='border-border'][class*='bg-background'] {
++  border-color: rgba(79,151,205,0.2);
++  background: linear-gradient(145deg, rgba(12,31,47,0.56), rgba(3,12,20,0.68));
++  box-shadow: inset 0 1px 0 rgba(255,255,255,0.035);
++}
++.command-surface button,
++.command-surface a[class*='border-primary'] { box-shadow: inset 0 1px 0 rgba(255,255,255,0.05), 0 0 18px -12px rgba(0,153,255,0.8); }
++.command-surface input,
++.command-surface textarea,
++.command-surface select {
++  border-color: rgba(76,154,214,0.25) !important;
++  background-color: rgba(3,13,22,0.72) !important;
++  box-shadow: inset 0 2px 8px rgba(0,0,0,0.45);
+ }
+ 
+-/* Thin command-center scrollbar */
+-::-webkit-scrollbar {
+-  width: 9px;
+-  height: 9px;
++/* KPI telemetry modules */
++.dashboard-console { display: flex; flex-direction: column; gap: 0.8rem; }
++.dashboard-kpi-grid { perspective: 1000px; }
++.kpi-instrument {
++  min-height: 8.5rem;
++  border: 1px solid rgba(112,188,240,0.25);
++  border-radius: 1.15rem;
++  isolation: isolate;
+ }
+-::-webkit-scrollbar-track {
+-  background: transparent;
++.kpi-instrument::before {
++  content: '';
++  position: absolute;
++  inset: 1px;
++  z-index: -1;
++  pointer-events: none;
++  border: 1px solid rgba(255,255,255,0.045);
++  border-radius: calc(1.15rem - 2px);
++  background: linear-gradient(165deg, rgba(255,255,255,0.035), transparent 35%);
++}
++.kpi-instrument::after {
++  content: '';
++  position: absolute;
++  inset: auto 8% 0;
++  height: 1px;
++  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.25), transparent);
+ }
+-::-webkit-scrollbar-thumb {
+-  background: rgba(46, 168, 255, 0.18);
+-  border-radius: 9999px;
++.kpi-instrument:hover { transform: translateY(-3px); filter: saturate(1.12); }
++.kpi-icon-block { background: radial-gradient(circle, rgba(20,73,110,0.5), rgba(3,17,29,0.72)); }
++.kpi-scanline { position: absolute; inset: 48% 0 auto; height: 1px; opacity: 0.12; background: linear-gradient(90deg, transparent, white, transparent); }
++.kpi-sparkline { position: absolute; right: 0.8rem; bottom: 0.55rem; width: 6.3rem; height: 2rem; opacity: 0.88; filter: drop-shadow(0 0 4px currentColor); }
++.trend-badge { border: 1px solid currentColor; border-color: color-mix(in srgb, currentColor 25%, transparent); box-shadow: 0 0 12px -8px currentColor; }
++
++.progress-track { box-shadow: inset 0 1px 4px rgba(0,0,0,0.8), 0 1px 0 rgba(255,255,255,0.025); }
++.progress-track > div { position: relative; box-shadow: 0 0 14px rgba(0,190,255,0.65); }
++.progress-track > div::after { content: ''; position: absolute; inset: 0 0 auto; height: 1px; background: rgba(255,255,255,0.55); }
++.reactor-pill { backdrop-filter: blur(12px); box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), 0 0 16px -10px currentColor; }
++.telemetry-row { margin-inline: -0.45rem; padding: 0.45rem; border-radius: 0.65rem; background: linear-gradient(90deg, rgba(31,113,169,0.055), transparent); transition: background .18s ease; }
++.telemetry-row:hover { background: linear-gradient(90deg, rgba(46,168,255,0.1), transparent 88%); }
++.heat-cell { border: 1px solid rgba(170,220,255,0.14); box-shadow: inset 0 1px 0 rgba(255,255,255,0.15), inset 0 -10px 18px rgba(0,0,0,0.2); }
++.recommendation-card { position: relative; background: linear-gradient(145deg, rgba(13,36,54,0.68), rgba(3,12,21,0.76)); box-shadow: inset 0 1px 0 rgba(255,255,255,0.055), 0 14px 28px -24px #000; }
++.recommendation-card::before { content: ''; position: absolute; inset: 8% auto 8% 0; width: 1px; background: linear-gradient(transparent, rgba(46,168,255,0.7), transparent); }
++
++.tabular { font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
++::-webkit-scrollbar { width: 8px; height: 8px; }
++::-webkit-scrollbar-track { background: transparent; }
++::-webkit-scrollbar-thumb { background: rgba(46,168,255,0.2); border-radius: 9999px; }
++::-webkit-scrollbar-thumb:hover { background: rgba(46,168,255,0.38); }
++
++@keyframes reactor-breathe {
++  0%, 100% { opacity: 0.88; filter: drop-shadow(0 0 3px rgba(0,157,255,0.2)); transform: scale(0.995); }
++  50% { opacity: 1; filter: drop-shadow(0 0 11px rgba(0,191,255,0.52)) drop-shadow(0 0 20px rgba(119,70,255,0.2)); transform: scale(1.012); }
++}
++
++@media (max-width: 1023px) {
++  .command-surface { min-height: calc(100vh - 96px); border-radius: 1.15rem; }
+ }
+-::-webkit-scrollbar-thumb:hover {
+-  background: rgba(46, 168, 255, 0.32);
++@media (max-width: 767px) {
++  .command-surface { padding: 0.85rem; border-radius: 1rem; }
++  .kpi-instrument { min-height: 8rem; padding: 0.8rem; }
++  .kpi-sparkline { width: 4.8rem; opacity: 0.65; }
+ }
