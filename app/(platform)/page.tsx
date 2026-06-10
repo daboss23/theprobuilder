@@ -16,7 +16,7 @@ import {
   type KpiTint,
 } from '@/components/reactor/ui'
 
-// Pastel rotation across the 8 KPI cards, echoing the reference dashboard.
+// Controlled telemetry tints distinguish KPI channels without breaking the console surface.
 const kpiTintCycle: KpiTint[] = ['blue', 'green', 'purple', 'teal', 'teal', 'rose', 'amber', 'blue']
 import {
   reactorKpis,
@@ -54,14 +54,15 @@ export default function ReactorDashboard() {
         </div>
       </div>
 
+      <div className="dashboard-console">
       {/* KPI grid */}
-      <section className="grid grid-cols-2 gap-3 md:grid-cols-4">
+      <section className="dashboard-kpi-grid grid grid-cols-2 gap-3 md:grid-cols-4">
         {reactorKpis.map((k, i) => (
           <KpiCard key={k.label} {...k} tint={kpiTintCycle[i % kpiTintCycle.length]} />
         ))}
       </section>
 
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
+      <div className="grid grid-cols-1 gap-3 xl:grid-cols-3">
         {/* Top winning angles */}
         <Panel className="xl:col-span-2">
           <PanelHeader
@@ -71,7 +72,7 @@ export default function ReactorDashboard() {
           />
           <div className="space-y-3 p-5">
             {winningAngles.map((a) => (
-              <div key={a.name} className="flex items-center gap-4">
+              <div key={a.name} className="telemetry-row flex items-center gap-4">
                 <div className="w-36 shrink-0">
                   <p className="text-sm font-medium text-white">{a.name}</p>
                   <p className="text-[11px] text-white/35">{a.campaigns} campaigns</p>
@@ -97,7 +98,7 @@ export default function ReactorDashboard() {
           />
           <div className="space-y-4 p-5">
             {reactorStatus.map((s) => (
-              <div key={s.label}>
+              <div key={s.label} className="telemetry-row">
                 <div className="mb-1.5 flex items-center justify-between">
                   <span className="text-xs text-white/55">{s.label}</span>
                   <span className="font-display text-sm font-bold tabular text-white">
@@ -148,7 +149,7 @@ export default function ReactorDashboard() {
                   {row.cells.map((c, i) => (
                     <td key={i}>
                       <div
-                        className="grid h-9 place-items-center rounded-md text-[11px] font-semibold tabular text-white/90 transition-transform hover:scale-105"
+                        className="heat-cell grid h-9 place-items-center rounded-md text-[11px] font-semibold tabular text-white/90 transition-transform hover:scale-105"
                         style={{
                           background: heatColor(c),
                           boxShadow: c >= 70 ? '0 0 14px -2px rgba(46,168,255,0.6)' : 'none',
@@ -177,7 +178,7 @@ export default function ReactorDashboard() {
           {recommendations.map((r) => (
             <div
               key={r.campaign}
-              className="glass-hover rounded-xl border border-border bg-surface/40 p-4"
+              className="recommendation-card glass-hover rounded-xl border border-border bg-surface/40 p-4"
             >
               <div className="mb-2 flex items-center justify-between">
                 <Pill tone={r.priority === 'Critical' ? 'danger' : 'warning'}>{r.priority}</Pill>
@@ -202,6 +203,8 @@ export default function ReactorDashboard() {
           ))}
         </div>
       </Panel>
+
+      </div>
 
       <div className="flex justify-center pb-2">
         <a
