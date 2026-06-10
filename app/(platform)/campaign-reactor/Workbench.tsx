@@ -1,7 +1,7 @@
 'use client'
 
 import { useRef, useState } from 'react'
-import { Atom, Zap, Check, Loader2, Copy as CopyIcon, Radar } from 'lucide-react'
+import { Atom, Zap, Check, Loader2, Copy as CopyIcon, Radar, Trophy } from 'lucide-react'
 import { Panel, PanelHeader, Pill } from '@/components/reactor/ui'
 import { reactorInputs, reactorOutputTypes, winningAngles } from '@/lib/reactor-data'
 
@@ -9,6 +9,8 @@ interface Concept {
   type: string
   text: string
   basis?: string
+  learningCheck?: string
+  score?: number
 }
 
 interface TelemetryLine {
@@ -25,6 +27,7 @@ export function Workbench() {
   const [telemetry, setTelemetry] = useState<TelemetryLine[]>([])
   const [error, setError] = useState<string | null>(null)
   const [copied, setCopied] = useState<string | null>(null)
+  const [logged, setLogged] = useState<Set<string>>(new Set())
   const feedRef = useRef<HTMLDivElement>(null)
 
   const toggle = (arr: string[], set: (v: string[]) => void, val: string) =>
@@ -88,6 +91,20 @@ export function Workbench() {
     navigator.clipboard?.writeText(text)
     setCopied(text)
     setTimeout(() => setCopied(null), 1500)
+  }
+
+  // Log a winner — feeds it back into the knowledge layer as a new pattern.
+  const markWinner = async (c: Concept) => {
+    setLogged((prev) => new Set(prev).add(c.text))
+    try {
+      await fetch('/api/campaign-reactor/outcome', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ angle, concept: c, verdict: 'winner' }),
+      })
+    } catch {
+      /* best-effort logging */
+    }
   }
 
   return (
@@ -241,22 +258,47 @@ export function Workbench() {
                 className="glass-hover animate-fade-up rounded-xl border border-border bg-surface/40 p-4"
                 style={{ animationDelay: `${i * 40}ms` }}
               >
-                <div className="mb-1.5 flex items-center justify-between">
-                  <Pill tone="primary">{c.type}</Pill>
-                  <button
-                    type="button"
-                    onClick={() => copy(c.text)}
-                    className="flex items-center gap-1 text-[11px] text-white/40 hover:text-glow"
-                  >
-                    {copied === c.text ? <Check size={12} /> : <CopyIcon size={12} />}
-                    {copied === c.text ? 'Copied' : 'Copy'}
-                  </button>
+                <div className="mb-1.5 flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <Pill tone="primary">{c.type}</Pill>
+                    {typeof c.score === 'number' && (
+                      <Pill tone={c.score >= 8 ? 'success' : 'warning'}>{c.score}/10</Pill>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => markWinner(c)}
+                      disabled={logged.has(c.text)}
+                      className="flex items-center gap-1 text-[11px] text-white/40 hover:text-success disabled:text-success"
+                    >
+                      <Trophy size={12} />
+                      {logged.has(c.text) ? 'Logged' : 'Mark winner'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => copy(c.text)}
+                      className="flex items-center gap-1 text-[11px] text-white/40 hover:text-glow"
+                    >
+                      {copied === c.text ? <Check size={12} /> : <CopyIcon size={12} />}
+                      {copied === c.text ? 'Copied' : 'Copy'}
+                    </button>
+                  </div>
                 </div>
                 <p className="text-sm text-white/80">{c.text}</p>
-                {c.basis && (
-                  <p className="mt-2 border-t border-border pt-2 text-[11px] text-white/40">
-                    <span className="text-glow/70">Grounded in:</span> {c.basis}
-                  </p>
+                {(c.basis || c.learningCheck) && (
+                  <div className="mt-2 space-y-1 border-t border-border pt-2 text-[11px] text-white/40">
+                    {c.basis && (
+                      <p>
+                        <span className="text-glow/70">Grounded in:</span> {c.basis}
+                      </p>
+                    )}
+                    {c.learningCheck && (
+                      <p>
+                        <span className="text-success/70">Rubric:</span> {c.learningCheck}
+                      </p>
+                    )}
+                  </div>
                 )}
               </div>
             ))}

@@ -1,6 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { NextRequest } from 'next/server'
 import { searchKnowledge, type KnowledgeSystem } from '@/lib/knowledge'
+import { learnings } from '@/lib/reactor-data'
 
 export const runtime = 'nodejs'
 export const maxDuration = 60
@@ -21,6 +22,8 @@ interface Concept {
   type: string
   text: string
   basis?: string
+  learningCheck?: string
+  score?: number
 }
 
 /* ------------------------------ SSE plumbing ------------------------------ */
@@ -50,9 +53,15 @@ const tools: Anthropic.Tool[] = [
     },
   },
   {
+    name: 'get_learnings',
+    description:
+      'Retrieve the documented Creative Learnings — the rubric of what consistently works for TPB. Call this before submitting so you can self-score each concept against proven principles.',
+    input_schema: { type: 'object', properties: {} },
+  },
+  {
     name: 'submit_concepts',
     description:
-      'Submit the final campaign concepts once you have gathered enough evidence. Each concept must cite the winning asset, pattern, or learning that informed it in the `basis` field.',
+      'Submit the final campaign concepts once you have gathered evidence AND self-scored each concept against the Creative Learnings rubric (call get_learnings first). Each concept must cite its evidence and pass the rubric check.',
     input_schema: {
       type: 'object',
       properties: {
@@ -64,6 +73,14 @@ const tools: Anthropic.Tool[] = [
               type: { type: 'string', description: 'Output type, e.g. Hook, Headline, Founder Concept' },
               text: { type: 'string' },
               basis: { type: 'string', description: 'Which winning asset / pattern / learning this draws from' },
+              learningCheck: {
+                type: 'string',
+                description: 'How this concept satisfies the Creative Learnings rubric (e.g. "uses a specific profit figure; founder-led")',
+              },
+              score: {
+                type: 'integer',
+                description: 'Self-assessed strength 1-10 against the learnings rubric. Only submit concepts scoring 7+.',
+              },
             },
             required: ['type', 'text'],
           },
@@ -82,7 +99,7 @@ Your job: design the next winning campaign based on everything that has already 
 Process — follow it like an engineer, not a copywriter guessing:
 1. Use search_knowledge to pull the relevant research (pain points, desires, objections), member transformations, winning creatives, top-performing copy, repeatable patterns, and documented learnings for the requested angle. Make several focused searches across systems.
 2. Ground every concept in retrieved evidence. Specific member numbers and named patterns beat vague claims.
-3. Self-check against the documented Creative Learnings before submitting (e.g. founder videos outperform talking heads; specific profit numbers outperform vague claims).
+3. Before submitting, call get_learnings and score every concept against that rubric. Revise or drop anything scoring below 7. Record the rubric check and score on each concept.
 4. Call submit_concepts exactly once with concepts ONLY for these requested output types: ${outputs.join(', ')}.
 
 Voice: confident, specific, builder-native. Engineered for performance.`
@@ -112,18 +129,19 @@ async function runDemo(
   const a = body.angle
   const al = a.toLowerCase()
   const pool: Concept[] = [
-    { type: 'Hook', text: `Most builders don't have a ${al} problem. They have a ${al} leak hiding in plain sight.`, basis: 'Profit Pattern + research pain points' },
-    { type: 'Headline', text: `From struggling to systemized — how ${a} became TPB's unfair advantage.`, basis: 'Transformation Intelligence (member wins)' },
-    { type: 'Primary Text', text: `You didn't get into building to babysit jobs. This is the ${a} system that gave 500+ builders their margin — and their weekends — back.`, basis: 'Member transformations + Time Freedom pattern' },
-    { type: 'VSL Opener', text: `In the next few minutes I'll show you the exact ${a} mechanism most builders never see until it's too late.`, basis: 'VSL framework' },
-    { type: 'Static Concept', text: `Dark background, one bold profit figure, named member underneath, single cyan accent. Angle: ${a}.`, basis: 'Learning: specific $ numbers outperform vague claims' },
-    { type: 'Video Concept', text: `Founder direct-to-camera on-site: 1.5s pattern interrupt, contrarian ${al} belief, member proof, soft CTA.`, basis: 'Learning: founder videos outperform talking heads' },
-    { type: 'Founder Concept', text: `Handheld walk-through of a finished site while the founder breaks down the ${a} turning point.`, basis: 'Creative Intelligence: Founder Video (71% win)' },
-    { type: 'Testimonial Concept', text: `Member states old hours/margin, the ${al} turning point, then the after. B-roll of their jobs.`, basis: 'Transformation Intelligence' },
-    { type: 'Event Concept', text: `High-energy room montage tied to one ${a} insight and community proof.`, basis: 'Authority Pattern' },
-    { type: 'Campaign Concept', text: `The ${a} Reactor: founder video + static proof ad + member testimonial, sequenced cold → warm → apply.`, basis: 'Strategic Recommendation' },
+    { type: 'Hook', text: `Most builders don't have a ${al} problem. They have a ${al} leak hiding in plain sight.`, basis: 'Profit Pattern + research pain points', learningCheck: 'Specific, contrarian framing', score: 9 },
+    { type: 'Headline', text: `From struggling to systemized — how ${a} became TPB's unfair advantage.`, basis: 'Transformation Intelligence (member wins)', learningCheck: 'Transformation arc over feature messaging', score: 8 },
+    { type: 'Primary Text', text: `You didn't get into building to babysit jobs. This is the ${a} system that gave 500+ builders their margin — and their weekends — back.`, basis: 'Member transformations + Time Freedom pattern', learningCheck: 'Concrete proof (500+ builders)', score: 8 },
+    { type: 'VSL Opener', text: `In the next few minutes I'll show you the exact ${a} mechanism most builders never see until it's too late.`, basis: 'VSL framework', learningCheck: 'Mechanism + curiosity', score: 7 },
+    { type: 'Static Concept', text: `Dark background, one bold profit figure, named member underneath, single cyan accent. Angle: ${a}.`, basis: 'Creative Intelligence: Static Proof Ad', learningCheck: 'Specific $ numbers outperform vague claims', score: 9 },
+    { type: 'Video Concept', text: `Founder direct-to-camera on-site: 1.5s pattern interrupt, contrarian ${al} belief, member proof, soft CTA.`, basis: 'Creative Intelligence: Founder Video (71% win)', learningCheck: 'Founder videos outperform talking heads', score: 9 },
+    { type: 'Founder Concept', text: `Handheld walk-through of a finished site while the founder breaks down the ${a} turning point.`, basis: 'Creative Intelligence: Founder Video (71% win)', learningCheck: 'Founder-led, on-site, real proof', score: 9 },
+    { type: 'Testimonial Concept', text: `Member states old hours/margin, the ${al} turning point, then the after. B-roll of their jobs.`, basis: 'Transformation Intelligence', learningCheck: 'Named member win over generic promise', score: 8 },
+    { type: 'Event Concept', text: `High-energy room montage tied to one ${a} insight and community proof.`, basis: 'Authority Pattern', learningCheck: 'Community proof', score: 7 },
+    { type: 'Campaign Concept', text: `The ${a} Reactor: founder video + static proof ad + member testimonial, sequenced cold → warm → apply.`, basis: 'Strategic Recommendation', learningCheck: 'Stacks the three highest-win formats', score: 9 },
   ]
-  for (const c of pool.filter((c) => outputs.includes(c.type))) {
+  sse(controller, { type: 'step', text: 'Scoring concepts against the Creative Learnings rubric…' })
+  for (const c of pool.filter((c) => outputs.includes(c.type) && (c.score ?? 0) >= 7)) {
     sse(controller, { type: 'concept', concept: c })
   }
   sse(controller, { type: 'done' })
@@ -182,7 +200,16 @@ export async function POST(request: NextRequest) {
 
           const results: Anthropic.ToolResultBlockParam[] = []
           for (const tu of toolUses) {
-            if (tu.name === 'search_knowledge') {
+            if (tu.name === 'get_learnings') {
+              sse(controller, { type: 'step', text: 'Loading Creative Learnings rubric for self-critique…' })
+              results.push({
+                type: 'tool_result',
+                tool_use_id: tu.id,
+                content: learnings
+                  .map((l) => `• ${l.insight} — ${l.recommendation} (evidence: ${l.evidence})`)
+                  .join('\n'),
+              })
+            } else if (tu.name === 'search_knowledge') {
               const { query, system } = tu.input as { query: string; system?: KnowledgeSystem }
               sse(controller, { type: 'step', text: `Searching ${system ?? 'all systems'}: "${query}"` })
               const hits = await searchKnowledge(query, { system, k: 6, builderId: body.builderId ?? null })
