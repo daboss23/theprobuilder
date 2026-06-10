@@ -26,6 +26,9 @@ import {
   recommendations,
   reactorStatus,
 } from '@/lib/reactor-data'
+import { vaultStats } from '@/lib/knowledge'
+
+export const dynamic = 'force-dynamic'
 
 function heatColor(v: number): string {
   if (v >= 85) return 'rgba(0,212,255,0.95)'
@@ -35,7 +38,9 @@ function heatColor(v: number): string {
   return 'rgba(28,36,51,0.7)'
 }
 
-export default function ReactorDashboard() {
+export default async function ReactorDashboard() {
+  const stats = await vaultStats()
+
   return (
     <>
       <div className="flex flex-wrap items-end justify-between gap-4">
@@ -49,7 +54,10 @@ export default function ReactorDashboard() {
             <span className="h-1.5 w-1.5 rounded-full bg-success" /> Live
           </Pill>
           <Pill tone="primary">
-            <Activity size={12} /> 2,847 assets synced
+            <Activity size={12} />{' '}
+            {stats.live
+              ? `${stats.total.toLocaleString()} assets stored`
+              : '2,847 assets synced'}
           </Pill>
         </div>
       </div>

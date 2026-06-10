@@ -14,6 +14,7 @@ import {
   learnings,
   researchOutputs,
   creativeAnalyses,
+  vaultCategories,
 } from '@/lib/reactor-data'
 
 export type KnowledgeSystem =
@@ -54,6 +55,14 @@ export function chunkText(text: string, maxChars = 1000): string[] {
 
 function dbReady(): boolean {
   return Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL) && hasEmbeddings()
+}
+
+// Reading/browsing/deleting only needs Supabase — not Voyage embeddings.
+function supabaseReady(): boolean {
+  return (
+    Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL) &&
+    Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SECRET_KEY)
+  )
 }
 
 /* -------------------------------- Ingest ---------------------------------- */
@@ -131,6 +140,146 @@ export async function searchKnowledge(
   }
 
   return demoSearch(query, k, opts.system)
+}
+
+/* ------------------------------ Vault stats ------------------------------- */
+// Live counts of what's actually stored in the knowledge layer. Degrades to the
+// curated demo map so the dashboards always render meaningful numbers.
+
+export interface VaultStatGroup {
+  system: string
+  category: string | null
+  count: number
+}
+
+export interface VaultStats {
+  live: boolean
+  total: number
+  groups: VaultStatGroup[]
+}
+
+// Sum of the curated category map — the demo "mapped" total.
+export function curatedVaultTotal(): number {
+  return vaultCategories.reduce(
+    (sum, g) => sum + g.items.reduce((s, i) => s + i.count, 0),
+    0,
+  )
+}
+
+export async function vaultStats(): Promise<VaultStats> {
+  if (supabaseReady()) {
+    try {
+      const { data, error } = await getSupabaseAdmin().rpc('knowledge_stats')
+      if (error) throw error
+      const groups: VaultStatGroup[] = (data ?? []).map((r: { system: string; category: string | null; count: number }) => ({
+        system: r.system,
+        category: r.category ?? null,
+        count: Number(r.count),
+      }))
+      const total = groups.reduce((s, g) => s + g.count, 0)
+      return { live: true, total, groups }
+    } catch (err) {
+      console.error('Vault stats query failed, using demo counts:', err)
+    }
+  }
+
+  const groups: VaultStatGroup[] = vaultCategories.flatMap((g) =>
+    g.items.map((i) => ({ system: g.group, category: i.name, count: i.count })),
+  )
+  return { live: false, total: curatedVaultTotal(), groups }
+}
+
+/* ------------------------------ Vault browse ------------------------------ */
+// List / search the actual stored chunks for the Vault library view.
+
+export interface VaultItem {
+  id: string | null
+  system: string
+  category: string | null
+  title: string
+  content: string
+  created_at: string | null
+  similarity?: number
+}
+
+export interface BrowseResult {
+  live: boolean
+  items: VaultItem[]
+}
+
+export async function browseKnowledge(
+  opts: { query?: string; system?: KnowledgeSystem; limit?: number } = {},
+): Promise<BrowseResult> {
+  const limit = opts.limit ?? 60
+  const q = opts.query?.trim()
+
+  if (supabaseReady()) {
+    try {
+      const admin = getSupabaseAdmin()
+
+      // Semantic search when a query is present and embeddings are configured.
+      if (q && hasEmbeddings()) {
+        const queryEmbedding = await embedOne(q, 'query')
+        const { data, error } = await admin.rpc('match_knowledge', {
+          query_embedding: queryEmbedding,
+          match_count: limit,
+          filter_system: opts.system ?? null,
+          filter_builder: null,
+        })
+        if (error) throw error
+        return {
+          live: true,
+          items: (data ?? []).map((d: VaultItem & { similarity: number }) => ({
+            id: d.id,
+            system: d.system,
+            category: d.category ?? null,
+            title: d.title,
+            content: d.content,
+            created_at: null,
+            similarity: d.similarity,
+          })),
+        }
+      }
+
+      // Plain browse (or keyword filter when there's no embeddings provider).
+      let sel = admin
+        .from('knowledge_chunks')
+        .select('id, system, category, title, content, created_at')
+        .order('created_at', { ascending: false })
+        .limit(limit)
+      if (opts.system) sel = sel.eq('system', opts.system)
+      if (q) sel = sel.or(`title.ilike.%${q}%,content.ilike.%${q}%`)
+
+      const { data, error } = await sel
+      if (error) throw error
+      return { live: true, items: (data ?? []) as VaultItem[] }
+    } catch (err) {
+      console.error('Vault browse failed, using demo corpus:', err)
+    }
+  }
+
+  // Demo fallback: browse the curated corpus.
+  const corpus = buildDemoCorpus().filter((d) => !opts.system || d.system === opts.system)
+  const filtered = q
+    ? corpus.filter((d) => `${d.title} ${d.content} ${d.category}`.toLowerCase().includes(q.toLowerCase()))
+    : corpus
+  return {
+    live: false,
+    items: filtered.slice(0, limit).map((d) => ({
+      id: null,
+      system: d.system,
+      category: d.category,
+      title: d.title,
+      content: d.content,
+      created_at: null,
+    })),
+  }
+}
+
+export async function deleteKnowledge(id: string): Promise<void> {
+  if (!supabaseReady()) throw new Error('Vector store not configured')
+  const { error } = await getSupabaseAdmin().from('knowledge_chunks').delete().eq('id', id)
+  if (error) throw error
 }
 
 /* ----------------------- Demo fallback knowledge -------------------------- */
