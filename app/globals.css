@@ -76,3 +76,121 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(46, 168, 255, 0.32);
 }
+
+/* Reactor dashboard: a single machined glass telemetry console */
+.dashboard-console {
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: clamp(0.55rem, 1.2vw, 0.9rem);
+  border: 1px solid rgba(122, 169, 214, 0.18);
+  border-radius: 1.45rem;
+  background:
+    radial-gradient(900px 380px at 82% -10%, rgba(35, 146, 217, 0.12), transparent 60%),
+    linear-gradient(145deg, rgba(22, 32, 45, 0.72), rgba(5, 9, 15, 0.86) 48%, rgba(10, 18, 27, 0.76));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.75),
+    0 34px 90px -42px rgba(0, 0, 0, 0.95),
+    0 0 0 1px rgba(0, 0, 0, 0.55);
+}
+.dashboard-console::before,
+.dashboard-console::after {
+  content: '';
+  position: absolute;
+  pointer-events: none;
+  z-index: -1;
+}
+.dashboard-console::before {
+  inset: 0.45rem;
+  border: 1px solid rgba(170, 211, 240, 0.05);
+  border-radius: 1.1rem;
+  background-image: linear-gradient(rgba(104, 158, 198, 0.025) 1px, transparent 1px), linear-gradient(90deg, rgba(104, 158, 198, 0.025) 1px, transparent 1px);
+  background-size: 28px 28px;
+}
+.dashboard-console::after {
+  inset: -1px 14% auto;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(130, 207, 255, 0.7), transparent);
+  filter: blur(0.2px);
+}
+.dashboard-console .glass {
+  border-color: rgba(126, 161, 196, 0.2);
+  border-radius: 1rem;
+  background:
+    linear-gradient(112deg, rgba(255, 255, 255, 0.035), transparent 24%),
+    linear-gradient(180deg, rgba(13, 22, 33, 0.82), rgba(5, 10, 17, 0.88));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.065), inset 0 -18px 42px rgba(0, 0, 0, 0.15), 0 12px 28px -22px rgba(0, 0, 0, 0.9);
+}
+.dashboard-console .glass::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  background: radial-gradient(420px 110px at 18% 0%, rgba(89, 188, 255, 0.055), transparent 70%);
+}
+.glass { position: relative; overflow: hidden; }
+.glass > *:not(.panel-sheen) { position: relative; z-index: 1; }
+.panel-sheen {
+  position: absolute;
+  inset: 0 0 auto;
+  height: 38%;
+  pointer-events: none;
+  background: linear-gradient(172deg, rgba(255,255,255,0.035), transparent 55%);
+}
+.panel-header { background: linear-gradient(90deg, rgba(255,255,255,0.018), transparent 55%); border-color: rgba(135, 174, 209, 0.13); }
+.panel-icon { box-shadow: inset 0 1px 0 rgba(255,255,255,0.08), 0 0 18px -7px rgba(46,168,255,0.8); }
+.dashboard-kpi-grid { perspective: 1000px; }
+.kpi-instrument { min-height: 7.25rem; border: 1px solid transparent; }
+.kpi-instrument::before {
+  content: '';
+  position: absolute;
+  inset: 1px;
+  border-radius: calc(1rem - 1px);
+  border: 1px solid rgba(255,255,255,0.04);
+  pointer-events: none;
+}
+.kpi-instrument::after {
+  content: '';
+  position: absolute;
+  inset: auto 10% 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+  opacity: 0.65;
+}
+.kpi-scanline {
+  position: absolute;
+  inset: 42% 0 auto;
+  height: 1px;
+  opacity: 0.16;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.7), transparent);
+}
+.telemetry-row {
+  margin-inline: -0.45rem;
+  padding: 0.45rem;
+  border-radius: 0.55rem;
+  background: linear-gradient(90deg, rgba(255,255,255,0.018), transparent);
+  transition: background 180ms ease;
+}
+.telemetry-row:hover { background: linear-gradient(90deg, rgba(46,168,255,0.07), transparent 88%); }
+.progress-track { box-shadow: inset 0 1px 3px rgba(0,0,0,0.75), 0 1px 0 rgba(255,255,255,0.025); }
+.heat-cell { border: 1px solid rgba(170,220,255,0.11); box-shadow: inset 0 1px 0 rgba(255,255,255,0.13), inset 0 -10px 16px rgba(0,0,0,0.18); }
+.recommendation-card {
+  position: relative;
+  background: linear-gradient(145deg, rgba(22,35,50,0.6), rgba(7,13,21,0.72));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.055), 0 14px 28px -24px #000;
+}
+.recommendation-card::before {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 1px;
+  background: linear-gradient(transparent, rgba(46,168,255,0.5), transparent);
+}
+@media (max-width: 767px) {
+  .dashboard-console { margin-inline: -0.3rem; padding: 0.45rem; border-radius: 1.1rem; }
+  .kpi-instrument { min-height: 6.7rem; }
+}
