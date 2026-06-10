@@ -110,28 +110,80 @@ export function TrendBadge({
 
 /* ------------------------------- KPI card --------------------------------- */
 
+// Soft pastel glass tints, matching the reference dashboard's frosted KPI panels.
+export type KpiTint = 'blue' | 'green' | 'purple' | 'teal' | 'amber' | 'rose'
+
+const kpiTints: Record<KpiTint, { wash: string; ring: string; glow: string }> = {
+  blue: {
+    wash: 'linear-gradient(150deg, rgba(86,140,255,0.22), rgba(46,168,255,0.06) 55%, rgba(11,15,23,0.35))',
+    ring: 'rgba(120,160,255,0.28)',
+    glow: 'rgba(86,140,255,0.45)',
+  },
+  green: {
+    wash: 'linear-gradient(150deg, rgba(74,222,170,0.20), rgba(32,201,151,0.05) 55%, rgba(11,15,23,0.35))',
+    ring: 'rgba(96,224,184,0.26)',
+    glow: 'rgba(74,222,170,0.4)',
+  },
+  purple: {
+    wash: 'linear-gradient(150deg, rgba(168,142,255,0.22), rgba(140,120,240,0.05) 55%, rgba(11,15,23,0.35))',
+    ring: 'rgba(176,150,255,0.28)',
+    glow: 'rgba(168,142,255,0.42)',
+  },
+  teal: {
+    wash: 'linear-gradient(150deg, rgba(94,224,234,0.20), rgba(0,212,255,0.05) 55%, rgba(11,15,23,0.35))',
+    ring: 'rgba(120,226,236,0.26)',
+    glow: 'rgba(94,224,234,0.4)',
+  },
+  amber: {
+    wash: 'linear-gradient(150deg, rgba(255,196,112,0.20), rgba(255,176,32,0.05) 55%, rgba(11,15,23,0.35))',
+    ring: 'rgba(255,202,130,0.26)',
+    glow: 'rgba(255,196,112,0.4)',
+  },
+  rose: {
+    wash: 'linear-gradient(150deg, rgba(255,138,170,0.20), rgba(255,77,128,0.05) 55%, rgba(11,15,23,0.35))',
+    ring: 'rgba(255,158,184,0.26)',
+    glow: 'rgba(255,138,170,0.4)',
+  },
+}
+
 export function KpiCard({
   label,
   value,
   delta,
   trend,
+  tint = 'blue',
 }: {
   label: string
   value: number
   delta: string
   trend: 'up' | 'down' | 'flat'
+  tint?: KpiTint
 }) {
+  const t = kpiTints[tint]
   return (
-    <Panel hover className="relative overflow-hidden p-4">
-      <div className="pointer-events-none absolute -right-6 -top-8 h-20 w-20 rounded-full bg-primary/10 blur-2xl" />
-      <p className="text-[11px] font-medium uppercase tracking-wider text-white/40">{label}</p>
-      <div className="mt-2 flex items-end justify-between">
-        <span className="font-display text-3xl font-bold tabular text-white">
+    <div
+      className="group relative overflow-hidden rounded-2xl p-4 backdrop-blur-xl transition-all duration-300 hover:-translate-y-0.5"
+      style={{
+        background: t.wash,
+        boxShadow: `inset 0 1px 0 0 rgba(255,255,255,0.10), inset 0 0 0 1px ${t.ring}, 0 18px 40px -24px rgba(0,0,0,0.85)`,
+      }}
+    >
+      {/* soft top sheen + corner bloom */}
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-white/25" />
+      <div
+        className="pointer-events-none absolute -right-8 -top-10 h-24 w-24 rounded-full blur-2xl transition-opacity duration-300 group-hover:opacity-100"
+        style={{ background: t.glow, opacity: 0.5 }}
+      />
+      <p className="relative text-[11px] font-medium uppercase tracking-wider text-white/55">
+        {label}
+      </p>
+      <div className="relative mt-2 flex items-end justify-between">
+        <span className="font-display text-3xl font-bold tabular text-white drop-shadow-[0_1px_8px_rgba(0,0,0,0.4)]">
           {value.toLocaleString()}
         </span>
         <TrendBadge trend={trend} value={delta} />
       </div>
-    </Panel>
+    </div>
   )
 }
 
