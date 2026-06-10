@@ -156,47 +156,41 @@ export interface ListFrameworksOptions {
 }
 
 export async function listFrameworks(opts: ListFrameworksOptions = {}): Promise<Framework[]> {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let query: any = getSupabaseAdmin()
+  const scope = opts.builderScope ?? 'all'
+
+  const base = getSupabaseAdmin()
     .from('frameworks')
     .select('*')
     .order('category', { ascending: true })
     .order('created_at', { ascending: true })
 
-  if (opts.category) {
-    query = query.eq('category', opts.category)
-  }
+  const withScope =
+    scope === 'global'
+      ? base.is('builder_id', null)
+      : scope !== 'all'
+        ? base.eq('builder_id', scope)
+        : base
 
-  const scope = opts.builderScope ?? 'all'
-  if (scope === 'all') {
-    // No filter
-  } else if (scope === 'global') {
-    query = query.is('builder_id', null)
-  } else {
-    query = query.eq('builder_id', scope)
-  }
+  const { data, error } = opts.category
+    ? await withScope.eq('category', opts.category)
+    : await withScope
 
-  const { data, error } = await query
   if (error) throw error
   return (data ?? []) as Framework[]
 }
 
 // For generation: returns global frameworks + builder-specific if builderId provided.
 export async function getFrameworksForBuilder(builderId: string | null): Promise<Framework[]> {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let query: any = getSupabaseAdmin()
+  const base = getSupabaseAdmin()
     .from('frameworks')
     .select('*')
     .order('category', { ascending: true })
     .order('created_at', { ascending: true })
 
-  if (builderId) {
-    query = query.or(`builder_id.is.null,builder_id.eq.${builderId}`)
-  } else {
-    query = query.is('builder_id', null)
-  }
+  const { data, error } = builderId
+    ? await base.or(`builder_id.is.null,builder_id.eq.${builderId}`)
+    : await base.is('builder_id', null)
 
-  const { data, error } = await query
   if (error) throw error
   return (data ?? []) as Framework[]
 }
