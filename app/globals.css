@@ -182,43 +182,52 @@ body {
 }
 
 /* ----------------------------------------------------------------------------
-   Reactor logo — breathing core, slow orbiting electrons
+   Reactor logo — only the engine core breathes; the lockup stays still.
+   Two screen-blended glow layers sit over the orange-red heart of the
+   engine (82.3% / 31% of the cropped artwork) and pulse on a 3.6s loop.
 ---------------------------------------------------------------------------- */
-.reactor-mark { animation: mark-glow 3.6s ease-in-out infinite; }
-.reactor-mark svg { overflow: visible; display: block; }
-.reactor-core {
-  animation: core-breathe 3.6s ease-in-out infinite;
-  transform-origin: center;
-  transform-box: fill-box;
+.engine-logo { line-height: 0; }
+.engine-glow,
+.engine-glow-core {
+  position: absolute;
+  left: 82.3%;
+  top: 31%;
+  transform: translate(-50%, -50%);
+  aspect-ratio: 1 / 1;
+  border-radius: 9999px;
+  pointer-events: none;
+  mix-blend-mode: screen;
 }
-.reactor-halo {
-  animation: halo-breathe 3.6s ease-in-out infinite;
-  transform-origin: center;
-  transform-box: fill-box;
+.engine-glow {
+  width: 31%;
+  background: radial-gradient(
+    circle,
+    rgba(255, 158, 64, 0.8),
+    rgba(252, 107, 3, 0.45) 34%,
+    rgba(170, 26, 6, 0.22) 58%,
+    transparent 74%
+  );
+  filter: blur(5px);
+  animation: engine-breathe 3.6s ease-in-out infinite;
 }
-.reactor-orbits {
-  animation: orbit-spin 26s linear infinite;
-  transform-origin: center;
-  transform-box: fill-box;
+.engine-glow-core {
+  width: 11%;
+  background: radial-gradient(
+    circle,
+    rgba(255, 244, 224, 0.95),
+    rgba(255, 170, 60, 0.55) 52%,
+    transparent 76%
+  );
+  filter: blur(1.5px);
+  animation: engine-breathe-core 3.6s ease-in-out infinite;
 }
-@keyframes mark-glow {
-  0%, 100% {
-    filter: drop-shadow(0 0 3px rgba(34, 211, 238, 0.28)) drop-shadow(0 0 9px rgba(59, 130, 246, 0.18));
-  }
-  50% {
-    filter: drop-shadow(0 0 9px rgba(34, 211, 238, 0.62)) drop-shadow(0 0 22px rgba(59, 130, 246, 0.42));
-  }
+@keyframes engine-breathe {
+  0%, 100% { opacity: 0.5; transform: translate(-50%, -50%) scale(0.9); }
+  50% { opacity: 1; transform: translate(-50%, -50%) scale(1.14); }
 }
-@keyframes core-breathe {
-  0%, 100% { opacity: 0.74; transform: scale(0.94); }
-  50% { opacity: 1; transform: scale(1.07); }
-}
-@keyframes halo-breathe {
-  0%, 100% { opacity: 0.35; transform: scale(0.92); }
-  50% { opacity: 0.8; transform: scale(1.1); }
-}
-@keyframes orbit-spin {
-  to { transform: rotate(360deg); }
+@keyframes engine-breathe-core {
+  0%, 100% { opacity: 0.55; transform: translate(-50%, -50%) scale(0.82); }
+  50% { opacity: 1; transform: translate(-50%, -50%) scale(1.18); }
 }
 
 /* ----------------------------------------------------------------------------
@@ -595,10 +604,8 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .reactor-mark,
-  .reactor-core,
-  .reactor-halo,
-  .reactor-orbits {
+  .engine-glow,
+  .engine-glow-core {
     animation: none;
   }
   .glass-hover,
