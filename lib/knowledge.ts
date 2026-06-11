@@ -80,6 +80,7 @@ export interface IngestResult {
   ok: boolean
   chunks: number
   stored: boolean
+  embedded?: boolean
   reason?: string
 }
 
@@ -90,7 +91,22 @@ export async function ingestKnowledge(input: IngestInput): Promise<IngestResult>
     return { ok: true, chunks: chunks.length, stored: false, reason: 'Vector store not configured' }
   }
 
-  const vectors = await embed(chunks, 'document')
+  // Embed each chunk. If Voyage is rate-limited (free tier) or otherwise fails,
+  // don't lose the content — store it as text only so it's still saved and
+  // keyword-searchable, and flag that semantic embeddings are missing.
+  let vectors: number[][] | null = null
+  let embedReason: string | undefined
+  try {
+    vectors = await embed(chunks, 'document')
+  } catch (err) {
+    vectors = null
+    embedReason =
+      err instanceof Error && /429/.test(err.message)
+        ? 'Saved as text only — Voyage is rate-limited (free tier). Add a payment method on Voyage, or re-ingest later, to enable semantic search for this item.'
+        : 'Saved as text only — embedding failed, so semantic search is unavailable for this item. Re-ingest later to embed it.'
+    console.error('Embedding failed, storing chunks without vectors:', err)
+  }
+
   const rows = chunks.map((content, i) => ({
     system: input.system,
     category: input.category ?? null,
@@ -98,13 +114,19 @@ export async function ingestKnowledge(input: IngestInput): Promise<IngestResult>
     content,
     builder_id: input.builderId ?? null,
     metadata: input.metadata ?? {},
-    embedding: vectors[i],
+    embedding: vectors ? vectors[i] : null,
   }))
 
   const { error } = await getSupabaseAdmin().from('knowledge_chunks').insert(rows)
   if (error) throw error
 
-  return { ok: true, chunks: chunks.length, stored: true }
+  return {
+    ok: true,
+    chunks: chunks.length,
+    stored: true,
+    embedded: vectors !== null,
+    reason: embedReason,
+  }
 }
 
 /* ------------------------------- Retrieval -------------------------------- */

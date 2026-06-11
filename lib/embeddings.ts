@@ -26,22 +26,37 @@ export async function embed(
   if (!key) throw new Error('VOYAGE_API_KEY is not configured')
   if (texts.length === 0) return []
 
-  const res = await fetch(VOYAGE_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${key}`,
-    },
-    body: JSON.stringify({ model: VOYAGE_MODEL, input: texts, input_type: inputType }),
-  })
+  // Voyage's free tier is rate-limited (3 RPM / 10K TPM). Retry a couple of
+  // times on 429 / 5xx with a short backoff so a transient burst doesn't fail
+  // the whole request. Kept short to stay within the serverless time budget.
+  const maxAttempts = 3
+  let lastDetail = ''
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    const res = await fetch(VOYAGE_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${key}`,
+      },
+      body: JSON.stringify({ model: VOYAGE_MODEL, input: texts, input_type: inputType }),
+    })
 
-  if (!res.ok) {
-    const detail = await res.text().catch(() => '')
-    throw new Error(`Voyage embeddings failed (${res.status}): ${detail.slice(0, 200)}`)
+    if (res.ok) {
+      const json = (await res.json()) as VoyageResponse
+      return json.data.sort((a, b) => a.index - b.index).map((d) => d.embedding)
+    }
+
+    lastDetail = await res.text().catch(() => '')
+    const retryable = res.status === 429 || res.status >= 500
+    if (!retryable || attempt === maxAttempts) {
+      throw new Error(`Voyage embeddings failed (${res.status}): ${lastDetail.slice(0, 200)}`)
+    }
+    // Backoff: 1.5s, then 3s.
+    await new Promise((r) => setTimeout(r, attempt * 1500))
   }
 
-  const json = (await res.json()) as VoyageResponse
-  return json.data.sort((a, b) => a.index - b.index).map((d) => d.embedding)
+  // Unreachable, but keeps TypeScript's control-flow analysis happy.
+  throw new Error(`Voyage embeddings failed: ${lastDetail.slice(0, 200)}`)
 }
 
 export async function embedOne(

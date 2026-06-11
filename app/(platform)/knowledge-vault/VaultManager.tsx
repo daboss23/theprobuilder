@@ -86,7 +86,7 @@ const inputCls =
 type IngestStatus =
   | { kind: 'idle' }
   | { kind: 'working' }
-  | { kind: 'done'; chunks: number; stored: boolean }
+  | { kind: 'done'; chunks: number; stored: boolean; embedded?: boolean; reason?: string }
   | { kind: 'error'; message: string }
 
 // Which input mode the "Add Knowledge" panel is in.
@@ -265,7 +265,13 @@ export function VaultManager({ initialStats }: { initialStats: Stats }) {
         }),
       }).then((r) => r.json())
       if (!res.success) throw new Error(res.error || 'Ingest failed')
-      setStatus({ kind: 'done', chunks: res.chunks, stored: res.stored })
+      setStatus({
+        kind: 'done',
+        chunks: res.chunks,
+        stored: res.stored,
+        embedded: res.embedded,
+        reason: res.reason,
+      })
       setTitle('')
       setCategory('')
       setContent('')
@@ -562,11 +568,21 @@ export function VaultManager({ initialStats }: { initialStats: Stats }) {
           <div className="flex items-center justify-between gap-3">
             <div className="text-[11px]">
               {status.kind === 'done' && (
-                <span className="flex items-center gap-1.5 text-success">
-                  <Check size={13} />
-                  {status.stored
-                    ? `Ingested · ${status.chunks} chunk${status.chunks === 1 ? '' : 's'} embedded`
-                    : 'Captured (demo mode — configure Supabase + Voyage to persist)'}
+                <span
+                  className={`flex items-center gap-1.5 ${
+                    status.stored && status.embedded === false ? 'text-amber-400' : 'text-success'
+                  }`}
+                >
+                  {status.stored && status.embedded === false ? (
+                    <AlertCircle size={13} />
+                  ) : (
+                    <Check size={13} />
+                  )}
+                  {!status.stored
+                    ? 'Captured (demo mode — configure Supabase + Voyage to persist)'
+                    : status.embedded === false
+                      ? status.reason ?? 'Saved as text only (embeddings unavailable)'
+                      : `Ingested · ${status.chunks} chunk${status.chunks === 1 ? '' : 's'} embedded`}
                 </span>
               )}
               {status.kind === 'error' && (
