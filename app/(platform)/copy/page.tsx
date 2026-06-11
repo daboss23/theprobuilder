@@ -47,15 +47,15 @@ export default function CopyPage() {
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
         <Panel>
-          <PanelHeader icon={<Anchor size={16} />} title="Top Performing Hooks" />
+          <PanelHeader icon={<Anchor size={16} />} accent="blue" title="Top Performing Hooks" />
           <CopyList items={topHooks} rank="H" />
         </Panel>
         <Panel>
-          <PanelHeader icon={<Heading size={16} />} title="Top Performing Headlines" />
+          <PanelHeader icon={<Heading size={16} />} accent="violet" title="Top Performing Headlines" />
           <CopyList items={topHeadlines} rank="L" />
         </Panel>
         <Panel>
-          <PanelHeader icon={<Tag size={16} />} title="Top Performing Offers" />
+          <PanelHeader icon={<Tag size={16} />} accent="amber" title="Top Performing Offers" />
           <CopyList items={topOffers} rank="O" />
         </Panel>
       </div>

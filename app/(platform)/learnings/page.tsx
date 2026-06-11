@@ -15,7 +15,7 @@ export default function LearningsPage() {
         {learnings.map((l, i) => (
           <Panel key={l.insight} hover className="p-5">
             <div className="flex items-start gap-4">
-              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg border border-border bg-surface/60 font-display text-sm font-bold text-glow">
+              <span className="panel-icon acc-emerald grid h-10 w-10 shrink-0 place-items-center rounded-lg font-display text-sm font-bold">
                 {String(i + 1).padStart(2, '0')}
               </span>
               <div className="min-w-0 flex-1">

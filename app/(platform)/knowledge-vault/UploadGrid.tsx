@@ -124,9 +124,8 @@ function UploadTile({ title, accept, icon }: { title: string; accept: string; ic
       className={`glass glass-hover group flex flex-col items-center justify-center gap-2 rounded-xl border-dashed p-5 text-center transition-all ${
         drag ? 'border-glow shadow-glow' : 'border-border'
       }`}
-      style={{ borderStyle: 'dashed' }}
     >
-      <span className="grid h-11 w-11 place-items-center rounded-lg border border-border bg-surface/60 text-glow transition-transform group-hover:scale-110">
+      <span className="panel-icon acc-blue grid h-11 w-11 place-items-center rounded-lg transition-transform group-hover:scale-110">
         {status.kind === 'working' ? (
           <Loader2 size={18} className="animate-spin" />
         ) : status.kind === 'done' ? (

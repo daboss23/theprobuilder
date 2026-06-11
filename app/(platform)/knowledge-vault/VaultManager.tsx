@@ -299,6 +299,7 @@ export function VaultManager({ initialStats }: { initialStats: Stats }) {
       <Panel>
         <PanelHeader
           icon={<Plus size={16} />}
+          accent="emerald"
           title="Add Knowledge"
           subtitle="Paste text, pull a website, drop a doc or PDF, or transcribe a YouTube video — embedded into the reactor's brain in seconds"
         />
@@ -680,6 +681,7 @@ export function VaultManager({ initialStats }: { initialStats: Stats }) {
       <Panel>
         <PanelHeader
           icon={<FolderOpen size={16} />}
+          accent="violet"
           title="Vault Categories"
           subtitle={
             categoriesLive
