@@ -153,16 +153,16 @@ export function Workbench() {
     setTimeout(() => setCopied(null), 1500)
   }
 
-  // Generate a Meta image creative from a concept (OpenAI gpt-image-1).
+  // Generate a still creative from a concept with Higgsfield.
   const generateCreative = async (c: Concept) => {
     setCreatives((p) => ({ ...p, [c.text]: { status: 'working' } }))
     try {
-      const res = await fetch('/api/generate-creative', {
+      const res = await fetch('/api/generate-image', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           prompt: `Meta ad creative for The Professional Builder. ${c.text} Photographic, on-site builder context, premium, high contrast, leave room for text overlay.`,
-          placement: 'feed',
+          aspectRatio: '1:1',
         }),
       }).then((r) => r.json())
 
@@ -174,7 +174,7 @@ export function Workbench() {
           [c.text]: {
             status: 'error',
             message: res.demo
-              ? 'Add OPENAI_API_KEY to generate live creatives'
+              ? 'Add HF_CREDENTIALS to generate Higgsfield creatives'
               : res.error || 'Generation failed',
           },
         }))
