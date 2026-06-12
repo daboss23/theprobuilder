@@ -91,7 +91,8 @@ These live in `.env.local` — never commit this file.
 ANTHROPIC_API_KEY            # Campaign Reactor agent + copy generation
 VOYAGE_API_KEY               # Embeddings for the RAG knowledge layer
 OPENAI_API_KEY               # Comparison copy / image
-HIGGSFIELD_API_KEY
+HF_CREDENTIALS               # Higgsfield image + video ("KEY_ID:KEY_SECRET")
+PIPEBOARD_API_TOKEN          # Meta Ads MCP (live ad performance) — optional
 NEXT_PUBLIC_SUPABASE_URL
 NEXT_PUBLIC_SUPABASE_ANON_KEY
 SUPABASE_SERVICE_ROLE_KEY
@@ -119,10 +120,15 @@ end. For destructive writes (Supabase inserts), surface errors clearly.
 - Stored in Supabase `pgvector` (`knowledge_chunks`); retrieved via `match_knowledge()`. See `lib/knowledge.ts` and `supabase/schema.reactor.sql`.
 - All retrieval degrades gracefully to a curated demo corpus when keys/DB are absent.
 
-### Higgsfield API calls
-- Always check response status before parsing
-- Image URL extraction: check `data.url`, `data.image_url`, `data.output?.[0]` in that order
-- Return null for imageUrl if generation fails — never throw, the copy is still usable
+### Higgsfield (image + video)
+- Use the official SDK **`@higgsfield/client`** (v2) via `lib/higgsfield.ts` — never shell out to the CLI (it needs a browser login + long-running process and can't run in a Vercel serverless route). Auth is `HF_CREDENTIALS` ("KEY_ID:KEY_SECRET").
+- `generateImage()` blocks until the still is ready (returns the URL inline). `startVideo()` is fire-and-forget — video renders take minutes, so the client polls `getVideoStatus()` via `/api/generate-video`.
+- Exposed to the Campaign Reactor agent as the `generate_image` / `generate_video` tools (only when `HF_CREDENTIALS` is set). Results stream to the Reactor as `media` SSE events and render on the concept cards.
+- Never throw on missing keys or failed renders — return null/`unknown` so the copy stays usable.
+
+### Meta Ads (MCP connector)
+- Attach Pipeboard's hosted Meta Ads MCP to the orchestrator with Anthropic's **MCP connector** (`mcp_servers` + `mcp_toolset` on `anthropic.beta.messages.create`, beta header `mcp-client-2025-11-20`). Token auth via `PIPEBOARD_API_TOKEN` (`?token=` on the server URL).
+- Only attached when configured; the agent runs normally without it. MCP tool calls execute server-side and surface in the telemetry feed.
 
 ### Supabase calls
 - Use `supabaseAdmin` (service role) for all write operations
@@ -247,8 +253,10 @@ To run the *real* agent end to end: set `ANTHROPIC_API_KEY` (agent),
 - [x] Agentic Campaign Reactor (Claude Opus 4.8 tool-use loop, streamed)
 - [x] Learnings-as-rubric self-critique
 - [x] Outcome logging + winner re-ingest (learning loop)
+- [x] Higgsfield image + video creatives as agent tools (`@higgsfield/client`)
+- [x] Meta Ads MCP wired into the orchestrator (Anthropic MCP connector)
 - [ ] Wire Knowledge Vault uploads → `/api/vault/ingest`
 - [ ] Dashboards reading live `knowledge_chunks` counts
 - [ ] Specialist sub-agents / Managed Agents coordinator
-- [ ] Performance ingest (Meta API) → `campaign_outcomes`
+- [ ] Performance ingest (Meta API) → `campaign_outcomes` (live tools done; auto-ingest pending)
 - [ ] Deployed + tested end to end with real keys
