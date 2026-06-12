@@ -2,15 +2,26 @@ import Anthropic from '@anthropic-ai/sdk'
 import { NextRequest } from 'next/server'
 import { searchKnowledge, type KnowledgeSystem } from '@/lib/knowledge'
 import { learnings } from '@/lib/reactor-data'
+import {
+  generateImage,
+  startVideo,
+  higgsfieldConfigured,
+  type AspectRatio,
+} from '@/lib/higgsfield'
 
 export const runtime = 'nodejs'
-export const maxDuration = 90
+export const maxDuration = 300
 
 // Coordinator brain (strategy + synthesis) and the cheaper specialists it
 // delegates to. Single source of truth for both models.
 const COORDINATOR_MODEL = 'claude-opus-4-8'
 const SPECIALIST_MODEL = 'claude-sonnet-4-6'
-const MAX_TURNS = 8
+const MAX_TURNS = 12
+
+// MCP connector (Messages API) beta — lets the coordinator call remote MCP
+// tools (Meta Ads) that Anthropic executes server-side.
+const MCP_BETA = 'mcp-client-2025-11-20'
+const META_ADS_MCP_NAME = 'meta_ads'
 
 interface ReactorRequest {
   angle: string
@@ -25,6 +36,21 @@ interface Concept {
   basis?: string
   learningCheck?: string
   score?: number
+  imageUrl?: string
+}
+
+/* ------------------------------ Meta Ads MCP ------------------------------ */
+
+// Pipeboard's hosted Meta Ads MCP. Token auth via the documented `?token=`
+// query param. Returns null (Meta Ads simply unavailable) when unconfigured.
+function metaAdsServer(): Anthropic.Beta.Messages.BetaRequestMCPServerURLDefinition | null {
+  const token = process.env.PIPEBOARD_API_TOKEN
+  const baseUrl = process.env.META_ADS_MCP_URL || 'https://meta-ads.mcp.pipeboard.co/'
+  if (!token && !process.env.META_ADS_MCP_URL) return null
+  const url = token
+    ? `${baseUrl}${baseUrl.includes('?') ? '&' : '?'}token=${encodeURIComponent(token)}`
+    : baseUrl
+  return { type: 'url', name: META_ADS_MCP_NAME, url }
 }
 
 /* ----------------------------- Specialists -------------------------------- */
@@ -61,34 +87,70 @@ function sse(controller: ReadableStreamDefaultController, event: unknown) {
 
 /* --------------------------------- Tools ---------------------------------- */
 
-const tools: Anthropic.Tool[] = [
-  {
-    name: 'consult_specialist',
-    description:
-      'Delegate a focused question to a specialist sub-agent who searches their slice of the knowledge layer and reports findings. Consult the research specialist plus at least one of creative/copy before drafting.',
-    input_schema: {
-      type: 'object',
-      properties: {
-        specialist: {
-          type: 'string',
-          enum: ['research', 'creative', 'copy'],
-          description: 'research = pains/desires/transformations; creative = formats/patterns; copy = hooks/headlines/offers',
+function buildTools(useHiggsfield: boolean, useMetaAds: boolean): Anthropic.Beta.Messages.BetaToolUnion[] {
+  const tools: Anthropic.Beta.Messages.BetaToolUnion[] = [
+    {
+      name: 'consult_specialist',
+      description:
+        'Delegate a focused question to a specialist sub-agent who searches their slice of the knowledge layer and reports findings. Consult the research specialist plus at least one of creative/copy before drafting.',
+      input_schema: {
+        type: 'object',
+        properties: {
+          specialist: {
+            type: 'string',
+            enum: ['research', 'creative', 'copy'],
+            description: 'research = pains/desires/transformations; creative = formats/patterns; copy = hooks/headlines/offers',
+          },
+          question: { type: 'string', description: 'The focused question for the specialist' },
         },
-        question: { type: 'string', description: 'The focused question for the specialist' },
+        required: ['specialist', 'question'],
       },
-      required: ['specialist', 'question'],
     },
-  },
-  {
-    name: 'get_learnings',
-    description:
-      'Retrieve the documented Creative Learnings rubric. Call this before submitting so you can self-score each concept against proven principles.',
-    input_schema: { type: 'object', properties: {} },
-  },
-  {
+    {
+      name: 'get_learnings',
+      description:
+        'Retrieve the documented Creative Learnings rubric. Call this before submitting so you can self-score each concept against proven principles.',
+      input_schema: { type: 'object', properties: {} },
+    },
+  ]
+
+  if (useHiggsfield) {
+    tools.push(
+      {
+        name: 'generate_image',
+        description:
+          'Generate a still ad creative with Higgsfield for a visual concept (e.g. Static Concept, Founder Concept, Campaign Concept). Returns the image URL, which also appears on the concept card in the Reactor. Call this for visual concepts before submitting them, and pass the imageUrl into that concept.',
+        input_schema: {
+          type: 'object',
+          properties: {
+            prompt: { type: 'string', description: 'A vivid, specific image prompt for the creative.' },
+            conceptType: { type: 'string', description: 'The output type this image is for (must match the concept type you will submit).' },
+            aspectRatio: { type: 'string', enum: ['1:1', '9:16', '16:9'], description: 'Defaults to 1:1.' },
+          },
+          required: ['prompt', 'conceptType'],
+        },
+      },
+      {
+        name: 'generate_video',
+        description:
+          'Animate a previously generated still into a short video with Higgsfield. Pass the imageUrl returned by generate_image. The video renders asynchronously and appears on the concept card when ready. Use for Video Concept / Founder Concept output types.',
+        input_schema: {
+          type: 'object',
+          properties: {
+            imageUrl: { type: 'string', description: 'The image URL returned by generate_image.' },
+            prompt: { type: 'string', description: 'Motion / direction prompt for the animation.' },
+            conceptType: { type: 'string', description: 'The output type this video is for (must match the concept type you will submit).' },
+          },
+          required: ['imageUrl', 'conceptType'],
+        },
+      },
+    )
+  }
+
+  tools.push({
     name: 'submit_concepts',
     description:
-      'Submit the final campaign concepts once specialists have reported AND you have self-scored each concept against the Creative Learnings rubric. Each concept must cite its evidence and pass the rubric.',
+      'Submit the final campaign concepts once specialists have reported AND you have self-scored each concept against the Creative Learnings rubric. Each concept must cite its evidence and pass the rubric. Include imageUrl for any concept you generated a creative for.',
     input_schema: {
       type: 'object',
       properties: {
@@ -102,6 +164,7 @@ const tools: Anthropic.Tool[] = [
               basis: { type: 'string', description: 'Which specialist finding / asset / pattern this draws from' },
               learningCheck: { type: 'string', description: 'How it satisfies the rubric' },
               score: { type: 'integer', description: 'Self-assessed 1-10. Only submit 7+.' },
+              imageUrl: { type: 'string', description: 'The Higgsfield image URL for this concept, if one was generated.' },
             },
             required: ['type', 'text'],
           },
@@ -109,10 +172,26 @@ const tools: Anthropic.Tool[] = [
       },
       required: ['concepts'],
     },
-  },
-]
+  })
 
-function coordinatorPrompt(outputs: string[]): string {
+  if (useMetaAds) {
+    tools.push({ type: 'mcp_toolset', mcp_server_name: META_ADS_MCP_NAME })
+  }
+
+  return tools
+}
+
+function coordinatorPrompt(
+  outputs: string[],
+  caps: { metaAds: boolean; higgsfield: boolean },
+): string {
+  const metaAdsLine = caps.metaAds
+    ? '\n- You also have live Meta Ads tools (meta_ads). Use them to ground concepts in what is actually performing — pull recent campaign/ad performance, top creatives, and spend before drafting.'
+    : ''
+  const higgsfieldLine = caps.higgsfield
+    ? '\n- For visual output types (Static Concept, Founder Concept, Video Concept, Testimonial Concept, Campaign Concept), call generate_image to produce a still creative, then optionally generate_video to animate it. Pass the concept type as conceptType, and include the returned imageUrl in the matching concept.'
+    : ''
+
   return `You are the Campaign Reactor Coordinator — the lead strategist of The Professional Builder's Creative Intelligence Command Center. You direct a team of specialist sub-agents.
 
 Your team:
@@ -121,8 +200,8 @@ Your team:
 - Copy Specialist — high-performing hooks, headlines, and offers.
 
 Process:
-1. Delegate focused questions to your specialists with consult_specialist. Always consult the Research Analyst plus at least one of Creative/Copy. Use their findings as evidence — don't guess.
-2. Call get_learnings and self-score every concept against that rubric. Revise or drop anything below 7.
+1. Delegate focused questions to your specialists with consult_specialist. Always consult the Research Analyst plus at least one of Creative/Copy. Use their findings as evidence — don't guess.${metaAdsLine}
+2. Call get_learnings and self-score every concept against that rubric. Revise or drop anything below 7.${higgsfieldLine}
 3. Call submit_concepts exactly once, with concepts ONLY for these requested output types: ${outputs.join(', ')}. Each concept cites which specialist finding it came from.
 
 Voice: confident, specific, builder-native. Engineered for performance.`
@@ -195,6 +274,10 @@ async function runDemo(controller: ReadableStreamDefaultController, body: Reacto
 
   sse(controller, { type: 'step', text: 'Loading Creative Learnings rubric for self-critique…' })
   sse(controller, { type: 'step', text: 'Coordinator synthesizing + scoring concepts…' })
+  sse(controller, {
+    type: 'step',
+    text: 'Live Meta Ads performance + Higgsfield image/video creatives activate with API keys.',
+  })
 
   const a = body.angle
   const al = a.toLowerCase()
@@ -234,9 +317,15 @@ export async function POST(request: NextRequest) {
         }
 
         const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
-        sse(controller, { type: 'step', text: 'Coordinator online. Briefing the specialist team…' })
+        const mcpServer = metaAdsServer()
+        const useHiggsfield = higgsfieldConfigured()
+        const tools = buildTools(useHiggsfield, Boolean(mcpServer))
 
-        const messages: Anthropic.MessageParam[] = [
+        sse(controller, { type: 'step', text: 'Coordinator online. Briefing the specialist team…' })
+        if (mcpServer) sse(controller, { type: 'step', text: 'Live Meta Ads performance feed connected.' })
+        if (useHiggsfield) sse(controller, { type: 'step', text: 'Higgsfield creative engine ready (image + video).' })
+
+        const messages: Anthropic.Beta.Messages.BetaMessageParam[] = [
           {
             role: 'user',
             content: `Design campaign concepts for the "${body.angle}" angle. Active intelligence inputs: ${(body.inputs ?? []).join(', ') || 'all'}. Requested output types: ${outputs.join(', ')}.`,
@@ -244,17 +333,33 @@ export async function POST(request: NextRequest) {
         ]
 
         for (let turn = 0; turn < MAX_TURNS; turn++) {
-          const response = await anthropic.messages.create({
+          const params: Anthropic.Beta.Messages.MessageCreateParamsNonStreaming = {
             model: COORDINATOR_MODEL,
             max_tokens: 4000,
-            system: coordinatorPrompt(outputs),
+            system: coordinatorPrompt(outputs, { metaAds: Boolean(mcpServer), higgsfield: useHiggsfield }),
             tools,
             messages,
-          })
+          }
+          if (mcpServer) {
+            params.mcp_servers = [mcpServer]
+            params.betas = [MCP_BETA]
+          }
+
+          const response = await anthropic.beta.messages.create(params)
           messages.push({ role: 'assistant', content: response.content })
 
+          // Surface server-side Meta Ads (MCP) tool activity in the telemetry feed.
+          for (const block of response.content) {
+            if (block.type === 'mcp_tool_use') {
+              sse(controller, { type: 'retrieval', system: 'meta-ads', title: block.name })
+            }
+          }
+
+          // Server-side tool loop paused — re-send to let it resume.
+          if (response.stop_reason === 'pause_turn') continue
+
           const toolUses = response.content.filter(
-            (b): b is Anthropic.ToolUseBlock => b.type === 'tool_use',
+            (b): b is Anthropic.Beta.Messages.BetaToolUseBlock => b.type === 'tool_use',
           )
           if (toolUses.length === 0) break
 
@@ -267,7 +372,7 @@ export async function POST(request: NextRequest) {
             return
           }
 
-          const results: Anthropic.ToolResultBlockParam[] = []
+          const results: Anthropic.Beta.Messages.BetaToolResultBlockParam[] = []
           for (const tu of toolUses) {
             if (tu.name === 'consult_specialist') {
               const { specialist, question } = tu.input as { specialist: SpecialistId; question: string }
@@ -286,6 +391,62 @@ export async function POST(request: NextRequest) {
                 tool_use_id: tu.id,
                 content: learnings.map((l) => `• ${l.insight} — ${l.recommendation} (evidence: ${l.evidence})`).join('\n'),
               })
+            } else if (tu.name === 'generate_image') {
+              const { prompt, conceptType, aspectRatio } = tu.input as {
+                prompt: string
+                conceptType?: string
+                aspectRatio?: AspectRatio
+              }
+              sse(controller, {
+                type: 'step',
+                text: `Generating still creative via Higgsfield${conceptType ? ` · ${conceptType}` : ''}…`,
+              })
+              const url = await generateImage(prompt, aspectRatio ?? '1:1')
+              if (url) {
+                sse(controller, { type: 'media', mediaType: 'image', conceptType: conceptType ?? '', url })
+                results.push({ type: 'tool_result', tool_use_id: tu.id, content: JSON.stringify({ imageUrl: url }) })
+              } else {
+                results.push({
+                  type: 'tool_result',
+                  tool_use_id: tu.id,
+                  content: JSON.stringify({ imageUrl: null, note: 'image generation unavailable' }),
+                })
+              }
+            } else if (tu.name === 'generate_video') {
+              const { prompt, imageUrl, conceptType } = tu.input as {
+                prompt?: string
+                imageUrl: string
+                conceptType?: string
+              }
+              sse(controller, {
+                type: 'step',
+                text: `Rendering video via Higgsfield${conceptType ? ` · ${conceptType}` : ''}…`,
+              })
+              const started = await startVideo(prompt ?? '', imageUrl)
+              if (started) {
+                sse(controller, {
+                  type: 'media',
+                  mediaType: 'video',
+                  conceptType: conceptType ?? '',
+                  requestId: started.requestId,
+                  status: started.status,
+                })
+                results.push({
+                  type: 'tool_result',
+                  tool_use_id: tu.id,
+                  content: JSON.stringify({
+                    requestId: started.requestId,
+                    status: started.status,
+                    note: 'video is rendering; it will appear on the concept card when ready',
+                  }),
+                })
+              } else {
+                results.push({
+                  type: 'tool_result',
+                  tool_use_id: tu.id,
+                  content: JSON.stringify({ requestId: null, note: 'video generation unavailable' }),
+                })
+              }
             } else {
               results.push({ type: 'tool_result', tool_use_id: tu.id, content: 'Unknown tool', is_error: true })
             }
