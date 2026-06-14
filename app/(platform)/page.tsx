@@ -112,6 +112,10 @@ export default async function ReactorDashboard() {
         </div>
       </div>
 
+      <div className="mb-8 flex justify-center">
+        <FireReactorButton />
+      </div>
+
       <div className="dashboard-console">
         {/* KPI instruments — 2 rows of neon telemetry cards */}
         <section className="grid grid-cols-2 gap-3 md:grid-cols-4">
@@ -306,9 +310,6 @@ export default async function ReactorDashboard() {
         </section>
       </div>
 
-      <div className="flex justify-center pb-2">
-        <FireReactorButton />
-      </div>
     </>
   )
 }
