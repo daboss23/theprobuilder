@@ -17,7 +17,7 @@ export default function RecommendationsPage() {
           <Panel key={r.campaign} hover className="overflow-hidden">
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-5 py-4">
               <div className="flex items-center gap-3">
-                <span className="grid h-10 w-10 place-items-center rounded-lg border border-primary/30 bg-primary/10 text-glow shadow-glow">
+                <span className="panel-icon acc-amber grid h-10 w-10 place-items-center rounded-lg">
                   <Target size={18} />
                 </span>
                 <div>

@@ -228,7 +228,7 @@ export function Workbench() {
       {/* Inputs */}
       <div className="space-y-4">
         <Panel>
-          <PanelHeader icon={<Zap size={16} />} title="Intelligence Inputs" subtitle="Feed the reactor" />
+          <PanelHeader icon={<Zap size={16} />} accent="amber" title="Intelligence Inputs" subtitle="Feed the reactor" />
           <div className="space-y-1.5 p-4">
             {reactorInputs.map((i) => {
               const on = activeInputs.includes(i)
@@ -300,7 +300,7 @@ export function Workbench() {
             type="button"
             onClick={fire}
             disabled={phase === 'firing' || outputs.length === 0}
-            className="mt-5 flex w-full items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-primary to-cyan px-4 py-3 font-display text-sm font-semibold text-white shadow-glow transition-all hover:shadow-glow-lg disabled:opacity-60"
+            className="fire-btn mt-5 flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3 font-display text-sm font-semibold text-white disabled:opacity-60"
           >
             {phase === 'firing' ? (
               <>
@@ -318,7 +318,8 @@ export function Workbench() {
       {/* Output */}
       <Panel className="min-h-[480px]">
         <PanelHeader
-          icon={<Atom size={16} className={phase === 'firing' ? 'animate-spin' : ''} />}
+          icon={<Atom size={16} className={phase === 'firing' ? 'animate-spin' : 'animate-pulse-glow'} />}
+          accent="cyan"
           title="Generated Concepts"
           subtitle="Synthesized from your active intelligence layer"
           accessory={concepts.length > 0 ? <Pill tone="success">{concepts.length} concepts</Pill> : undefined}
@@ -338,7 +339,7 @@ export function Workbench() {
           <div className="space-y-4 p-5">
             {/* Live telemetry feed */}
             {(telemetry.length > 0 || phase === 'firing') && (
-              <div className="rounded-xl border border-border bg-background/40 p-3">
+              <div className="telemetry-console p-3">
                 <div className="mb-2 flex items-center gap-2 text-[10px] font-medium uppercase tracking-widest text-white/35">
                   <Radar size={12} className={phase === 'firing' ? 'animate-spin text-glow' : ''} />
                   Reactor Telemetry
@@ -382,8 +383,7 @@ export function Workbench() {
               return (
                 <div
                   key={i}
-                  className="glass-hover animate-fade-up rounded-xl border border-border bg-surface/40 p-4"
-                  style={{ animationDelay: `${i * 40}ms` }}
+                  className={`glass-hover animate-fade-up stagger-${(i % 8) + 1} rounded-xl border border-border bg-surface/40 p-4`}
                 >
                   <div className="mb-1.5 flex items-center justify-between gap-2">
                     <div className="flex items-center gap-2">
@@ -453,7 +453,7 @@ export function Workbench() {
                     </div>
                   )}
 
-                  {/* Generated still creative (Higgsfield agent / Higgsfield concept / OpenAI) */}
+                  {/* Generated still creative (Higgsfield agent or manual) */}
                   {image && (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={image} alt={c.type} className="mt-3 w-full rounded-lg border border-border" />
@@ -481,7 +481,7 @@ export function Workbench() {
                     </p>
                   )}
 
-                  {/* OpenAI creative status (in-flight / error) */}
+                  {/* Creative render status (in-flight / error) */}
                   {creatives[c.text]?.status === 'working' && (
                     <div className="mt-3 grid aspect-square w-full place-items-center rounded-lg border border-border bg-background/40">
                       <span className="flex items-center gap-2 text-xs text-cyan">

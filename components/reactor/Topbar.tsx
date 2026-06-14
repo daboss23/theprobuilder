@@ -2,16 +2,17 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import Image from 'next/image'
 import { usePathname } from 'next/navigation'
 import { Menu, X, Search, Bell } from 'lucide-react'
 import { navItems } from '@/lib/nav'
+import { ReactorLogo } from '@/components/reactor/ReactorLogo'
 import { cn } from '@/lib/utils'
 
 export function Topbar() {
   const pathname = usePathname()
   const [open, setOpen] = useState(false)
   const current = navItems.find((n) => n.href === pathname)
+  const heading = pathname === '/' ? 'Reactor Dashboard' : current?.label ?? 'Reactor Dashboard'
 
   return (
     <header className="reactor-topbar sticky top-0 z-30">
@@ -19,30 +20,24 @@ export function Topbar() {
         <button
           type="button"
           onClick={() => setOpen((v) => !v)}
-          className="lg:hidden grid h-9 w-9 place-items-center rounded-lg border border-border text-white/70"
+          className="topbar-control grid h-9 w-9 place-items-center rounded-xl border border-border text-white/70 lg:hidden"
           aria-label="Toggle navigation"
         >
           {open ? <X size={18} /> : <Menu size={18} />}
         </button>
 
-        <div className="lg:hidden">
-          <Image
-            src="/TPG-Reactor-Logo.png"
-            alt="TPB Creative Reactor"
-            width={1619}
-            height={971}
-            className="reactor-logo h-7 w-auto"
-          />
-        </div>
+        <Link href="/" className="lg:hidden" aria-label="TPB Creative Reactor — Dashboard">
+          <ReactorLogo size="sm" />
+        </Link>
 
-        <div className="hidden lg:flex items-center gap-3">
+        <div className="hidden items-center gap-3 lg:flex">
           {current?.system && (
             <span className="font-mono text-[11px] tracking-widest text-glow/70">
               SYSTEM {current.system}
             </span>
           )}
           <h1 className="font-display text-base font-semibold tracking-tight text-white">
-            {current?.label ?? 'Reactor Dashboard'}
+            {heading}
           </h1>
         </div>
 
@@ -60,7 +55,7 @@ export function Topbar() {
             aria-label="Alerts"
           >
             <Bell size={16} />
-            <span className="absolute right-2 top-2 h-1.5 w-1.5 rounded-full bg-cyan shadow-[0_0_8px_2px_rgba(0,212,255,0.7)]" />
+            <span className="absolute right-2 top-2 h-1.5 w-1.5 rounded-full bg-cyan shadow-[0_0_8px_2px_rgba(34,211,238,0.7)]" />
           </button>
           <div className="topbar-avatar grid h-9 w-9 place-items-center rounded-xl bg-gradient-to-br from-primary to-cyan text-xs font-bold text-white">
             TPB
@@ -69,7 +64,7 @@ export function Topbar() {
       </div>
 
       {open && (
-        <nav className="mobile-reactor-nav space-y-1 border-t border-border bg-card/95 px-3 py-3 lg:hidden">
+        <nav className="mobile-reactor-nav space-y-1.5 border-t border-border bg-card/95 px-3 py-3 lg:hidden">
           {navItems.map((item) => {
             const active = pathname === item.href
             const Icon = item.icon
@@ -79,11 +74,13 @@ export function Topbar() {
                 href={item.href}
                 onClick={() => setOpen(false)}
                 className={cn(
-                  'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm',
-                  active ? 'bg-primary/15 text-white' : 'text-white/60',
+                  'reactor-nav-item flex items-center gap-2.5 rounded-xl px-2.5 py-2 text-sm',
+                  active ? 'is-active text-white' : 'text-white/60',
                 )}
               >
-                <Icon size={17} className={active ? 'text-glow' : 'text-white/40'} />
+                <span className="nav-icon-chip grid h-7 w-7 shrink-0 place-items-center rounded-lg">
+                  <Icon size={15} className={active ? 'text-glow' : 'text-white/45'} />
+                </span>
                 {item.label}
               </Link>
             )
