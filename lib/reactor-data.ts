@@ -20,21 +20,42 @@ export const reactorKpis: KpiStat[] = [
   { label: 'Campaign Ideas Ready', value: 24, delta: '+5', trend: 'up' },
 ]
 
+// Neon accent channel names shared with the command-center UI layer.
+export type DataAccent = 'blue' | 'cyan' | 'violet' | 'emerald' | 'pink' | 'amber'
+
 export interface AngleStat {
   name: string
   score: number // 0-100 win index
   campaigns: number
   trend: 'up' | 'down' | 'flat'
+  delta: string
+  accent: DataAccent
 }
 
 export const winningAngles: AngleStat[] = [
-  { name: 'Profit', score: 94, campaigns: 61, trend: 'up' },
-  { name: 'Systems', score: 88, campaigns: 54, trend: 'up' },
-  { name: 'Time Freedom', score: 85, campaigns: 47, trend: 'up' },
-  { name: 'Leadership', score: 79, campaigns: 38, trend: 'flat' },
-  { name: 'Cashflow', score: 76, campaigns: 33, trend: 'up' },
-  { name: 'Growth', score: 71, campaigns: 42, trend: 'down' },
-  { name: 'Team Accountability', score: 68, campaigns: 29, trend: 'up' },
+  { name: 'Profit', score: 94, campaigns: 61, trend: 'up', delta: '4', accent: 'emerald' },
+  { name: 'Systems', score: 88, campaigns: 54, trend: 'up', delta: '4', accent: 'cyan' },
+  { name: 'Time Freedom', score: 85, campaigns: 47, trend: 'up', delta: '4', accent: 'blue' },
+  { name: 'Leadership', score: 79, campaigns: 38, trend: 'flat', delta: '—', accent: 'pink' },
+  { name: 'Cashflow', score: 76, campaigns: 33, trend: 'up', delta: '4', accent: 'amber' },
+  { name: 'Growth', score: 71, campaigns: 42, trend: 'down', delta: '2', accent: 'violet' },
+  { name: 'Team Accountability', score: 68, campaigns: 29, trend: 'up', delta: '3', accent: 'cyan' },
+]
+
+export interface PerformanceSignal {
+  label: string
+  value: string
+  metric: string
+  pct: number
+  accent: DataAccent
+}
+
+// Compact performance read-outs along the foot of the Reactor Dashboard.
+export const performanceSignals: PerformanceSignal[] = [
+  { label: 'Top Performing Platform', value: 'Facebook', metric: 'ROAS 4.7x', pct: 87, accent: 'blue' },
+  { label: 'Best Performing Format', value: 'Video', metric: 'Win Rate 68%', pct: 68, accent: 'emerald' },
+  { label: 'Optimal Hook Length', value: '8-12 Words', metric: 'Win Rate 72%', pct: 72, accent: 'violet' },
+  { label: 'Peak Engagement Time', value: '7PM - 10PM', metric: 'Win Rate 63%', pct: 63, accent: 'amber' },
 ]
 
 export interface HeatRow {

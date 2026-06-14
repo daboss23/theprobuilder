@@ -37,6 +37,7 @@ export default function ResearchPage() {
         <Panel>
           <PanelHeader
             icon={<Building2 size={16} />}
+            accent="emerald"
             title="Internal Sources"
             subtitle="First-party signal from inside TPB"
           />
@@ -45,6 +46,7 @@ export default function ResearchPage() {
         <Panel>
           <PanelHeader
             icon={<Globe size={16} />}
+            accent="cyan"
             title="External Sources"
             subtitle="Market signal from the wider builder world"
           />
@@ -55,6 +57,7 @@ export default function ResearchPage() {
       <Panel>
         <PanelHeader
           icon={<Sparkles size={16} />}
+          accent="violet"
           title="Extracted Outputs"
           subtitle="What the reactor learned from the research layer"
           accessory={<Pill tone="primary"><Radar size={12} /> Continuously mined</Pill>}
