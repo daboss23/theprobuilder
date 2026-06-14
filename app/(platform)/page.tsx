@@ -1,7 +1,6 @@
 import {
   Activity,
   Anchor,
-  ArrowUpRight,
   Atom,
   Banknote,
   Box,
@@ -42,6 +41,7 @@ import {
 } from '@/lib/reactor-data'
 import { vaultStats } from '@/lib/knowledge'
 import { cn } from '@/lib/utils'
+import FireReactorButton from '@/components/FireReactorButton'
 
 export const dynamic = 'force-dynamic'
 
@@ -307,12 +307,7 @@ export default async function ReactorDashboard() {
       </div>
 
       <div className="flex justify-center pb-2">
-        <a
-          href="/campaign-reactor"
-          className="fire-btn inline-flex items-center gap-2 rounded-xl px-6 py-3 font-display text-sm font-semibold text-white"
-        >
-          Launch Campaign Reactor <ArrowUpRight size={16} />
-        </a>
+        <FireReactorButton />
       </div>
     </>
   )
