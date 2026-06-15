@@ -308,10 +308,10 @@ export default async function ReactorDashboard() {
 
       <div className="flex justify-center pb-2">
         <a
-          href="/campaign-reactor"
+          href="/campaign-reactor?modal=open"
           className="fire-btn inline-flex items-center gap-2 rounded-xl px-6 py-3 font-display text-sm font-semibold text-white"
         >
-          Launch Campaign Reactor <ArrowUpRight size={16} />
+          New Creative Campaign <ArrowUpRight size={16} />
         </a>
       </div>
     </>
