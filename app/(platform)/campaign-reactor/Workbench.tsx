@@ -448,7 +448,7 @@ export function Workbench() {
             type="button"
             onClick={fire}
             disabled={phase === 'firing' || outputs.length === 0}
-            className="fire-btn mt-5 flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3 font-display text-sm font-semibold text-white disabled:opacity-60"
+            className="fire-btn mt-5 flex w-full items-center justify-center gap-2 rounded-full px-4 py-4 font-display text-base font-bold uppercase tracking-wide text-white"
           >
             {phase === 'firing' ? (
               <>
