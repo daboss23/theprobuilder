@@ -89,6 +89,32 @@ function sse(controller: ReadableStreamDefaultController, event: unknown) {
   controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify(event)}\n\n`))
 }
 
+/* ------------------------------ Resilience -------------------------------- */
+
+// Anthropic occasionally returns 429 (rate limit) or 529 (overloaded). These are
+// transient — retry with exponential backoff instead of failing the whole run.
+async function withRetry<T>(
+  fn: () => Promise<T>,
+  onRetry?: (attempt: number, waitMs: number) => void,
+): Promise<T> {
+  const MAX = 4
+  let lastErr: unknown
+  for (let attempt = 0; attempt <= MAX; attempt++) {
+    try {
+      return await fn()
+    } catch (err) {
+      lastErr = err
+      const status = (err as { status?: number })?.status
+      const retriable = status === 429 || status === 500 || status === 503 || status === 529
+      if (!retriable || attempt === MAX) throw err
+      const wait = 1000 * 2 ** attempt // 1s, 2s, 4s, 8s
+      onRetry?.(attempt + 1, wait)
+      await new Promise((r) => setTimeout(r, wait))
+    }
+  }
+  throw lastErr
+}
+
 /* --------------------------------- Tools ---------------------------------- */
 
 function buildTools(
@@ -285,14 +311,22 @@ async function runSpecialist(
     ? hits.map((h) => `[${h.system}] ${h.title}: ${h.content}`).join('\n\n')
     : 'No stored knowledge yet — reason from builder-industry first principles.'
 
-  const response = await anthropic.messages.create({
-    model: SPECIALIST_MODEL,
-    max_tokens: 700,
-    system: `You are the ${spec.name} for The Professional Builder. You specialise in ${spec.focus}. Given retrieved evidence, return 3-5 tight, specific bullet findings the strategist can build a campaign on. Cite the asset/pattern names. No preamble.`,
-    messages: [
-      { role: 'user', content: `Question: ${question}\n\nRetrieved evidence:\n${evidence}` },
-    ],
-  })
+  const response = await withRetry(
+    () =>
+      anthropic.messages.create({
+        model: SPECIALIST_MODEL,
+        max_tokens: 700,
+        system: `You are the ${spec.name} for The Professional Builder. You specialise in ${spec.focus}. Given retrieved evidence, return 3-5 tight, specific bullet findings the strategist can build a campaign on. Cite the asset/pattern names. No preamble.`,
+        messages: [
+          { role: 'user', content: `Question: ${question}\n\nRetrieved evidence:\n${evidence}` },
+        ],
+      }),
+    (n, w) =>
+      sse(controller, {
+        type: 'step',
+        text: `${spec.name}: model busy — retrying (${n}/4) in ${w / 1000}s…`,
+      }),
+  )
 
   const block = response.content.find((b): b is Anthropic.TextBlock => b.type === 'text')
   const findings = block?.text ?? 'No findings.'
@@ -409,7 +443,14 @@ export async function POST(request: NextRequest) {
             params.betas = [MCP_BETA]
           }
 
-          const response = await anthropic.beta.messages.create(params)
+          const response = await withRetry(
+            () => anthropic.beta.messages.create(params),
+            (n, w) =>
+              sse(controller, {
+                type: 'step',
+                text: `Claude is busy (overloaded) — retrying (${n}/4) in ${w / 1000}s…`,
+              }),
+          )
           messages.push({ role: 'assistant', content: response.content })
 
           // Surface server-side Meta Ads (MCP) tool activity in the telemetry feed.
@@ -554,7 +595,16 @@ export async function POST(request: NextRequest) {
         controller.close()
       } catch (err) {
         console.error('Campaign Reactor error:', err)
-        sse(controller, { type: 'error', message: err instanceof Error ? err.message : 'Reactor failed' })
+        const status = (err as { status?: number })?.status
+        const message =
+          status === 529 || status === 503
+            ? 'Claude is temporarily overloaded. Please fire the reactor again in a moment.'
+            : status === 429
+              ? 'Rate limit reached. Wait a few seconds and fire the reactor again.'
+              : err instanceof Error
+                ? err.message
+                : 'Reactor failed'
+        sse(controller, { type: 'error', message })
         controller.close()
       }
     },
