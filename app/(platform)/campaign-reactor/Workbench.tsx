@@ -614,7 +614,7 @@ export function Workbench() {
                           ) : (
                             <ImageIcon size={12} />
                           )}
-                          {wantsVideo ? 'Generate video' : 'Generate creative'}
+                          {wantsVideo ? 'Generate Video Creative' : 'Generate Image Creative'}
                         </button>
                       )}
                       {image && !video && (
