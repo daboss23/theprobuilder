@@ -90,8 +90,10 @@ These live in `.env.local` — never commit this file.
 ```
 ANTHROPIC_API_KEY            # Campaign Reactor agent + copy generation
 VOYAGE_API_KEY               # Embeddings for the RAG knowledge layer
-OPENAI_API_KEY               # Comparison copy / image
+OPENAI_API_KEY               # Comparison copy / image (GPT Image)
+GEMINI_API_KEY               # Nano Banana 2 image model (Gemini) — or GOOGLE_API_KEY
 HF_CREDENTIALS               # Higgsfield image + video ("KEY_ID:KEY_SECRET")
+FAL_KEY                      # fal.ai gateway → Seedance/Kling/Veo/Wan video models
 PIPEBOARD_API_TOKEN          # Meta Ads MCP (live ad performance) — optional
 NEXT_PUBLIC_SUPABASE_URL
 NEXT_PUBLIC_SUPABASE_ANON_KEY
@@ -125,6 +127,19 @@ end. For destructive writes (Supabase inserts), surface errors clearly.
 - `generateImage()` blocks until the still is ready (returns the URL inline). `startVideo()` is fire-and-forget — video renders take minutes, so the client polls `getVideoStatus()` via `/api/generate-video`.
 - Exposed to the Campaign Reactor agent as the `generate_image` / `generate_video` tools (only when `HF_CREDENTIALS` is set). Results stream to the Reactor as `media` SSE events and render on the concept cards.
 - Never throw on missing keys or failed renders — return null/`unknown` so the copy stays usable.
+
+### Image models (multi-provider "oven")
+- The image layer lives in `lib/image/` and mirrors the video layer. `lib/image/registry.ts` is the menu: **nano-banana** (Gemini, `lib/image/gemini.ts`), **openai-gpt-image** (`lib/image/openai.ts`), **higgsfield-soul** (Higgsfield SDK). One provider key each.
+- `lib/image/index.ts` dispatches `generateImageWith(modelId, prompt, aspectRatio)` → `{ imageUrl, modelId, provider }`, picking the best configured model when none/an unconfigured one is requested. Never throws — returns null.
+- Exposed to the agent as `generate_image` with a `model` selector; `lib/image/recommend.ts` suggests a model from the requested output types (OpenAI for text-heavy statics, Higgsfield Soul for photographic founder/testimonial, Nano Banana for fast variants).
+- API: `GET /api/image/models` lists the menu + configured status; `POST /api/generate-image` is model-aware (backward compatible — prompt only renders on the default/best model).
+
+### Video models (multi-provider "oven")
+- The video layer lives in `lib/video/` and is provider-agnostic. `lib/video/registry.ts` is the model menu (Seedance 2.0, Kling 2.5, Veo 3, Wan 2.5, Higgsfield DoP) with capabilities (modes, max duration, aspect ratios, native audio). Endpoints are env-overridable since vendor model paths drift.
+- **fal.ai** is the single gateway for the frontier models — one key (`FAL_KEY`) unlocks Seedance/Kling/Veo/Wan via the async queue API (`lib/video/fal.ts`). Higgsfield stays wired through its own SDK.
+- `lib/video/index.ts` dispatches start/poll into one `VideoJob` shape: `startVideoJob(modelId, input)` and `getVideoJob(modelId, requestId)`. Supports both `text-to-video` (full scene, e.g. a builder on-site or a person speaking) and `image-to-video` (animate a still). Use **veo-3** for spoken/UGC (native audio), **seedance-2.0**/**kling-2.5** for cinematic realism, **wan-2.5** for high-volume/budget.
+- Exposed to the agent as the `generate_video` tool with a `model` + `mode` selector; renders stream as `media` SSE events. Every render is logged to `media_generations` (`lib/video/persistence.ts`, `supabase/schema.media.sql`) when Supabase is configured.
+- API: `GET /api/video/models` lists the menu + which are configured; `POST/GET /api/generate-video` starts/polls a render (model-aware, backward compatible). Never throw on missing keys — return null/`unknown`.
 
 ### Meta Ads (MCP connector)
 - Attach Pipeboard's hosted Meta Ads MCP to the orchestrator with Anthropic's **MCP connector** (`mcp_servers` + `mcp_toolset` on `anthropic.beta.messages.create`, beta header `mcp-client-2025-11-20`). Token auth via `PIPEBOARD_API_TOKEN` (`?token=` on the server URL).

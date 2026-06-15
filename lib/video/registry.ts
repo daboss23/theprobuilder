@@ -1,0 +1,161 @@
+import type { VideoModel } from './types'
+
+/**
+ * The model menu — TPB's in-house equivalent of Higgsfield's model picker.
+ *
+ * fal.ai is used as a single gateway for the frontier models (Seedance, Kling,
+ * Veo, Wan): one key (FAL_KEY) unlocks all of them with one async pattern.
+ * Higgsfield stays wired through its own platform API.
+ *
+ * Provider model paths drift as vendors ship new versions, so every endpoint
+ * can be overridden with an env var without code changes. The defaults reflect
+ * the current generation; update them (or set the env var) as models evolve.
+ */
+
+const env = (key: string, fallback: string) => process.env[key] || fallback
+
+export const VIDEO_MODELS: VideoModel[] = [
+  {
+    id: 'seedance-2.0',
+    label: 'Seedance 2.0 (ByteDance)',
+    provider: 'fal',
+    endpoints: {
+      'text-to-video': env('FAL_SEEDANCE_T2V', 'bytedance/seedance-2.0/text-to-video'),
+      'image-to-video': env('FAL_SEEDANCE_I2V', 'bytedance/seedance-2.0/image-to-video'),
+      'reference-to-video': env('FAL_SEEDANCE_R2V', 'bytedance/seedance-2.0/reference-to-video'),
+    },
+    modes: ['text-to-video', 'image-to-video', 'reference-to-video'],
+    maxDurationSec: 15,
+    aspectRatios: ['1:1', '9:16', '16:9'],
+    audio: true,
+    tier: 'flagship',
+    notes: 'ByteDance flagship — native synchronized audio, real-world physics, and cinematic multi-shot in one pass. Reference-to-video keeps a consistent face across clips (in-house UGC / face library). Best for realistic human scenes and on-site builder B-roll.',
+  },
+  {
+    id: 'seedance-2.0-fast',
+    label: 'Seedance 2.0 Fast (ByteDance)',
+    provider: 'fal',
+    endpoints: {
+      'text-to-video': env('FAL_SEEDANCE_FAST_T2V', 'bytedance/seedance-2.0/fast/text-to-video'),
+      'image-to-video': env('FAL_SEEDANCE_FAST_I2V', 'bytedance/seedance-2.0/fast/image-to-video'),
+      'reference-to-video': env('FAL_SEEDANCE_FAST_R2V', 'bytedance/seedance-2.0/fast/reference-to-video'),
+    },
+    modes: ['text-to-video', 'image-to-video', 'reference-to-video'],
+    maxDurationSec: 15,
+    aspectRatios: ['1:1', '9:16', '16:9'],
+    audio: true,
+    tier: 'fast',
+    notes: 'Lower-latency, lower-cost Seedance 2.0 — same native audio and reference-to-video face consistency, ideal for high-volume in-house UGC.',
+  },
+  {
+    id: 'veo-3.1',
+    label: 'Veo 3.1 (Google)',
+    provider: 'fal',
+    endpoints: {
+      'text-to-video': env('FAL_VEO31_T2V', 'fal-ai/veo3.1'),
+      'image-to-video': env('FAL_VEO31_I2V', 'fal-ai/veo3.1/image-to-video'),
+    },
+    modes: ['text-to-video', 'image-to-video'],
+    maxDurationSec: 8,
+    aspectRatios: ['9:16', '16:9'],
+    audio: true,
+    tier: 'flagship',
+    notes: "Google's latest — native synchronized audio + dialogue. Best for people speaking / UGC voices.",
+  },
+  {
+    id: 'kling-3.0',
+    label: 'Kling 3.0 (Kuaishou)',
+    provider: 'fal',
+    endpoints: {
+      'text-to-video': env('FAL_KLING3_T2V', 'fal-ai/kling-video/v3/pro/text-to-video'),
+      'image-to-video': env('FAL_KLING3_I2V', 'fal-ai/kling-video/v3/pro/image-to-video'),
+    },
+    modes: ['text-to-video', 'image-to-video'],
+    maxDurationSec: 10,
+    aspectRatios: ['1:1', '9:16', '16:9'],
+    audio: false,
+    tier: 'flagship',
+    notes: 'Latest Kling — top-tier motion consistency and prompt adherence for UGC and action.',
+  },
+  {
+    id: 'wan-2.7',
+    label: 'Wan 2.7 (Alibaba)',
+    provider: 'fal',
+    endpoints: {
+      'text-to-video': env('FAL_WAN27_T2V', 'fal-ai/wan/v2.7/text-to-video'),
+      'image-to-video': env('FAL_WAN27_I2V', 'fal-ai/wan/v2.7/image-to-video'),
+    },
+    modes: ['text-to-video', 'image-to-video'],
+    maxDurationSec: 15,
+    aspectRatios: ['1:1', '9:16', '16:9'],
+    audio: false,
+    tier: 'flagship',
+    notes: 'Native 1080p, 15s clips, first/last-frame control — strong quality at scale for high-volume variants.',
+  },
+  {
+    id: 'kling-2.5',
+    label: 'Kling 2.5 (Kuaishou)',
+    provider: 'fal',
+    endpoints: {
+      'text-to-video': env('FAL_KLING_T2V', 'fal-ai/kling-video/v2.5-turbo/pro/text-to-video'),
+      'image-to-video': env('FAL_KLING_I2V', 'fal-ai/kling-video/v2.5-turbo/pro/image-to-video'),
+    },
+    modes: ['text-to-video', 'image-to-video'],
+    maxDurationSec: 10,
+    aspectRatios: ['1:1', '9:16', '16:9'],
+    audio: false,
+    tier: 'flagship',
+    notes: 'Excellent prompt adherence and lip-sync-friendly motion for UGC.',
+  },
+  {
+    id: 'veo-3',
+    label: 'Veo 3 (Google)',
+    provider: 'fal',
+    endpoints: {
+      'text-to-video': env('FAL_VEO3_T2V', 'fal-ai/veo3'),
+      'image-to-video': env('FAL_VEO3_I2V', 'fal-ai/veo3/image-to-video'),
+    },
+    modes: ['text-to-video', 'image-to-video'],
+    maxDurationSec: 8,
+    aspectRatios: ['9:16', '16:9'],
+    audio: true,
+    tier: 'flagship',
+    notes: 'Native synchronized audio + dialogue — best for people speaking / UGC voices.',
+  },
+  {
+    id: 'wan-2.5',
+    label: 'Wan 2.5 (Alibaba)',
+    provider: 'fal',
+    endpoints: {
+      'text-to-video': env('FAL_WAN_T2V', 'fal-ai/wan-25-preview/text-to-video'),
+      'image-to-video': env('FAL_WAN_I2V', 'fal-ai/wan-25-preview/image-to-video'),
+    },
+    modes: ['text-to-video', 'image-to-video'],
+    maxDurationSec: 10,
+    aspectRatios: ['1:1', '9:16', '16:9'],
+    audio: false,
+    tier: 'budget',
+    notes: 'Strong quality-to-cost ratio for high-volume variant generation.',
+  },
+  {
+    id: 'higgsfield-dop',
+    label: 'Higgsfield DoP',
+    provider: 'higgsfield',
+    endpoints: {
+      'image-to-video': 'dop',
+    },
+    modes: ['image-to-video'],
+    maxDurationSec: 5,
+    aspectRatios: ['1:1', '9:16', '16:9'],
+    audio: false,
+    tier: 'fast',
+    notes: 'Cinematic camera-move animation of a still — already wired via the Higgsfield SDK.',
+  },
+]
+
+/** Default model when the caller does not specify one. */
+export const DEFAULT_VIDEO_MODEL = 'seedance-2.0'
+
+export function getVideoModel(id: string): VideoModel | undefined {
+  return VIDEO_MODELS.find((m) => m.id === id)
+}

@@ -2,12 +2,14 @@ import Anthropic from '@anthropic-ai/sdk'
 import { NextRequest } from 'next/server'
 import { searchKnowledge, type KnowledgeSystem } from '@/lib/knowledge'
 import { learnings } from '@/lib/reactor-data'
+import { generateImageWith, imageConfigured, listImageModels, type AspectRatio } from '@/lib/image'
 import {
-  generateImage,
-  startVideo,
-  higgsfieldConfigured,
-  type AspectRatio,
-} from '@/lib/higgsfield'
+  startVideoJob,
+  listVideoModels,
+  videoConfigured,
+  type GenMode,
+} from '@/lib/video'
+import { logGeneration } from '@/lib/video/persistence'
 
 export const runtime = 'nodejs'
 export const maxDuration = 300
@@ -28,6 +30,8 @@ interface ReactorRequest {
   inputs?: string[]
   outputs?: string[]
   builderId?: string | null
+  videoModel?: string | null
+  imageModel?: string | null
 }
 
 interface Concept {
@@ -85,9 +89,45 @@ function sse(controller: ReadableStreamDefaultController, event: unknown) {
   controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify(event)}\n\n`))
 }
 
+/* ------------------------------ Resilience -------------------------------- */
+
+// Anthropic occasionally returns 429 (rate limit) or 529 (overloaded). These are
+// transient — retry with exponential backoff instead of failing the whole run.
+async function withRetry<T>(
+  fn: () => Promise<T>,
+  onRetry?: (attempt: number, waitMs: number) => void,
+): Promise<T> {
+  const MAX = 4
+  let lastErr: unknown
+  for (let attempt = 0; attempt <= MAX; attempt++) {
+    try {
+      return await fn()
+    } catch (err) {
+      lastErr = err
+      const status = (err as { status?: number })?.status
+      const retriable = status === 429 || status === 500 || status === 503 || status === 529
+      if (!retriable || attempt === MAX) throw err
+      const wait = 1000 * 2 ** attempt // 1s, 2s, 4s, 8s
+      onRetry?.(attempt + 1, wait)
+      await new Promise((r) => setTimeout(r, wait))
+    }
+  }
+  throw lastErr
+}
+
 /* --------------------------------- Tools ---------------------------------- */
 
-function buildTools(useHiggsfield: boolean, useMetaAds: boolean): Anthropic.Beta.Messages.BetaToolUnion[] {
+function buildTools(
+  useImage: boolean,
+  useVideo: boolean,
+  useMetaAds: boolean,
+): Anthropic.Beta.Messages.BetaToolUnion[] {
+  const videoModelIds = listVideoModels()
+    .filter((m) => m.configured)
+    .map((m) => m.id)
+  const imageModelIds = listImageModels()
+    .filter((m) => m.configured)
+    .map((m) => m.id)
   const tools: Anthropic.Beta.Messages.BetaToolUnion[] = [
     {
       name: 'consult_specialist',
@@ -114,37 +154,56 @@ function buildTools(useHiggsfield: boolean, useMetaAds: boolean): Anthropic.Beta
     },
   ]
 
-  if (useHiggsfield) {
-    tools.push(
-      {
-        name: 'generate_image',
-        description:
-          'Generate a still ad creative with Higgsfield for a visual concept (e.g. Static Concept, Founder Concept, Campaign Concept). Returns the image URL, which also appears on the concept card in the Reactor. Call this for visual concepts before submitting them, and pass the imageUrl into that concept.',
-        input_schema: {
-          type: 'object',
-          properties: {
-            prompt: { type: 'string', description: 'A vivid, specific image prompt for the creative.' },
-            conceptType: { type: 'string', description: 'The output type this image is for (must match the concept type you will submit).' },
-            aspectRatio: { type: 'string', enum: ['1:1', '9:16', '16:9'], description: 'Defaults to 1:1.' },
+  if (useImage) {
+    tools.push({
+      name: 'generate_image',
+      description:
+        'Generate a still ad creative for a visual concept (e.g. Static Concept, Founder Concept, Campaign Concept). Returns the image URL, which also appears on the concept card in the Reactor. Call this for visual concepts before submitting them, and pass the imageUrl into that concept.',
+      input_schema: {
+        type: 'object',
+        properties: {
+          prompt: { type: 'string', description: 'A vivid, specific image prompt for the creative.' },
+          conceptType: { type: 'string', description: 'The output type this image is for (must match the concept type you will submit).' },
+          model: {
+            type: 'string',
+            enum: imageModelIds.length ? imageModelIds : ['nano-banana'],
+            description:
+              'Image model: fal-flux = photoreal humans/scenes in-house via fal; nano-banana = fast high-quality variants; openai-gpt-image = best legible text-in-image; higgsfield-soul = premium photographic ad look.',
           },
-          required: ['prompt', 'conceptType'],
+          aspectRatio: { type: 'string', enum: ['1:1', '9:16', '16:9'], description: 'Defaults to 1:1.' },
         },
+        required: ['prompt', 'conceptType'],
       },
-      {
-        name: 'generate_video',
-        description:
-          'Animate a previously generated still into a short video with Higgsfield. Pass the imageUrl returned by generate_image. The video renders asynchronously and appears on the concept card when ready. Use for Video Concept / Founder Concept output types.',
-        input_schema: {
-          type: 'object',
-          properties: {
-            imageUrl: { type: 'string', description: 'The image URL returned by generate_image.' },
-            prompt: { type: 'string', description: 'Motion / direction prompt for the animation.' },
-            conceptType: { type: 'string', description: 'The output type this video is for (must match the concept type you will submit).' },
+    })
+  }
+
+  if (useVideo) {
+    tools.push({
+      name: 'generate_video',
+      description:
+        'Generate a high-quality video clip for a visual concept (Video Concept, Founder Concept, Testimonial Concept). Two modes: text-to-video (describe the full scene — e.g. a real builder on-site, a person speaking to camera) needs only a prompt; image-to-video animates a still from generate_image (pass its imageUrl). Choose the model best suited to the shot. The clip renders asynchronously and appears on the concept card when ready.',
+      input_schema: {
+        type: 'object',
+        properties: {
+          mode: {
+            type: 'string',
+            enum: ['text-to-video', 'image-to-video'],
+            description: 'text-to-video for a described scene; image-to-video to animate a generated still.',
           },
-          required: ['imageUrl', 'conceptType'],
+          prompt: { type: 'string', description: 'Scene or motion direction. Required for text-to-video.' },
+          imageUrl: { type: 'string', description: 'Source still from generate_image. Required for image-to-video.' },
+          model: {
+            type: 'string',
+            enum: videoModelIds.length ? videoModelIds : ['seedance-2.0'],
+            description:
+              'Model to render with. seedance-2.0 = cinematic realism/B-roll with native synchronized audio (up to 15s); seedance-2.0-fast = same with lower latency/cost for volume; kling-2.5 = UGC motion; veo-3 = people speaking with native audio; wan-2.5 = high-volume/budget; higgsfield-dop = animate a still.',
+          },
+          aspectRatio: { type: 'string', enum: ['1:1', '9:16', '16:9'], description: 'Defaults to 9:16.' },
+          conceptType: { type: 'string', description: 'The output type this video is for (must match the concept type you will submit).' },
         },
+        required: ['mode', 'conceptType'],
       },
-    )
+    })
   }
 
   tools.push({
@@ -183,13 +242,32 @@ function buildTools(useHiggsfield: boolean, useMetaAds: boolean): Anthropic.Beta
 
 function coordinatorPrompt(
   outputs: string[],
-  caps: { metaAds: boolean; higgsfield: boolean },
+  caps: {
+    metaAds: boolean
+    image: boolean
+    video: boolean
+    videoModels: string[]
+    imageModels: string[]
+    preferredVideoModel?: string | null
+    preferredImageModel?: string | null
+  },
 ): string {
   const metaAdsLine = caps.metaAds
     ? '\n- You also have live Meta Ads tools (meta_ads). Use them to ground concepts in what is actually performing — pull recent campaign/ad performance, top creatives, and spend before drafting.'
     : ''
-  const higgsfieldLine = caps.higgsfield
-    ? '\n- For visual output types (Static Concept, Founder Concept, Video Concept, Testimonial Concept, Campaign Concept), call generate_image to produce a still creative, then optionally generate_video to animate it. Pass the concept type as conceptType, and include the returned imageUrl in the matching concept.'
+  const preferredImageLine =
+    caps.preferredImageModel && caps.imageModels.includes(caps.preferredImageModel)
+      ? ` The user has selected the "${caps.preferredImageModel}" image model — use it unless a concept clearly needs a different one.`
+      : ''
+  const imageLine = caps.image
+    ? `\n- For visual output types (Static Concept, Founder Concept, Campaign Concept), call generate_image to produce a still creative. Available models: ${caps.imageModels.join(', ')}. Pass the concept type as conceptType and include the returned imageUrl in the matching concept.${preferredImageLine}`
+    : ''
+  const preferredLine =
+    caps.preferredVideoModel && caps.videoModels.includes(caps.preferredVideoModel)
+      ? ` The user has selected the "${caps.preferredVideoModel}" model — use it for every generate_video call unless a shot clearly needs a different capability.`
+      : ''
+  const videoLine = caps.video
+    ? `\n- For video output types (Video Concept, Founder Concept, Testimonial Concept), call generate_video. Available models: ${caps.videoModels.join(', ')}. Use text-to-video to direct a full scene (e.g. a real builder on-site, a member speaking to camera — use veo-3 when they speak so it has audio; seedance-2.0 or kling-2.5 for cinematic action). Use image-to-video to animate a still from generate_image. Match conceptType to the concept you submit.${preferredLine}`
     : ''
 
   return `You are the Campaign Reactor Coordinator — the lead strategist of The Professional Builder's Creative Intelligence Command Center. You direct a team of specialist sub-agents.
@@ -201,7 +279,7 @@ Your team:
 
 Process:
 1. Delegate focused questions to your specialists with consult_specialist. Always consult the Research Analyst plus at least one of Creative/Copy. Use their findings as evidence — don't guess.${metaAdsLine}
-2. Call get_learnings and self-score every concept against that rubric. Revise or drop anything below 7.${higgsfieldLine}
+2. Call get_learnings and self-score every concept against that rubric. Revise or drop anything below 7.${imageLine}${videoLine}
 3. Call submit_concepts exactly once, with concepts ONLY for these requested output types: ${outputs.join(', ')}. Each concept cites which specialist finding it came from.
 
 Voice: confident, specific, builder-native. Engineered for performance.`
@@ -233,14 +311,22 @@ async function runSpecialist(
     ? hits.map((h) => `[${h.system}] ${h.title}: ${h.content}`).join('\n\n')
     : 'No stored knowledge yet — reason from builder-industry first principles.'
 
-  const response = await anthropic.messages.create({
-    model: SPECIALIST_MODEL,
-    max_tokens: 700,
-    system: `You are the ${spec.name} for The Professional Builder. You specialise in ${spec.focus}. Given retrieved evidence, return 3-5 tight, specific bullet findings the strategist can build a campaign on. Cite the asset/pattern names. No preamble.`,
-    messages: [
-      { role: 'user', content: `Question: ${question}\n\nRetrieved evidence:\n${evidence}` },
-    ],
-  })
+  const response = await withRetry(
+    () =>
+      anthropic.messages.create({
+        model: SPECIALIST_MODEL,
+        max_tokens: 700,
+        system: `You are the ${spec.name} for The Professional Builder. You specialise in ${spec.focus}. Given retrieved evidence, return 3-5 tight, specific bullet findings the strategist can build a campaign on. Cite the asset/pattern names. No preamble.`,
+        messages: [
+          { role: 'user', content: `Question: ${question}\n\nRetrieved evidence:\n${evidence}` },
+        ],
+      }),
+    (n, w) =>
+      sse(controller, {
+        type: 'step',
+        text: `${spec.name}: model busy — retrying (${n}/4) in ${w / 1000}s…`,
+      }),
+  )
 
   const block = response.content.find((b): b is Anthropic.TextBlock => b.type === 'text')
   const findings = block?.text ?? 'No findings.'
@@ -318,12 +404,16 @@ export async function POST(request: NextRequest) {
 
         const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
         const mcpServer = metaAdsServer()
-        const useHiggsfield = higgsfieldConfigured()
-        const tools = buildTools(useHiggsfield, Boolean(mcpServer))
+        const useImage = imageConfigured()
+        const useVideo = videoConfigured()
+        const availableVideoModels = listVideoModels().filter((m) => m.configured).map((m) => m.id)
+        const availableImageModels = listImageModels().filter((m) => m.configured).map((m) => m.id)
+        const tools = buildTools(useImage, useVideo, Boolean(mcpServer))
 
         sse(controller, { type: 'step', text: 'Coordinator online. Briefing the specialist team…' })
         if (mcpServer) sse(controller, { type: 'step', text: 'Live Meta Ads performance feed connected.' })
-        if (useHiggsfield) sse(controller, { type: 'step', text: 'Higgsfield creative engine ready (image + video).' })
+        if (useImage) sse(controller, { type: 'step', text: `Image engine ready · models: ${availableImageModels.join(', ')}` })
+        if (useVideo) sse(controller, { type: 'step', text: `Video engine ready · models: ${availableVideoModels.join(', ')}` })
 
         const messages: Anthropic.Beta.Messages.BetaMessageParam[] = [
           {
@@ -336,7 +426,15 @@ export async function POST(request: NextRequest) {
           const params: Anthropic.Beta.Messages.MessageCreateParamsNonStreaming = {
             model: COORDINATOR_MODEL,
             max_tokens: 4000,
-            system: coordinatorPrompt(outputs, { metaAds: Boolean(mcpServer), higgsfield: useHiggsfield }),
+            system: coordinatorPrompt(outputs, {
+              metaAds: Boolean(mcpServer),
+              image: useImage,
+              video: useVideo,
+              videoModels: availableVideoModels,
+              imageModels: availableImageModels,
+              preferredVideoModel: body.videoModel ?? null,
+              preferredImageModel: body.imageModel ?? null,
+            }),
             tools,
             messages,
           }
@@ -345,7 +443,14 @@ export async function POST(request: NextRequest) {
             params.betas = [MCP_BETA]
           }
 
-          const response = await anthropic.beta.messages.create(params)
+          const response = await withRetry(
+            () => anthropic.beta.messages.create(params),
+            (n, w) =>
+              sse(controller, {
+                type: 'step',
+                text: `Claude is busy (overloaded) — retrying (${n}/4) in ${w / 1000}s…`,
+              }),
+          )
           messages.push({ role: 'assistant', content: response.content })
 
           // Surface server-side Meta Ads (MCP) tool activity in the telemetry feed.
@@ -392,19 +497,30 @@ export async function POST(request: NextRequest) {
                 content: learnings.map((l) => `• ${l.insight} — ${l.recommendation} (evidence: ${l.evidence})`).join('\n'),
               })
             } else if (tu.name === 'generate_image') {
-              const { prompt, conceptType, aspectRatio } = tu.input as {
+              const { prompt, conceptType, aspectRatio, model } = tu.input as {
                 prompt: string
                 conceptType?: string
                 aspectRatio?: AspectRatio
+                model?: string
               }
               sse(controller, {
                 type: 'step',
-                text: `Generating still creative via Higgsfield${conceptType ? ` · ${conceptType}` : ''}…`,
+                text: `Generating still creative via ${model ?? 'default model'}${conceptType ? ` · ${conceptType}` : ''}…`,
               })
-              const url = await generateImage(prompt, aspectRatio ?? '1:1')
-              if (url) {
-                sse(controller, { type: 'media', mediaType: 'image', conceptType: conceptType ?? '', url })
-                results.push({ type: 'tool_result', tool_use_id: tu.id, content: JSON.stringify({ imageUrl: url }) })
+              const result = await generateImageWith(model, prompt, aspectRatio ?? '1:1')
+              if (result) {
+                sse(controller, {
+                  type: 'media',
+                  mediaType: 'image',
+                  conceptType: conceptType ?? '',
+                  model: result.modelId,
+                  url: result.imageUrl,
+                })
+                results.push({
+                  type: 'tool_result',
+                  tool_use_id: tu.id,
+                  content: JSON.stringify({ imageUrl: result.imageUrl, model: result.modelId }),
+                })
               } else {
                 results.push({
                   type: 'tool_result',
@@ -413,29 +529,50 @@ export async function POST(request: NextRequest) {
                 })
               }
             } else if (tu.name === 'generate_video') {
-              const { prompt, imageUrl, conceptType } = tu.input as {
+              const { mode, prompt, imageUrl, model, aspectRatio, conceptType } = tu.input as {
+                mode: GenMode
                 prompt?: string
-                imageUrl: string
+                imageUrl?: string
+                model?: string
+                aspectRatio?: AspectRatio
                 conceptType?: string
               }
               sse(controller, {
                 type: 'step',
-                text: `Rendering video via Higgsfield${conceptType ? ` · ${conceptType}` : ''}…`,
+                text: `Rendering ${mode} via ${model ?? 'default model'}${conceptType ? ` · ${conceptType}` : ''}…`,
               })
-              const started = await startVideo(prompt ?? '', imageUrl)
+              const started = await startVideoJob(model, {
+                mode,
+                prompt,
+                imageUrl,
+                aspectRatio,
+              })
               if (started) {
+                await logGeneration({
+                  builder_id: body.builderId ?? null,
+                  model_id: started.modelId,
+                  provider: started.provider,
+                  mode,
+                  prompt: prompt ?? null,
+                  image_url: imageUrl ?? null,
+                  request_id: started.requestId,
+                  status: started.status,
+                })
                 sse(controller, {
                   type: 'media',
                   mediaType: 'video',
                   conceptType: conceptType ?? '',
+                  model: started.modelId,
                   requestId: started.requestId,
                   status: started.status,
+                  responseUrl: started.responseUrl,
                 })
                 results.push({
                   type: 'tool_result',
                   tool_use_id: tu.id,
                   content: JSON.stringify({
                     requestId: started.requestId,
+                    model: started.modelId,
                     status: started.status,
                     note: 'video is rendering; it will appear on the concept card when ready',
                   }),
@@ -459,7 +596,16 @@ export async function POST(request: NextRequest) {
         controller.close()
       } catch (err) {
         console.error('Campaign Reactor error:', err)
-        sse(controller, { type: 'error', message: err instanceof Error ? err.message : 'Reactor failed' })
+        const status = (err as { status?: number })?.status
+        const message =
+          status === 529 || status === 503
+            ? 'Claude is temporarily overloaded. Please fire the reactor again in a moment.'
+            : status === 429
+              ? 'Rate limit reached. Wait a few seconds and fire the reactor again.'
+              : err instanceof Error
+                ? err.message
+                : 'Reactor failed'
+        sse(controller, { type: 'error', message })
         controller.close()
       }
     },
