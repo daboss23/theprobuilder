@@ -54,10 +54,15 @@ export function Workbench() {
   // Face library: reference image URLs that lock a consistent face across UGC
   // clips (Seedance 2.0 reference-to-video). One URL per line or comma-separated.
   const [faceUrlsRaw, setFaceUrlsRaw] = useState('')
-  const faceUrls = faceUrlsRaw
-    .split(/[\n,]+/)
-    .map((s) => s.trim())
-    .filter(Boolean)
+  const [refVideosRaw, setRefVideosRaw] = useState('')
+  const parseUrls = (raw: string) =>
+    raw
+      .split(/[\n,]+/)
+      .map((s) => s.trim())
+      .filter(Boolean)
+  const faceUrls = parseUrls(faceUrlsRaw).slice(0, 9)
+  const refVideos = parseUrls(refVideosRaw).slice(0, 3)
+  const hasRefs = faceUrls.length > 0 || refVideos.length > 0
   const feedRef = useRef<HTMLDivElement>(null)
 
   // Load the model menus once so the user can pick (and we can recommend).
@@ -345,7 +350,7 @@ export function Workbench() {
   // the face library (reference images) + the concept's brief. Forces Seedance
   // since it's the model that supports reference-to-video.
   const generateUGC = async (c: Concept) => {
-    if (faceUrls.length === 0) return
+    if (!hasRefs) return
     setManualVideos((p) => ({ ...p, [c.text]: { status: 'rendering' } }))
     try {
       const res = await fetch('/api/generate-video', {
@@ -356,6 +361,7 @@ export function Workbench() {
           mode: 'reference-to-video',
           model: 'seedance-2.0',
           imageUrls: faceUrls,
+          videoUrls: refVideos,
           aspectRatio: '9:16',
         }),
       }).then((r) => r.json())
@@ -546,26 +552,39 @@ export function Workbench() {
                   </span>
                 </div>
               )}
-            </div>
-          )}
 
-          {showVideoPicker && (
-            <div className="mt-4">
-              <p className="mb-2 flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-white/40">
-                <Users size={12} /> Face Library
-              </p>
-              <textarea
-                value={faceUrlsRaw}
-                onChange={(e) => setFaceUrlsRaw(e.target.value)}
-                rows={2}
-                placeholder="Reference face image URLs — one per line (up to 9). In-house UGC: keeps the same face across clips."
-                className="w-full resize-y rounded-lg border border-border bg-surface/60 px-3 py-2.5 text-[12px] text-white outline-none placeholder:text-white/25 focus:border-glow"
-              />
-              <p className="mt-1.5 text-[11px] text-white/35">
-                {faceUrls.length > 0
-                  ? `${faceUrls.length} reference face${faceUrls.length > 1 ? 's' : ''} → use “Generate UGC” on a video concept (Seedance 2.0 reference-to-video).`
-                  : 'Add faces to generate consistent-character UGC from any video concept.'}
-              </p>
+              {/* Face library — references that lock a consistent character for
+                  in-house UGC (Seedance 2.0 reference-to-video). */}
+              <div className="mt-4 rounded-lg border border-border bg-surface/30 p-3">
+                <p className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-white/40">
+                  <Users size={12} /> Face Library — In-House UGC
+                </p>
+                <p className="mt-1 text-[11px] text-white/35">
+                  Add up to 9 reference images and up to 3 reference videos to lock a consistent
+                  character across clips.
+                </p>
+                <textarea
+                  value={faceUrlsRaw}
+                  onChange={(e) => setFaceUrlsRaw(e.target.value)}
+                  rows={2}
+                  placeholder="Reference image URLs — one per line (faces, up to 9)"
+                  className="mt-2 w-full resize-y rounded-lg border border-border bg-surface/60 px-3 py-2 text-[12px] text-white outline-none placeholder:text-white/25 focus:border-glow"
+                />
+                <textarea
+                  value={refVideosRaw}
+                  onChange={(e) => setRefVideosRaw(e.target.value)}
+                  rows={2}
+                  placeholder="Reference video URLs — one per line (motion/style, up to 3)"
+                  className="mt-2 w-full resize-y rounded-lg border border-border bg-surface/60 px-3 py-2 text-[12px] text-white outline-none placeholder:text-white/25 focus:border-glow"
+                />
+                <p className="mt-1.5 text-[11px] text-white/35">
+                  {hasRefs
+                    ? `${faceUrls.length} image${faceUrls.length === 1 ? '' : 's'}${
+                        refVideos.length ? ` + ${refVideos.length} video${refVideos.length === 1 ? '' : 's'}` : ''
+                      } loaded → use “Generate UGC” on any video concept after firing.`
+                    : 'Once added, a “Generate UGC” button appears on each video concept.'}
+                </p>
+              </div>
             </div>
           )}
 
@@ -686,13 +705,13 @@ export function Workbench() {
                           {wantsVideo ? 'Generate Video Creative' : 'Generate Image Creative'}
                         </button>
                       )}
-                      {wantsVideo && faceUrls.length > 0 && (
+                      {wantsVideo && hasRefs && (
                         <button
                           type="button"
                           onClick={() => generateUGC(c)}
                           disabled={creativeBusy}
                           className="flex items-center gap-1 text-[11px] text-white/40 hover:text-cyan disabled:opacity-60"
-                          title={`Generate with ${faceUrls.length} reference face${faceUrls.length > 1 ? 's' : ''} (Seedance 2.0)`}
+                          title={`Generate with ${faceUrls.length} reference image${faceUrls.length === 1 ? '' : 's'}${refVideos.length ? ` + ${refVideos.length} video${refVideos.length === 1 ? '' : 's'}` : ''} (Seedance 2.0 reference-to-video)`}
                         >
                           <Users size={12} />
                           Generate UGC

@@ -51,10 +51,12 @@ function buildInput(input: VideoInput): Record<string, unknown> {
   if (input.mode === 'image-to-video' && input.imageUrl) {
     payload.image_url = input.imageUrl
   }
-  // reference-to-video: pass up to 9 identity images so the model keeps the
-  // same face/character consistent across the clip (the face-library path).
-  if (input.mode === 'reference-to-video' && input.imageUrls?.length) {
-    payload.image_urls = input.imageUrls.slice(0, 9)
+  // reference-to-video: pass up to 9 identity images (and up to 3 reference
+  // videos) so the model keeps the same face/character consistent across the
+  // clip (the face-library path).
+  if (input.mode === 'reference-to-video') {
+    if (input.imageUrls?.length) payload.image_urls = input.imageUrls.slice(0, 9)
+    if (input.videoUrls?.length) payload.video_urls = input.videoUrls.slice(0, 3)
   }
   return payload
 }

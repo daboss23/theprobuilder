@@ -30,6 +30,7 @@ export async function POST(request: NextRequest) {
       prompt?: string
       imageUrl?: string
       imageUrls?: string[]
+      videoUrls?: string[]
       model?: string
       mode?: GenMode
       aspectRatio?: '1:1' | '9:16' | '16:9'
@@ -37,19 +38,22 @@ export async function POST(request: NextRequest) {
       builderId?: string | null
     }
 
-    // Infer mode: explicit > reference (faces supplied) > image (still) > text.
+    // Infer mode: explicit > reference (faces/videos supplied) > image (still) > text.
+    const hasRefs = Boolean(body.imageUrls?.length || body.videoUrls?.length)
     const mode: GenMode =
-      body.mode ??
-      (body.imageUrls?.length ? 'reference-to-video' : body.imageUrl ? 'image-to-video' : 'text-to-video')
+      body.mode ?? (hasRefs ? 'reference-to-video' : body.imageUrl ? 'image-to-video' : 'text-to-video')
     if (mode === 'image-to-video' && !body.imageUrl) {
       return NextResponse.json(
         { success: false, error: 'imageUrl is required for image-to-video' },
         { status: 400 },
       )
     }
-    if (mode === 'reference-to-video' && !body.imageUrls?.length) {
+    if (mode === 'reference-to-video' && !hasRefs) {
       return NextResponse.json(
-        { success: false, error: 'imageUrls (reference faces) are required for reference-to-video' },
+        {
+          success: false,
+          error: 'At least one reference image or video is required for reference-to-video',
+        },
         { status: 400 },
       )
     }
@@ -64,6 +68,7 @@ export async function POST(request: NextRequest) {
       prompt: body.prompt,
       imageUrl: body.imageUrl,
       imageUrls: body.imageUrls,
+      videoUrls: body.videoUrls,
       mode,
       aspectRatio: body.aspectRatio,
       durationSec: body.durationSec,

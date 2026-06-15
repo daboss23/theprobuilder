@@ -51,6 +51,8 @@ export interface VideoInput {
   /** Reference identity images (up to 9) for reference-to-video — keeps a face
    * consistent across the clip. The face-library mechanism. */
   imageUrls?: string[]
+  /** Reference videos (up to 3) for reference-to-video — motion/style refs. */
+  videoUrls?: string[]
   mode: GenMode
   aspectRatio?: AspectRatio
   durationSec?: number
