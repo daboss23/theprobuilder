@@ -87,6 +87,7 @@ export async function POST(request: NextRequest) {
 export async function GET(request: NextRequest) {
   const requestId = request.nextUrl.searchParams.get('requestId')
   const model = request.nextUrl.searchParams.get('model') ?? DEFAULT_VIDEO_MODEL
+  const responseUrl = request.nextUrl.searchParams.get('responseUrl')
   if (!requestId) {
     return NextResponse.json({ success: false, error: 'requestId is required' }, { status: 400 })
   }
@@ -94,7 +95,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ success: false, error: `Unknown model: ${model}` }, { status: 400 })
   }
 
-  const job = await getVideoJob(model, requestId)
+  const job = await getVideoJob(model, requestId, responseUrl)
   if (job.status === 'completed' || job.status === 'failed') {
     await updateGeneration(requestId, job)
   }

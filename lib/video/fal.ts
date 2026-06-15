@@ -57,6 +57,12 @@ function buildInput(input: VideoInput): Record<string, unknown> {
 export interface FalSubmitResult {
   requestId: string
   status: JobStatus
+  /**
+   * fal's authoritative result URL for this request (status lives at
+   * `${responseUrl}/status`). Using it avoids guessing the base app path from
+   * the endpoint, which is fragile for multi-segment model ids.
+   */
+  responseUrl: string | null
 }
 
 /** Submit a render to a fal model endpoint. Returns a request id to poll. */
@@ -76,9 +82,17 @@ export async function falSubmit(
       console.error('fal submit failed:', res.status, await res.text())
       return null
     }
-    const data = (await res.json()) as { request_id?: string; status?: string }
+    const data = (await res.json()) as {
+      request_id?: string
+      status?: string
+      response_url?: string
+    }
     if (!data.request_id) return null
-    return { requestId: data.request_id, status: mapStatus(data.status) || 'queued' }
+    return {
+      requestId: data.request_id,
+      status: mapStatus(data.status) || 'queued',
+      responseUrl: data.response_url ?? null,
+    }
   } catch (err) {
     console.error('fal submit error:', err)
     return null
@@ -90,30 +104,37 @@ export interface FalStatusResult {
   videoUrl: string | null
 }
 
-/**
- * Poll a render. The base endpoint here is the model path WITHOUT the mode
- * suffix variations — fal exposes status/result under the same model namespace.
- */
-export async function falStatus(endpoint: string, requestId: string): Promise<FalStatusResult> {
-  if (!falConfigured() || !requestId) return { status: 'unknown', videoUrl: null }
-  // fal's status/result live under the model's base namespace (strip trailing
-  // mode segments like /text-to-video so the requests path resolves).
+/** Resolve the result URL for a request: prefer fal's authoritative
+ * response_url; otherwise reconstruct from the endpoint's base app namespace. */
+function resultUrlFor(endpoint: string, requestId: string, responseUrl?: string | null): string {
+  if (responseUrl) return responseUrl
   const base = endpoint.split('/').slice(0, 2).join('/')
+  return `${QUEUE_BASE}/${base}/requests/${encodeURIComponent(requestId)}`
+}
+
+/**
+ * Poll a render. Uses fal's authoritative response_url when known (status is at
+ * `${responseUrl}/status`), falling back to the base-namespace reconstruction.
+ */
+export async function falStatus(
+  endpoint: string,
+  requestId: string,
+  responseUrl?: string | null,
+): Promise<FalStatusResult> {
+  if (!falConfigured() || !requestId) return { status: 'unknown', videoUrl: null }
+  const resultUrl = resultUrlFor(endpoint, requestId, responseUrl)
   try {
-    const statusRes = await fetch(
-      `${QUEUE_BASE}/${base}/requests/${encodeURIComponent(requestId)}/status`,
-      { headers: authHeaders(), cache: 'no-store' },
-    )
+    const statusRes = await fetch(`${resultUrl}/status`, {
+      headers: authHeaders(),
+      cache: 'no-store',
+    })
     if (!statusRes.ok) return { status: 'unknown', videoUrl: null }
     const statusData = (await statusRes.json()) as { status?: string }
     const status = mapStatus(statusData.status)
     if (status !== 'completed') return { status, videoUrl: null }
 
     // Completed — fetch the result payload for the video URL.
-    const resultRes = await fetch(
-      `${QUEUE_BASE}/${base}/requests/${encodeURIComponent(requestId)}`,
-      { headers: authHeaders(), cache: 'no-store' },
-    )
+    const resultRes = await fetch(resultUrl, { headers: authHeaders(), cache: 'no-store' })
     if (!resultRes.ok) return { status: 'completed', videoUrl: null }
     const result = (await resultRes.json()) as {
       video?: { url?: string }

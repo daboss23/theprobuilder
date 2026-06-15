@@ -565,6 +565,7 @@ export async function POST(request: NextRequest) {
                   model: started.modelId,
                   requestId: started.requestId,
                   status: started.status,
+                  responseUrl: started.responseUrl,
                 })
                 results.push({
                   type: 'tool_result',

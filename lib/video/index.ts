@@ -90,11 +90,17 @@ export async function startVideoJob(
     requestId: started.requestId,
     status: started.status,
     videoUrl: null,
+    responseUrl: started.responseUrl,
   }
 }
 
-/** Poll a previously started render by model + request id. */
-export async function getVideoJob(modelId: string, requestId: string): Promise<VideoJob> {
+/** Poll a previously started render by model + request id. Pass the responseUrl
+ * returned at start time so fal status resolution is exact (no path guessing). */
+export async function getVideoJob(
+  modelId: string,
+  requestId: string,
+  responseUrl?: string | null,
+): Promise<VideoJob> {
   const model = getVideoModel(modelId)
   const base: VideoJob = {
     provider: model?.provider ?? 'fal',
@@ -110,9 +116,9 @@ export async function getVideoJob(modelId: string, requestId: string): Promise<V
     return { ...base, status: normalizeHiggsfieldStatus(state.status), videoUrl: state.videoUrl }
   }
 
-  // fal: any of the model's endpoints resolves to the same base namespace.
+  // fal: prefer the authoritative responseUrl; fall back to the endpoint base.
   const endpoint = Object.values(model.endpoints)[0]
   if (!endpoint) return base
-  const state = await falStatus(endpoint, requestId)
+  const state = await falStatus(endpoint, requestId, responseUrl)
   return { ...base, status: state.status, videoUrl: state.videoUrl }
 }

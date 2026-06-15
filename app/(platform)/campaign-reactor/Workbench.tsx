@@ -104,13 +104,15 @@ export function Workbench() {
     requestId: string,
     model: string | undefined,
     onUpdate: (s: VideoUiState) => void,
+    responseUrl?: string,
   ) => {
     const modelQuery = model ? `&model=${encodeURIComponent(model)}` : ''
+    const responseQuery = responseUrl ? `&responseUrl=${encodeURIComponent(responseUrl)}` : ''
     for (let i = 0; i < 90; i++) {
       await new Promise((r) => setTimeout(r, 4000))
       try {
         const res = await fetch(
-          `/api/generate-video?requestId=${encodeURIComponent(requestId)}${modelQuery}`,
+          `/api/generate-video?requestId=${encodeURIComponent(requestId)}${modelQuery}${responseQuery}`,
         ).then((r) => r.json())
         if (res.status === 'completed' && res.videoUrl) {
           onUpdate({ status: 'done', url: res.videoUrl })
@@ -188,8 +190,11 @@ export function Workbench() {
               setAgentMedia((p) => ({ ...p, [key]: { ...p[key], video: { status: 'rendering' } } }))
               const requestId = ev.requestId as string | undefined
               if (requestId) {
-                pollVideo(requestId, ev.model as string | undefined, (s) =>
-                  setAgentMedia((p) => ({ ...p, [key]: { ...p[key], video: s } })),
+                pollVideo(
+                  requestId,
+                  ev.model as string | undefined,
+                  (s) => setAgentMedia((p) => ({ ...p, [key]: { ...p[key], video: s } })),
+                  ev.responseUrl as string | undefined,
                 )
               }
             }
@@ -211,15 +216,22 @@ export function Workbench() {
     setTimeout(() => setCopied(null), 1500)
   }
 
-  // Generate a still creative from a concept with Higgsfield.
+  // A concept whose brief is a moving creative (Video / Testimonial) renders a
+  // video ad; everything else renders a still. Either way we feed the agent's
+  // exact design brief (c.text) as the generation prompt.
+  const isVideoConcept = (c: Concept) => /video|testimonial/i.test(c.type)
+
+  // Turn a concept's design brief into the right creative — image or video.
   const generateCreative = async (c: Concept) => {
+    if (isVideoConcept(c)) return generateVideoCreative(c)
+
     setCreatives((p) => ({ ...p, [c.text]: { status: 'working' } }))
     try {
       const res = await fetch('/api/generate-image', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          prompt: `Meta ad creative for The Professional Builder. ${c.text} Photographic, on-site builder context, premium, high contrast, leave room for text overlay.`,
+          prompt: `${c.text}\n\nRender as a premium Meta ad creative for The Professional Builder — photographic, on-site builder context, high contrast, leave room for text overlay.`,
           aspectRatio: '1:1',
           model: resolvedImageModel,
         }),
@@ -235,13 +247,52 @@ export function Workbench() {
             message:
               res.error ||
               (res.demo
-                ? 'No image API key set — add GEMINI_API_KEY, OPENAI_API_KEY, or HF_CREDENTIALS'
+                ? 'No image API key set — add FAL_KEY, GEMINI_API_KEY, OPENAI_API_KEY, or HF_CREDENTIALS'
                 : 'Generation failed'),
           },
         }))
       }
     } catch {
       setCreatives((p) => ({ ...p, [c.text]: { status: 'error', message: 'Generation failed' } }))
+    }
+  }
+
+  // Render a video ad straight from the concept's brief (text-to-video) using
+  // the selected/recommended model.
+  const generateVideoCreative = async (c: Concept) => {
+    setManualVideos((p) => ({ ...p, [c.text]: { status: 'rendering' } }))
+    try {
+      const res = await fetch('/api/generate-video', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          prompt: c.text,
+          mode: 'text-to-video',
+          model: resolvedVideoModel,
+          aspectRatio: '9:16',
+        }),
+      }).then((r) => r.json())
+
+      if (res.success && res.requestId) {
+        pollVideo(
+          res.requestId,
+          res.modelId,
+          (s) => setManualVideos((p) => ({ ...p, [c.text]: s })),
+          res.responseUrl,
+        )
+      } else {
+        setManualVideos((p) => ({
+          ...p,
+          [c.text]: {
+            status: 'error',
+            message:
+              res.error ||
+              (res.demo ? 'No video API key set — add FAL_KEY or HF_CREDENTIALS' : 'Video render failed'),
+          },
+        }))
+      }
+    } catch {
+      setManualVideos((p) => ({ ...p, [c.text]: { status: 'error', message: 'Video render failed' } }))
     }
   }
 
@@ -261,7 +312,12 @@ export function Workbench() {
       }).then((r) => r.json())
 
       if (res.success && res.requestId) {
-        pollVideo(res.requestId, res.modelId, (s) => setManualVideos((p) => ({ ...p, [c.text]: s })))
+        pollVideo(
+          res.requestId,
+          res.modelId,
+          (s) => setManualVideos((p) => ({ ...p, [c.text]: s })),
+          res.responseUrl,
+        )
       } else {
         setManualVideos((p) => ({
           ...p,
@@ -528,6 +584,9 @@ export function Workbench() {
             {concepts.map((c, i) => {
               const image = imageFor(c)
               const video = videoFor(c)
+              const wantsVideo = isVideoConcept(c)
+              const creativeBusy =
+                creatives[c.text]?.status === 'working' || video?.status === 'rendering'
               return (
                 <div
                   key={i}
@@ -545,15 +604,17 @@ export function Workbench() {
                         <button
                           type="button"
                           onClick={() => generateCreative(c)}
-                          disabled={creatives[c.text]?.status === 'working'}
+                          disabled={creativeBusy}
                           className="flex items-center gap-1 text-[11px] text-white/40 hover:text-cyan disabled:opacity-60"
                         >
-                          {creatives[c.text]?.status === 'working' ? (
+                          {creativeBusy ? (
                             <Loader2 size={12} className="animate-spin" />
+                          ) : wantsVideo ? (
+                            <Film size={12} />
                           ) : (
                             <ImageIcon size={12} />
                           )}
-                          Generate creative
+                          {wantsVideo ? 'Generate video' : 'Generate creative'}
                         </button>
                       )}
                       {image && !video && (

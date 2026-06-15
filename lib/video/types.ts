@@ -56,6 +56,10 @@ export interface VideoJob {
   requestId: string
   status: JobStatus
   videoUrl: string | null
+  /** fal's authoritative result URL (status at `${responseUrl}/status`); null
+   * for providers that don't use it (e.g. Higgsfield). Pass it back when polling
+   * so status resolution never relies on guessing the model's base path. */
+  responseUrl?: string | null
 }
 
 /** Model entry plus whether its provider keys are present in this environment. */
