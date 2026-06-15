@@ -11,8 +11,12 @@ export type AspectRatio = '1:1' | '9:16' | '16:9'
 
 export type VideoProvider = 'fal' | 'higgsfield'
 
-/** How a clip is produced: from a written prompt, or from a still image. */
-export type GenMode = 'text-to-video' | 'image-to-video'
+/**
+ * How a clip is produced: from a written prompt, from a single still, or from a
+ * set of reference images that lock a consistent identity/face across the clip
+ * (the "face library" / in-house UGC mechanism).
+ */
+export type GenMode = 'text-to-video' | 'image-to-video' | 'reference-to-video'
 
 /** Normalised render lifecycle across every provider. */
 export type JobStatus = 'queued' | 'in_progress' | 'completed' | 'failed' | 'unknown'
@@ -44,6 +48,9 @@ export interface VideoInput {
   prompt?: string
   /** Required for image-to-video. */
   imageUrl?: string
+  /** Reference identity images (up to 9) for reference-to-video — keeps a face
+   * consistent across the clip. The face-library mechanism. */
+  imageUrls?: string[]
   mode: GenMode
   aspectRatio?: AspectRatio
   durationSec?: number

@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Atom, Zap, Check, Loader2, Copy as CopyIcon, Radar, Trophy, ImageIcon, Film, Clapperboard, Sparkles } from 'lucide-react'
+import { Atom, Zap, Check, Loader2, Copy as CopyIcon, Radar, Trophy, ImageIcon, Film, Clapperboard, Sparkles, Users } from 'lucide-react'
 import { Panel, PanelHeader, Pill } from '@/components/reactor/ui'
 import { reactorInputs, reactorOutputTypes, winningAngles } from '@/lib/reactor-data'
 import { recommendVideoModel } from '@/lib/video/recommend'
@@ -51,6 +51,13 @@ export function Workbench() {
   const [videoModel, setVideoModel] = useState<string>('auto')
   const [imageModels, setImageModels] = useState<ImageModelAvailability[]>([])
   const [imageModel, setImageModel] = useState<string>('auto')
+  // Face library: reference image URLs that lock a consistent face across UGC
+  // clips (Seedance 2.0 reference-to-video). One URL per line or comma-separated.
+  const [faceUrlsRaw, setFaceUrlsRaw] = useState('')
+  const faceUrls = faceUrlsRaw
+    .split(/[\n,]+/)
+    .map((s) => s.trim())
+    .filter(Boolean)
   const feedRef = useRef<HTMLDivElement>(null)
 
   // Load the model menus once so the user can pick (and we can recommend).
@@ -334,6 +341,48 @@ export function Workbench() {
     }
   }
 
+  // Generate UGC with a consistent face — Seedance 2.0 reference-to-video using
+  // the face library (reference images) + the concept's brief. Forces Seedance
+  // since it's the model that supports reference-to-video.
+  const generateUGC = async (c: Concept) => {
+    if (faceUrls.length === 0) return
+    setManualVideos((p) => ({ ...p, [c.text]: { status: 'rendering' } }))
+    try {
+      const res = await fetch('/api/generate-video', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          prompt: c.text,
+          mode: 'reference-to-video',
+          model: 'seedance-2.0',
+          imageUrls: faceUrls,
+          aspectRatio: '9:16',
+        }),
+      }).then((r) => r.json())
+
+      if (res.success && res.requestId) {
+        pollVideo(
+          res.requestId,
+          res.modelId,
+          (s) => setManualVideos((p) => ({ ...p, [c.text]: s })),
+          res.responseUrl,
+        )
+      } else {
+        setManualVideos((p) => ({
+          ...p,
+          [c.text]: {
+            status: 'error',
+            message:
+              res.error ||
+              (res.demo ? 'No video API key set — add FAL_KEY' : 'UGC render failed'),
+          },
+        }))
+      }
+    } catch {
+      setManualVideos((p) => ({ ...p, [c.text]: { status: 'error', message: 'UGC render failed' } }))
+    }
+  }
+
   // Log a winner — feeds it back into the knowledge layer as a new pattern.
   const markWinner = async (c: Concept) => {
     setLogged((prev) => new Set(prev).add(c.text))
@@ -500,6 +549,26 @@ export function Workbench() {
             </div>
           )}
 
+          {showVideoPicker && (
+            <div className="mt-4">
+              <p className="mb-2 flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-white/40">
+                <Users size={12} /> Face Library
+              </p>
+              <textarea
+                value={faceUrlsRaw}
+                onChange={(e) => setFaceUrlsRaw(e.target.value)}
+                rows={2}
+                placeholder="Reference face image URLs — one per line (up to 9). In-house UGC: keeps the same face across clips."
+                className="w-full resize-y rounded-lg border border-border bg-surface/60 px-3 py-2.5 text-[12px] text-white outline-none placeholder:text-white/25 focus:border-glow"
+              />
+              <p className="mt-1.5 text-[11px] text-white/35">
+                {faceUrls.length > 0
+                  ? `${faceUrls.length} reference face${faceUrls.length > 1 ? 's' : ''} → use “Generate UGC” on a video concept (Seedance 2.0 reference-to-video).`
+                  : 'Add faces to generate consistent-character UGC from any video concept.'}
+              </p>
+            </div>
+          )}
+
           <button
             type="button"
             onClick={fire}
@@ -615,6 +684,18 @@ export function Workbench() {
                             <ImageIcon size={12} />
                           )}
                           {wantsVideo ? 'Generate Video Creative' : 'Generate Image Creative'}
+                        </button>
+                      )}
+                      {wantsVideo && faceUrls.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => generateUGC(c)}
+                          disabled={creativeBusy}
+                          className="flex items-center gap-1 text-[11px] text-white/40 hover:text-cyan disabled:opacity-60"
+                          title={`Generate with ${faceUrls.length} reference face${faceUrls.length > 1 ? 's' : ''} (Seedance 2.0)`}
+                        >
+                          <Users size={12} />
+                          Generate UGC
                         </button>
                       )}
                       {image && !video && (

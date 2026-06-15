@@ -22,13 +22,14 @@ export const VIDEO_MODELS: VideoModel[] = [
     endpoints: {
       'text-to-video': env('FAL_SEEDANCE_T2V', 'bytedance/seedance-2.0/text-to-video'),
       'image-to-video': env('FAL_SEEDANCE_I2V', 'bytedance/seedance-2.0/image-to-video'),
+      'reference-to-video': env('FAL_SEEDANCE_R2V', 'bytedance/seedance-2.0/reference-to-video'),
     },
-    modes: ['text-to-video', 'image-to-video'],
+    modes: ['text-to-video', 'image-to-video', 'reference-to-video'],
     maxDurationSec: 15,
     aspectRatios: ['1:1', '9:16', '16:9'],
     audio: true,
     tier: 'flagship',
-    notes: 'ByteDance flagship — native synchronized audio, real-world physics, and cinematic multi-shot in one pass. Best for realistic human scenes and on-site builder B-roll.',
+    notes: 'ByteDance flagship — native synchronized audio, real-world physics, and cinematic multi-shot in one pass. Reference-to-video keeps a consistent face across clips (in-house UGC / face library). Best for realistic human scenes and on-site builder B-roll.',
   },
   {
     id: 'seedance-2.0-fast',
@@ -37,13 +38,14 @@ export const VIDEO_MODELS: VideoModel[] = [
     endpoints: {
       'text-to-video': env('FAL_SEEDANCE_FAST_T2V', 'bytedance/seedance-2.0/fast/text-to-video'),
       'image-to-video': env('FAL_SEEDANCE_FAST_I2V', 'bytedance/seedance-2.0/fast/image-to-video'),
+      'reference-to-video': env('FAL_SEEDANCE_FAST_R2V', 'bytedance/seedance-2.0/fast/reference-to-video'),
     },
-    modes: ['text-to-video', 'image-to-video'],
+    modes: ['text-to-video', 'image-to-video', 'reference-to-video'],
     maxDurationSec: 15,
     aspectRatios: ['1:1', '9:16', '16:9'],
     audio: true,
     tier: 'fast',
-    notes: 'Lower-latency, lower-cost Seedance 2.0 — same native audio, ideal for high-volume variant generation.',
+    notes: 'Lower-latency, lower-cost Seedance 2.0 — same native audio and reference-to-video face consistency, ideal for high-volume in-house UGC.',
   },
   {
     id: 'veo-3.1',

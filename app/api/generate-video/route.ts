@@ -29,6 +29,7 @@ export async function POST(request: NextRequest) {
     const body = (await request.json()) as {
       prompt?: string
       imageUrl?: string
+      imageUrls?: string[]
       model?: string
       mode?: GenMode
       aspectRatio?: '1:1' | '9:16' | '16:9'
@@ -36,11 +37,19 @@ export async function POST(request: NextRequest) {
       builderId?: string | null
     }
 
-    // Infer mode: explicit > image-to-video when a still is supplied > text-to-video.
-    const mode: GenMode = body.mode ?? (body.imageUrl ? 'image-to-video' : 'text-to-video')
+    // Infer mode: explicit > reference (faces supplied) > image (still) > text.
+    const mode: GenMode =
+      body.mode ??
+      (body.imageUrls?.length ? 'reference-to-video' : body.imageUrl ? 'image-to-video' : 'text-to-video')
     if (mode === 'image-to-video' && !body.imageUrl) {
       return NextResponse.json(
         { success: false, error: 'imageUrl is required for image-to-video' },
+        { status: 400 },
+      )
+    }
+    if (mode === 'reference-to-video' && !body.imageUrls?.length) {
+      return NextResponse.json(
+        { success: false, error: 'imageUrls (reference faces) are required for reference-to-video' },
         { status: 400 },
       )
     }
@@ -54,6 +63,7 @@ export async function POST(request: NextRequest) {
     const job = await startVideoJob(body.model, {
       prompt: body.prompt,
       imageUrl: body.imageUrl,
+      imageUrls: body.imageUrls,
       mode,
       aspectRatio: body.aspectRatio,
       durationSec: body.durationSec,
