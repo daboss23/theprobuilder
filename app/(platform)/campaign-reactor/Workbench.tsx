@@ -112,6 +112,13 @@ export function Workbench() {
     }
   }, [])
 
+  // Topbar "New Creative Campaign" button signals this when already on the page.
+  useEffect(() => {
+    const open = () => setModalOpen(true)
+    window.addEventListener('open-reactor-modal', open)
+    return () => window.removeEventListener('open-reactor-modal', open)
+  }, [])
+
   // System recommendation based on the selected output types, recomputed live.
   const recommendation = useMemo(
     () => (videoModels.length ? recommendVideoModel(outputs, videoModels) : null),
