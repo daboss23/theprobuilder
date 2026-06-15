@@ -1,8 +1,9 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Atom, Zap, Check, Loader2, Copy as CopyIcon, Radar, Trophy, ImageIcon, Film, Clapperboard, Sparkles, Users } from 'lucide-react'
 import { Panel, PanelHeader, Pill } from '@/components/reactor/ui'
+import { FaceLibrary } from '@/components/reactor/FaceLibrary'
 import { reactorInputs, reactorOutputTypes, winningAngles } from '@/lib/reactor-data'
 import { recommendVideoModel } from '@/lib/video/recommend'
 import type { ModelAvailability } from '@/lib/video/types'
@@ -53,16 +54,15 @@ export function Workbench() {
   const [imageModel, setImageModel] = useState<string>('auto')
   // Face library: reference image URLs that lock a consistent face across UGC
   // clips (Seedance 2.0 reference-to-video). One URL per line or comma-separated.
-  const [faceUrlsRaw, setFaceUrlsRaw] = useState('')
-  const [refVideosRaw, setRefVideosRaw] = useState('')
-  const parseUrls = (raw: string) =>
-    raw
-      .split(/[\n,]+/)
-      .map((s) => s.trim())
-      .filter(Boolean)
-  const faceUrls = parseUrls(faceUrlsRaw).slice(0, 9)
-  const refVideos = parseUrls(refVideosRaw).slice(0, 3)
+  // Selected reference assets from the Face Library (saved roster) → power
+  // Seedance 2.0 reference-to-video for consistent-character in-house UGC.
+  const [faceUrls, setFaceUrls] = useState<string[]>([])
+  const [refVideos, setRefVideos] = useState<string[]>([])
   const hasRefs = faceUrls.length > 0 || refVideos.length > 0
+  const handleFaceSelection = useCallback((images: string[], videos: string[]) => {
+    setFaceUrls(images.slice(0, 9))
+    setRefVideos(videos.slice(0, 3))
+  }, [])
   const feedRef = useRef<HTMLDivElement>(null)
 
   // Load the model menus once so the user can pick (and we can recommend).
@@ -553,38 +553,7 @@ export function Workbench() {
                 </div>
               )}
 
-              {/* Face library — references that lock a consistent character for
-                  in-house UGC (Seedance 2.0 reference-to-video). */}
-              <div className="mt-4 rounded-lg border border-border bg-surface/30 p-3">
-                <p className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-white/40">
-                  <Users size={12} /> Face Library — In-House UGC
-                </p>
-                <p className="mt-1 text-[11px] text-white/35">
-                  Add up to 9 reference images and up to 3 reference videos to lock a consistent
-                  character across clips.
-                </p>
-                <textarea
-                  value={faceUrlsRaw}
-                  onChange={(e) => setFaceUrlsRaw(e.target.value)}
-                  rows={2}
-                  placeholder="Reference image URLs — one per line (faces, up to 9)"
-                  className="mt-2 w-full resize-y rounded-lg border border-border bg-surface/60 px-3 py-2 text-[12px] text-white outline-none placeholder:text-white/25 focus:border-glow"
-                />
-                <textarea
-                  value={refVideosRaw}
-                  onChange={(e) => setRefVideosRaw(e.target.value)}
-                  rows={2}
-                  placeholder="Reference video URLs — one per line (motion/style, up to 3)"
-                  className="mt-2 w-full resize-y rounded-lg border border-border bg-surface/60 px-3 py-2 text-[12px] text-white outline-none placeholder:text-white/25 focus:border-glow"
-                />
-                <p className="mt-1.5 text-[11px] text-white/35">
-                  {hasRefs
-                    ? `${faceUrls.length} image${faceUrls.length === 1 ? '' : 's'}${
-                        refVideos.length ? ` + ${refVideos.length} video${refVideos.length === 1 ? '' : 's'}` : ''
-                      } loaded → use “Generate UGC” on any video concept after firing.`
-                    : 'Once added, a “Generate UGC” button appears on each video concept.'}
-                </p>
-              </div>
+              <FaceLibrary onChange={handleFaceSelection} />
             </div>
           )}
 
