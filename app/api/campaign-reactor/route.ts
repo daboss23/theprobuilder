@@ -196,7 +196,7 @@ function buildTools(
             type: 'string',
             enum: videoModelIds.length ? videoModelIds : ['seedance-2.0'],
             description:
-              'Model to render with. seedance-2.0 = cinematic realism/B-roll; kling-2.5 = UGC motion; veo-3 = people speaking with native audio; wan-2.5 = high-volume/budget; higgsfield-dop = animate a still.',
+              'Model to render with. seedance-2.0 = cinematic realism/B-roll with native synchronized audio (up to 15s); seedance-2.0-fast = same with lower latency/cost for volume; kling-2.5 = UGC motion; veo-3 = people speaking with native audio; wan-2.5 = high-volume/budget; higgsfield-dop = animate a still.',
           },
           aspectRatio: { type: 'string', enum: ['1:1', '9:16', '16:9'], description: 'Defaults to 9:16.' },
           conceptType: { type: 'string', description: 'The output type this video is for (must match the concept type you will submit).' },

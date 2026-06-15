@@ -37,16 +37,17 @@ export function recommendVideoModel(
   const preference: { id: string; reason: string }[] = wantsSpeech
     ? [
         { id: 'veo-3', reason: 'people speaking with native audio (UGC / testimonials)' },
+        { id: 'seedance-2.0', reason: 'cinematic realism with native synchronized audio' },
         { id: 'kling-2.5', reason: 'strong lip-sync-friendly motion for talking-head UGC' },
-        { id: 'seedance-2.0', reason: 'cinematic realism (audio added separately)' },
       ]
     : wantsCinematic
       ? [
-          { id: 'seedance-2.0', reason: 'cinematic realism for on-site builder B-roll' },
+          { id: 'seedance-2.0', reason: 'cinematic realism + native audio for on-site builder B-roll' },
           { id: 'kling-2.5', reason: 'high prompt adherence for action scenes' },
           { id: 'veo-3', reason: 'realistic motion with native audio' },
         ]
       : [
+          { id: 'seedance-2.0-fast', reason: 'flagship Seedance quality at lower cost for high-volume variants' },
           { id: 'wan-2.5', reason: 'best quality-to-cost for high-volume variants' },
           { id: 'seedance-2.0', reason: 'flagship realism' },
         ]
