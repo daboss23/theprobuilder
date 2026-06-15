@@ -14,6 +14,7 @@ export interface ImageModel {
   id: string
   label: string
   provider: ImageProvider
+  endpoint?: string
   aspectRatios: AspectRatio[]
   tier: ModelTier
   notes: string

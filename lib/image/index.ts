@@ -66,7 +66,7 @@ async function renderWithModel(
   if (!model) return { url: null, error: `Unknown image model "${id}"` }
   if (model.provider === 'gemini') return generateGeminiImage(prompt, aspectRatio)
   if (model.provider === 'openai') return generateOpenAIImage(prompt, aspectRatio)
-  if (model.provider === 'fal') return generateFalImage(prompt, aspectRatio)
+  if (model.provider === 'fal') return generateFalImage(prompt, aspectRatio, model.endpoint)
   if (model.provider === 'higgsfield') {
     const url = await higgsfieldImage(prompt, aspectRatio)
     return { url, error: url ? undefined : 'Higgsfield returned no image' }

@@ -170,7 +170,7 @@ function buildTools(
             type: 'string',
             enum: imageModelIds.length ? imageModelIds : ['nano-banana'],
             description:
-              'Image model: fal-flux = photoreal humans/scenes in-house via fal; nano-banana = fast high-quality variants; openai-gpt-image = best legible text-in-image; higgsfield-soul = premium photographic ad look.',
+              'Image model: fal-nano-banana-pro = premium fal-hosted variants; fal-gpt-image-2 = fal-hosted text-heavy/static ads; fal-grok-imagine = fal-hosted high-quality creative exploration; fal-flux = photoreal humans/scenes via fal; nano-banana = Gemini variants; openai-gpt-image = direct OpenAI text-in-image; higgsfield-soul = premium photographic ad look.',
           },
           aspectRatio: { type: 'string', enum: ['1:1', '9:16', '16:9'], description: 'Defaults to 1:1.' },
         },
