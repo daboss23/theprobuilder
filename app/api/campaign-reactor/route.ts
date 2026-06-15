@@ -307,6 +307,10 @@ const BLOCK_SEP = '\n\n───────────────────
 // brief → angle → awareness → audience → sophistication → offer → outputs →
 // intelligence systems → on-brand → compliance (always last, overrides all).
 function buildInputBlocks(inputs: ReactorInputs | undefined): string {
+  // No guided inputs → classic left-panel run: leave the prompt exactly as it
+  // was so the existing agent behaviour is untouched.
+  if (!inputs) return ''
+
   const parts: string[] = []
 
   if (inputs) {

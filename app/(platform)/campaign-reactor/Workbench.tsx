@@ -1,11 +1,11 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Atom, Check, Loader2, Copy as CopyIcon, Radar, Trophy, ImageIcon, Film, Users, ChevronRight } from 'lucide-react'
+import { Atom, Zap, Check, Loader2, Copy as CopyIcon, Radar, Trophy, ImageIcon, Film, Clapperboard, Sparkles, Users, Wand2 } from 'lucide-react'
 import { Panel, PanelHeader, Pill } from '@/components/reactor/ui'
 import { FaceLibrary } from '@/components/reactor/FaceLibrary'
 import { ReactorModal } from '@/components/campaign-reactor/ReactorModal'
-import { reactorOutputTypes } from '@/lib/reactor-data'
+import { reactorInputs, reactorOutputTypes, winningAngles } from '@/lib/reactor-data'
 import type { ReactorInputs } from '@/lib/reactor-inputs'
 import { recommendVideoModel } from '@/lib/video/recommend'
 import type { ModelAvailability } from '@/lib/video/types'
@@ -34,9 +34,9 @@ const normType = (s: string) => s.toLowerCase().replace(/s$/, '').trim()
 
 export function Workbench() {
   const [modalOpen, setModalOpen] = useState(false)
-  const [showRefs, setShowRefs] = useState(false)
-  // The angle from the last fired run — used when logging a winner outcome.
-  const [lastAngle, setLastAngle] = useState('')
+  const [activeInputs, setActiveInputs] = useState<string[]>(reactorInputs)
+  const [angle, setAngle] = useState(winningAngles[0].name)
+  const [outputs, setOutputs] = useState<string[]>(reactorOutputTypes)
   const [phase, setPhase] = useState<'idle' | 'firing' | 'done'>('idle')
   const [concepts, setConcepts] = useState<Concept[]>([])
   const [telemetry, setTelemetry] = useState<TelemetryLine[]>([])
@@ -50,11 +50,11 @@ export function Workbench() {
   const [agentMedia, setAgentMedia] = useState<Record<string, { image?: string; video?: VideoUiState }>>({})
   // Manually triggered "Animate" renders, keyed by concept text.
   const [manualVideos, setManualVideos] = useState<Record<string, VideoUiState>>({})
-  // Available models (from the API). Selection is now agent-decided — the modal
-  // no longer exposes pickers — so we resolve each manual card action to the
-  // recommended model for the concepts on screen.
+  // Available models (from the API) + the user's pick ('auto' = recommended).
   const [videoModels, setVideoModels] = useState<ModelAvailability[]>([])
+  const [videoModel, setVideoModel] = useState<string>('auto')
   const [imageModels, setImageModels] = useState<ImageModelAvailability[]>([])
+  const [imageModel, setImageModel] = useState<string>('auto')
   // Face library: reference image URLs that lock a consistent face across UGC
   // clips (Seedance 2.0 reference-to-video). One URL per line or comma-separated.
   // Selected reference assets from the Face Library (saved roster) → power
@@ -85,7 +85,7 @@ export function Workbench() {
   }, [])
 
   // Dashboard's "New Creative Campaign" CTA links here with ?modal=open — open
-  // the modal on arrival, then strip the param so a refresh doesn't reopen it.
+  // the guided modal on arrival, then strip the param so refresh doesn't reopen.
   useEffect(() => {
     if (typeof window === 'undefined') return
     const params = new URLSearchParams(window.location.search)
@@ -97,23 +97,30 @@ export function Workbench() {
     }
   }, [])
 
-  // Recommend a model from whatever concepts are on screen (or the full output
-  // menu before a run) so the per-card Generate / Animate / UGC actions resolve
-  // to a sensible default without a picker.
-  const activeOutputs = useMemo(
-    () => (concepts.length ? concepts.map((c) => c.type) : reactorOutputTypes),
-    [concepts],
-  )
+  // System recommendation based on the selected output types, recomputed live.
   const recommendation = useMemo(
-    () => (videoModels.length ? recommendVideoModel(activeOutputs, videoModels) : null),
-    [activeOutputs, videoModels],
+    () => (videoModels.length ? recommendVideoModel(outputs, videoModels) : null),
+    [outputs, videoModels],
   )
-  const resolvedVideoModel = recommendation?.modelId
+  // What we actually send: the explicit pick, or the recommendation when on Auto.
+  const resolvedVideoModel = videoModel === 'auto' ? recommendation?.modelId : videoModel
+  const labelFor = (id?: string | null) => videoModels.find((m) => m.id === id)?.label ?? id ?? ''
+  const showVideoPicker =
+    videoModels.length > 0 && outputs.some((o) => /video|founder|testimonial|event|campaign/i.test(o))
+
+  // Image model: same pattern.
   const imageRecommendation = useMemo(
-    () => (imageModels.length ? recommendImageModel(activeOutputs, imageModels) : null),
-    [activeOutputs, imageModels],
+    () => (imageModels.length ? recommendImageModel(outputs, imageModels) : null),
+    [outputs, imageModels],
   )
-  const resolvedImageModel = imageRecommendation?.modelId
+  const resolvedImageModel = imageModel === 'auto' ? imageRecommendation?.modelId : imageModel
+  const imageLabelFor = (id?: string | null) =>
+    imageModels.find((m) => m.id === id)?.label ?? id ?? ''
+  const showImagePicker =
+    imageModels.length > 0 && outputs.some((o) => /concept|static|founder|campaign|testimonial/i.test(o))
+
+  const toggle = (arr: string[], set: (v: string[]) => void, val: string) =>
+    set(arr.includes(val) ? arr.filter((v) => v !== val) : [...arr, val])
 
   const pushTelemetry = (line: TelemetryLine) => {
     setTelemetry((prev) => [...prev, line])
@@ -150,7 +157,9 @@ export function Workbench() {
     onUpdate({ status: 'error' })
   }
 
-  const fire = async (inputs: ReactorInputs) => {
+  // Shared streaming runner — both the classic left panel and the guided modal
+  // post into the same SSE pipeline; only the request payload differs.
+  const streamReactor = async (payload: Record<string, unknown>) => {
     setPhase('firing')
     setConcepts([])
     setTelemetry([])
@@ -158,21 +167,11 @@ export function Workbench() {
     setAgentMedia({})
     setManualVideos({})
 
-    const angle = inputs.angleIsAgentDecided ? 'Agent decides' : inputs.angle
-    setLastAngle(angle)
-    // When the agent decides outputs we pass the full menu as the allowed set;
-    // the system prompt instructs it to pick the best subset for this brief.
-    const outputs = inputs.outputTypesAgentDecided ? reactorOutputTypes : inputs.outputTypes
-
     try {
       const res = await fetch('/api/campaign-reactor', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          angle,
-          outputs,
-          reactorInputs: inputs,
-        }),
+        body: JSON.stringify(payload),
       })
       if (!res.body) throw new Error('No response stream')
 
@@ -233,6 +232,26 @@ export function Workbench() {
       setError(err instanceof Error ? err.message : 'Reactor failed')
       setPhase('done')
     }
+  }
+
+  // Classic left-panel fire — unchanged payload (angle / inputs / outputs / models).
+  const fire = () =>
+    streamReactor({
+      angle,
+      inputs: activeInputs,
+      outputs,
+      videoModel: resolvedVideoModel,
+      imageModel: resolvedImageModel,
+    })
+
+  // Guided modal fire — carries the richer ReactorInputs; reflects the chosen
+  // angle/outputs into the panel state so the rest of the UI stays in sync.
+  const fireWithInputs = (inputs: ReactorInputs) => {
+    const a = inputs.angleIsAgentDecided ? 'Agent decides' : inputs.angle
+    const o = inputs.outputTypesAgentDecided ? reactorOutputTypes : inputs.outputTypes
+    setAngle(a)
+    setOutputs(o)
+    streamReactor({ angle: a, outputs: o, reactorInputs: inputs })
   }
 
   const copy = (text: string) => {
@@ -409,7 +428,7 @@ export function Workbench() {
       await fetch('/api/campaign-reactor/outcome', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ angle: lastAngle, concept: c, verdict: 'winner' }),
+        body: JSON.stringify({ angle, concept: c, verdict: 'winner' }),
       })
     } catch {
       /* best-effort logging */
@@ -422,55 +441,181 @@ export function Workbench() {
     manualVideos[c.text] || agentMedia[normType(c.type)]?.video
 
   return (
-    <div className="space-y-6">
-      {/* Trigger bar — opens the multi-step campaign modal */}
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h2 className="font-display text-lg font-semibold text-white">Configure your campaign</h2>
-          <p className="mt-0.5 text-sm text-white/45">
-            Set the brief, audience, and offer across four quick steps — then fire the reactor.
-          </p>
-        </div>
+    <div className="grid grid-cols-1 gap-6 xl:grid-cols-[360px_1fr]">
+      {/* Inputs */}
+      <div className="space-y-4">
+        {/* Guided flow — opens the 4-step modal. The full manual panel stays below. */}
         <button
           type="button"
           onClick={() => setModalOpen(true)}
-          disabled={phase === 'firing'}
-          className="fire-btn inline-flex items-center gap-2 rounded-full px-6 py-3.5 font-display text-base font-bold uppercase tracking-wide text-white"
+          className="flex w-full items-center justify-center gap-2 rounded-xl border border-[#FF5E3A]/40 bg-[#FF5E3A]/[0.08] px-4 py-3 font-display text-sm font-semibold text-[#FF5E3A] transition-colors hover:bg-[#FF5E3A]/15"
         >
-          {phase === 'firing' ? (
-            <>
-              <Loader2 size={16} className="animate-spin" /> Firing Reactor…
-            </>
-          ) : (
-            <>
-              <Atom size={16} /> New Creative Campaign
-            </>
-          )}
+          <Wand2 size={15} /> New Creative Campaign — Guided
         </button>
-      </div>
 
-      {/* Reference library (optional) — powers consistent-face UGC on video concepts */}
-      <Panel className="p-4">
-        <button
-          type="button"
-          onClick={() => setShowRefs((v) => !v)}
-          className="flex w-full items-center gap-2 text-[11px] font-medium uppercase tracking-[0.08em] text-white/45 transition-colors hover:text-white/70"
-        >
-          <ChevronRight size={13} className={`transition-transform ${showRefs ? 'rotate-90' : ''}`} />
-          <Users size={13} />
-          Reference Library
-          {hasRefs && (
-            <span className="ml-1 rounded-full border border-[#FF5E3A]/40 bg-[#FF5E3A]/10 px-1.5 py-0.5 text-[10px] text-[#FF5E3A]">
-              {faceUrls.length + refVideos.length} selected
-            </span>
-          )}
-        </button>
-        {showRefs && (
-          <div className="mt-3">
-            <FaceLibrary onChange={handleFaceSelection} />
+        <Panel>
+          <PanelHeader icon={<Zap size={16} />} accent="amber" title="Intelligence Inputs" subtitle="Feed the reactor" />
+          <div className="space-y-1.5 p-4">
+            {reactorInputs.map((i) => {
+              const on = activeInputs.includes(i)
+              return (
+                <button
+                  key={i}
+                  type="button"
+                  onClick={() => toggle(activeInputs, setActiveInputs, i)}
+                  className={`flex w-full items-center justify-between rounded-lg border px-3 py-2 text-sm transition-all ${
+                    on
+                      ? 'border-primary/30 bg-primary/10 text-white'
+                      : 'border-border bg-surface/30 text-white/45'
+                  }`}
+                >
+                  {i}
+                  <span
+                    className={`grid h-4 w-4 place-items-center rounded ${
+                      on ? 'bg-glow text-background' : 'border border-border'
+                    }`}
+                  >
+                    {on && <Check size={11} />}
+                  </span>
+                </button>
+              )
+            })}
           </div>
-        )}
-      </Panel>
+        </Panel>
+
+        <Panel className="p-4">
+          <label className="mb-2 block text-[11px] font-medium uppercase tracking-wider text-white/40">
+            Campaign Angle
+          </label>
+          <select
+            value={angle}
+            onChange={(e) => setAngle(e.target.value)}
+            className="w-full rounded-lg border border-border bg-surface/60 px-3 py-2.5 text-sm text-white outline-none focus:border-glow"
+          >
+            {winningAngles.map((a) => (
+              <option key={a.name} value={a.name} className="bg-card">
+                {a.name}
+              </option>
+            ))}
+          </select>
+
+          <p className="mb-2 mt-4 text-[11px] font-medium uppercase tracking-wider text-white/40">
+            Output Types
+          </p>
+          <div className="flex flex-wrap gap-1.5">
+            {reactorOutputTypes.map((o) => {
+              const on = outputs.includes(o)
+              return (
+                <button
+                  key={o}
+                  type="button"
+                  onClick={() => toggle(outputs, setOutputs, o)}
+                  className={`rounded-full border px-2.5 py-1 text-[11px] transition-all ${
+                    on
+                      ? 'border-primary/30 bg-primary/10 text-glow'
+                      : 'border-border text-white/40'
+                  }`}
+                >
+                  {o}
+                </button>
+              )
+            })}
+          </div>
+
+          {showImagePicker && (
+            <div className="mt-4">
+              <p className="mb-2 flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-white/40">
+                <ImageIcon size={12} /> Image Model
+              </p>
+              <select
+                value={imageModel}
+                onChange={(e) => setImageModel(e.target.value)}
+                className="w-full rounded-lg border border-border bg-surface/60 px-3 py-2.5 text-sm text-white outline-none focus:border-glow"
+              >
+                <option value="auto" className="bg-card">
+                  Auto — recommended
+                  {imageRecommendation ? ` (${imageLabelFor(imageRecommendation.modelId)})` : ''}
+                </option>
+                {imageModels.map((m) => (
+                  <option key={m.id} value={m.id} className="bg-card" disabled={!m.configured}>
+                    {m.label}
+                    {m.configured ? '' : ' — needs key'}
+                  </option>
+                ))}
+              </select>
+
+              {imageRecommendation && (
+                <div className="mt-2 flex items-start gap-1.5 rounded-lg border border-primary/20 bg-primary/[0.06] px-2.5 py-2 text-[11px] text-white/60">
+                  <Sparkles size={12} className="mt-0.5 shrink-0 text-glow" />
+                  <span>
+                    <span className="text-glow/80">Recommended:</span>{' '}
+                    {imageLabelFor(imageRecommendation.modelId)} — {imageRecommendation.reason}.
+                    {!imageRecommendation.configured && (
+                      <span className="text-warning"> Add its API key to enable.</span>
+                    )}
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
+
+          {showVideoPicker && (
+            <div className="mt-4">
+              <p className="mb-2 flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-white/40">
+                <Clapperboard size={12} /> Video Model
+              </p>
+              <select
+                value={videoModel}
+                onChange={(e) => setVideoModel(e.target.value)}
+                className="w-full rounded-lg border border-border bg-surface/60 px-3 py-2.5 text-sm text-white outline-none focus:border-glow"
+              >
+                <option value="auto" className="bg-card">
+                  Auto — recommended{recommendation ? ` (${labelFor(recommendation.modelId)})` : ''}
+                </option>
+                {videoModels.map((m) => (
+                  <option key={m.id} value={m.id} className="bg-card" disabled={!m.configured}>
+                    {m.label}
+                    {m.audio ? ' · audio' : ''}
+                    {m.configured ? '' : ' — needs key'}
+                  </option>
+                ))}
+              </select>
+
+              {recommendation && (
+                <div className="mt-2 flex items-start gap-1.5 rounded-lg border border-primary/20 bg-primary/[0.06] px-2.5 py-2 text-[11px] text-white/60">
+                  <Sparkles size={12} className="mt-0.5 shrink-0 text-glow" />
+                  <span>
+                    <span className="text-glow/80">Recommended:</span>{' '}
+                    {labelFor(recommendation.modelId)} — {recommendation.reason}.
+                    {!recommendation.configured && (
+                      <span className="text-warning"> Add its API key to enable.</span>
+                    )}
+                  </span>
+                </div>
+              )}
+
+              <FaceLibrary onChange={handleFaceSelection} />
+            </div>
+          )}
+
+          <button
+            type="button"
+            onClick={fire}
+            disabled={phase === 'firing' || outputs.length === 0}
+            className="fire-btn mt-5 flex w-full items-center justify-center gap-2 rounded-full px-4 py-4 font-display text-base font-bold uppercase tracking-wide text-white"
+          >
+            {phase === 'firing' ? (
+              <>
+                <Loader2 size={16} className="animate-spin" /> Firing Reactor…
+              </>
+            ) : (
+              <>
+                <Atom size={16} /> Fire Reactor
+              </>
+            )}
+          </button>
+        </Panel>
+      </div>
 
       {/* Output */}
       <Panel className="min-h-[480px]">
@@ -486,9 +631,8 @@ export function Workbench() {
           <div className="grid place-items-center px-6 py-24 text-center">
             <Atom size={40} className="mb-4 text-white/15" />
             <p className="max-w-sm text-sm text-white/40">
-              Hit <span className="text-white/70">New Creative Campaign</span> to set your brief,
-              audience, and offer — then fire the reactor. The agent walks your frameworks,
-              retrieves what has already worked, and drafts grounded concepts.
+              Select your intelligence inputs and angle, then fire the reactor. The agent walks
+              your frameworks, retrieves what has already worked, and drafts grounded concepts.
             </p>
           </div>
         )}
@@ -676,7 +820,7 @@ export function Workbench() {
         )}
       </Panel>
 
-      <ReactorModal open={modalOpen} onClose={() => setModalOpen(false)} onFire={fire} />
+      <ReactorModal open={modalOpen} onClose={() => setModalOpen(false)} onFire={fireWithInputs} />
     </div>
   )
 }
