@@ -23,7 +23,7 @@ interface TelemetryLine {
   kind: 'step' | 'retrieval' | 'specialist'
 }
 
-type VideoUiState = { status: 'rendering' | 'done' | 'error'; url?: string }
+type VideoUiState = { status: 'rendering' | 'done' | 'error'; url?: string; message?: string }
 
 // Normalize an output/concept type so agent-generated media keyed by type lines
 // up with the concept the agent submits ("Static Concepts" ≈ "Static Concept").
@@ -232,9 +232,11 @@ export function Workbench() {
           ...p,
           [c.text]: {
             status: 'error',
-            message: res.demo
-              ? 'Add HF_CREDENTIALS to generate Higgsfield creatives'
-              : res.error || 'Generation failed',
+            message:
+              res.error ||
+              (res.demo
+                ? 'No image API key set — add GEMINI_API_KEY, OPENAI_API_KEY, or HF_CREDENTIALS'
+                : 'Generation failed'),
           },
         }))
       }
@@ -261,10 +263,18 @@ export function Workbench() {
       if (res.success && res.requestId) {
         pollVideo(res.requestId, res.modelId, (s) => setManualVideos((p) => ({ ...p, [c.text]: s })))
       } else {
-        setManualVideos((p) => ({ ...p, [c.text]: { status: 'error' } }))
+        setManualVideos((p) => ({
+          ...p,
+          [c.text]: {
+            status: 'error',
+            message:
+              res.error ||
+              (res.demo ? 'No video API key set — add FAL_KEY or HF_CREDENTIALS' : 'Video render failed'),
+          },
+        }))
       }
     } catch {
-      setManualVideos((p) => ({ ...p, [c.text]: { status: 'error' } }))
+      setManualVideos((p) => ({ ...p, [c.text]: { status: 'error', message: 'Video render failed' } }))
     }
   }
 
@@ -615,7 +625,7 @@ export function Workbench() {
                   )}
                   {video?.status === 'error' && (
                     <p className="mt-3 rounded-lg border border-warning/30 bg-warning/[0.06] p-2 text-[11px] text-warning">
-                      Video render failed — check HF_CREDENTIALS or try again.
+                      {video.message || 'Video render failed — check FAL_KEY / HF_CREDENTIALS or try again.'}
                     </p>
                   )}
 

@@ -29,10 +29,18 @@ export async function POST(request: NextRequest) {
     }
 
     const result = await generateImageWith(model, prompt, aspectRatio ?? '1:1')
+    if (!result) {
+      return NextResponse.json({
+        success: false,
+        imageUrl: null,
+        model: null,
+        error: `Image render failed${model ? ` for "${model}"` : ''}. The provider rejected the request — check that the matching API key is set and valid (Nano Banana → GEMINI_API_KEY, OpenAI → OPENAI_API_KEY, Higgsfield → HF_CREDENTIALS as "KEY_ID:KEY_SECRET").`,
+      })
+    }
     return NextResponse.json({
-      success: Boolean(result),
-      imageUrl: result?.imageUrl ?? null,
-      model: result?.modelId ?? null,
+      success: true,
+      imageUrl: result.imageUrl,
+      model: result.modelId,
     })
   } catch (error) {
     console.error('Image generation error:', error)
