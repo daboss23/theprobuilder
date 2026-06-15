@@ -31,11 +31,17 @@ const FAL_SIZE: Record<AspectRatio, string> = {
   '16:9': 'landscape_16_9',
 }
 
+export interface FalImageResult {
+  url: string | null
+  error?: string
+}
+
 export async function generateFalImage(
   prompt: string,
   aspectRatio: AspectRatio = '1:1',
-): Promise<string | null> {
-  if (!falImageConfigured() || !prompt) return null
+): Promise<FalImageResult> {
+  if (!falImageConfigured()) return { url: null, error: 'FAL_KEY is not set' }
+  if (!prompt) return { url: null, error: 'Empty prompt' }
   try {
     const res = await fetch(`${RUN_BASE}/${FAL_IMAGE_MODEL}`, {
       method: 'POST',
@@ -51,16 +57,18 @@ export async function generateFalImage(
       cache: 'no-store',
     })
     if (!res.ok) {
-      console.error('fal image failed:', res.status, await res.text())
-      return null
+      const body = (await res.text()).slice(0, 400)
+      console.error('fal image failed:', res.status, body)
+      return { url: null, error: `fal ${FAL_IMAGE_MODEL} → HTTP ${res.status}: ${body || res.statusText}` }
     }
     const data = (await res.json()) as {
       images?: { url?: string }[]
       image?: { url?: string }
     }
-    return data.images?.[0]?.url ?? data.image?.url ?? null
+    const url = data.images?.[0]?.url ?? data.image?.url ?? null
+    return { url, error: url ? undefined : 'fal returned no image URL' }
   } catch (err) {
     console.error('fal image error:', err)
-    return null
+    return { url: null, error: err instanceof Error ? err.message : 'fal request failed' }
   }
 }

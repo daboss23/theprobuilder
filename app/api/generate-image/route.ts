@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { generateImageWith, imageConfigured, type AspectRatio } from '@/lib/image'
+import { generateImageDetailed, imageConfigured, type AspectRatio } from '@/lib/image'
 
 export const runtime = 'nodejs'
 export const maxDuration = 60
@@ -28,19 +28,21 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'prompt is required' }, { status: 400 })
     }
 
-    const result = await generateImageWith(model, prompt, aspectRatio ?? '1:1')
-    if (!result) {
+    const { image, error } = await generateImageDetailed(model, prompt, aspectRatio ?? '1:1')
+    if (!image) {
       return NextResponse.json({
         success: false,
         imageUrl: null,
         model: null,
-        error: `Image render failed${model ? ` for "${model}"` : ''}. The provider rejected the request — check that the matching API key is set and valid (FLUX → FAL_KEY, Nano Banana → GEMINI_API_KEY, OpenAI → OPENAI_API_KEY, Higgsfield → HF_CREDENTIALS as "KEY_ID:KEY_SECRET").`,
+        error: `Image render failed${model ? ` for "${model}"` : ''}. ${
+          error ?? 'The provider rejected the request.'
+        } (Keys: FLUX → FAL_KEY, Nano Banana → GEMINI_API_KEY, OpenAI → OPENAI_API_KEY, Higgsfield → HF_CREDENTIALS as "KEY_ID:KEY_SECRET".)`,
       })
     }
     return NextResponse.json({
       success: true,
-      imageUrl: result.imageUrl,
-      model: result.modelId,
+      imageUrl: image.imageUrl,
+      model: image.modelId,
     })
   } catch (error) {
     console.error('Image generation error:', error)

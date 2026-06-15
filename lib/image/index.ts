@@ -50,23 +50,48 @@ export interface GeneratedImage {
   provider: string
 }
 
+export interface ImageAttempt {
+  image: GeneratedImage | null
+  /** Human-readable failure reason when image is null (surfaced to the UI). */
+  error?: string
+}
+
+/**
+ * Generate a still and report WHY it failed (provider status/body) so the UI
+ * can show an actionable error instead of a generic "rejected" message.
+ */
+export async function generateImageDetailed(
+  modelId: string | undefined,
+  prompt: string,
+  aspectRatio: AspectRatio = '1:1',
+): Promise<ImageAttempt> {
+  const id = resolveModelId(modelId)
+  if (!id) return { image: null, error: 'No image provider is configured' }
+  const model = getImageModel(id)
+  if (!model) return { image: null, error: `Unknown image model "${modelId}"` }
+
+  let imageUrl: string | null = null
+  let error: string | undefined
+  if (model.provider === 'gemini') imageUrl = await generateGeminiImage(prompt, aspectRatio)
+  else if (model.provider === 'openai') imageUrl = await generateOpenAIImage(prompt, aspectRatio)
+  else if (model.provider === 'higgsfield') imageUrl = await higgsfieldImage(prompt, aspectRatio)
+  else if (model.provider === 'fal') {
+    const r = await generateFalImage(prompt, aspectRatio)
+    imageUrl = r.url
+    error = r.error
+  }
+
+  if (!imageUrl) {
+    return { image: null, error: error ?? `${model.label} returned no image` }
+  }
+  return { image: { imageUrl, modelId: id, provider: model.provider } }
+}
+
 /** Generate a still with the chosen model (or the best available). */
 export async function generateImageWith(
   modelId: string | undefined,
   prompt: string,
   aspectRatio: AspectRatio = '1:1',
 ): Promise<GeneratedImage | null> {
-  const id = resolveModelId(modelId)
-  if (!id) return null
-  const model = getImageModel(id)
-  if (!model) return null
-
-  let imageUrl: string | null = null
-  if (model.provider === 'gemini') imageUrl = await generateGeminiImage(prompt, aspectRatio)
-  else if (model.provider === 'openai') imageUrl = await generateOpenAIImage(prompt, aspectRatio)
-  else if (model.provider === 'higgsfield') imageUrl = await higgsfieldImage(prompt, aspectRatio)
-  else if (model.provider === 'fal') imageUrl = await generateFalImage(prompt, aspectRatio)
-
-  if (!imageUrl) return null
-  return { imageUrl, modelId: id, provider: model.provider }
+  return (await generateImageDetailed(modelId, prompt, aspectRatio)).image
 }
