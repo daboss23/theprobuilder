@@ -17,11 +17,17 @@ const SIZE: Record<AspectRatio, '1024x1024' | '1024x1536' | '1536x1024'> = {
   '16:9': '1536x1024',
 }
 
+export interface OpenAIImageResult {
+  url: string | null
+  error?: string
+}
+
 export async function generateOpenAIImage(
   prompt: string,
   aspectRatio: AspectRatio = '1:1',
-): Promise<string | null> {
-  if (!openaiImageConfigured() || !prompt) return null
+): Promise<OpenAIImageResult> {
+  if (!openaiImageConfigured()) return { url: null, error: 'OPENAI_API_KEY is not set' }
+  if (!prompt) return { url: null, error: 'Empty prompt' }
   try {
     const response = await getOpenAI().images.generate({
       model: 'gpt-image-1',
@@ -31,9 +37,10 @@ export async function generateOpenAIImage(
       n: 1,
     })
     const data = response.data?.[0]
-    return data?.url || (data?.b64_json ? `data:image/png;base64,${data.b64_json}` : null)
+    const url = data?.url || (data?.b64_json ? `data:image/png;base64,${data.b64_json}` : null)
+    return { url, error: url ? undefined : 'OpenAI returned no image' }
   } catch (err) {
     console.error('OpenAI image error:', err)
-    return null
+    return { url: null, error: `OpenAI: ${err instanceof Error ? err.message : 'request failed'}` }
   }
 }

@@ -18,11 +18,17 @@ export function geminiConfigured(): boolean {
   return Boolean(geminiKey())
 }
 
+export interface GeminiImageResult {
+  url: string | null
+  error?: string
+}
+
 export async function generateGeminiImage(
   prompt: string,
   aspectRatio: AspectRatio = '1:1',
-): Promise<string | null> {
-  if (!geminiConfigured() || !prompt) return null
+): Promise<GeminiImageResult> {
+  if (!geminiConfigured()) return { url: null, error: 'GEMINI_API_KEY is not set' }
+  if (!prompt) return { url: null, error: 'Empty prompt' }
   try {
     const ai = new GoogleGenAI({ apiKey: geminiKey() })
     const response = await ai.models.generateContent({
@@ -37,12 +43,14 @@ export async function generateGeminiImage(
       const data = part.inlineData?.data
       if (data) {
         const mime = part.inlineData?.mimeType || 'image/png'
-        return `data:${mime};base64,${data}`
+        return { url: `data:${mime};base64,${data}` }
       }
     }
-    return null
+    // No image part — often a safety block or quota issue; surface any text back.
+    const text = response.candidates?.[0]?.content?.parts?.find((p) => p.text)?.text
+    return { url: null, error: text ? `Gemini: ${text.slice(0, 200)}` : 'Gemini returned no image (check quota/billing or safety filters)' }
   } catch (err) {
     console.error('Gemini image error:', err)
-    return null
+    return { url: null, error: `Gemini: ${err instanceof Error ? err.message : 'request failed'}` }
   }
 }

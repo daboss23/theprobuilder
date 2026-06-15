@@ -44,6 +44,36 @@ function resolveModelId(requested?: string): string | null {
   return IMAGE_MODELS.find((m) => providerConfigured(m.provider))?.id ?? null
 }
 
+/**
+ * Ordered list of configured model ids to try: the resolved/requested model
+ * first, then every other configured model as a fallback. This makes the oven
+ * resilient — if the chosen provider is out of credit or rejects, it
+ * automatically tries another configured provider before giving up.
+ */
+function candidateModelIds(requested?: string): string[] {
+  const first = resolveModelId(requested)
+  const rest = IMAGE_MODELS.filter((m) => providerConfigured(m.provider)).map((m) => m.id)
+  return Array.from(new Set([first, ...rest].filter(Boolean) as string[]))
+}
+
+/** Render with a single specific model; returns the URL and any failure reason. */
+async function renderWithModel(
+  id: string,
+  prompt: string,
+  aspectRatio: AspectRatio,
+): Promise<{ url: string | null; error?: string }> {
+  const model = getImageModel(id)
+  if (!model) return { url: null, error: `Unknown image model "${id}"` }
+  if (model.provider === 'gemini') return generateGeminiImage(prompt, aspectRatio)
+  if (model.provider === 'openai') return generateOpenAIImage(prompt, aspectRatio)
+  if (model.provider === 'fal') return generateFalImage(prompt, aspectRatio)
+  if (model.provider === 'higgsfield') {
+    const url = await higgsfieldImage(prompt, aspectRatio)
+    return { url, error: url ? undefined : 'Higgsfield returned no image' }
+  }
+  return { url: null, error: `No renderer for provider "${model.provider}"` }
+}
+
 export interface GeneratedImage {
   imageUrl: string
   modelId: string
@@ -65,26 +95,21 @@ export async function generateImageDetailed(
   prompt: string,
   aspectRatio: AspectRatio = '1:1',
 ): Promise<ImageAttempt> {
-  const id = resolveModelId(modelId)
-  if (!id) return { image: null, error: 'No image provider is configured' }
-  const model = getImageModel(id)
-  if (!model) return { image: null, error: `Unknown image model "${modelId}"` }
+  const candidates = candidateModelIds(modelId)
+  if (candidates.length === 0) return { image: null, error: 'No image provider is configured' }
 
-  let imageUrl: string | null = null
-  let error: string | undefined
-  if (model.provider === 'gemini') imageUrl = await generateGeminiImage(prompt, aspectRatio)
-  else if (model.provider === 'openai') imageUrl = await generateOpenAIImage(prompt, aspectRatio)
-  else if (model.provider === 'higgsfield') imageUrl = await higgsfieldImage(prompt, aspectRatio)
-  else if (model.provider === 'fal') {
-    const r = await generateFalImage(prompt, aspectRatio)
-    imageUrl = r.url
-    error = r.error
+  const errors: string[] = []
+  for (const id of candidates) {
+    const model = getImageModel(id)
+    if (!model) continue
+    const { url, error } = await renderWithModel(id, prompt, aspectRatio)
+    if (url) {
+      return { image: { imageUrl: url, modelId: id, provider: model.provider } }
+    }
+    errors.push(`${model.label}: ${error ?? 'no image'}`)
   }
 
-  if (!imageUrl) {
-    return { image: null, error: error ?? `${model.label} returned no image` }
-  }
-  return { image: { imageUrl, modelId: id, provider: model.provider } }
+  return { image: null, error: errors.join(' · ') || 'All image providers failed' }
 }
 
 /** Generate a still with the chosen model (or the best available). */
