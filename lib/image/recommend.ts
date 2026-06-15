@@ -37,15 +37,18 @@ export function recommendImageModel(
     ? [
         { id: 'openai-gpt-image', reason: 'best legible text rendering for headline/static ads' },
         { id: 'nano-banana', reason: 'fast high-quality creative variants' },
+        { id: 'fal-flux', reason: 'photoreal stills in-house via one fal key' },
         { id: 'higgsfield-soul', reason: 'premium photographic look' },
       ]
     : wantsPhoto
       ? [
+          { id: 'fal-flux', reason: 'photoreal founder/testimonial stills in-house via one fal key' },
           { id: 'higgsfield-soul', reason: 'premium photographic look for founder/testimonial ads' },
           { id: 'nano-banana', reason: 'fast high-quality realism' },
           { id: 'openai-gpt-image', reason: 'precise prompt adherence' },
         ]
       : [
+          { id: 'fal-flux', reason: 'photoreal variants in-house via one fal key' },
           { id: 'nano-banana', reason: 'fast, high-quality variant generation' },
           { id: 'higgsfield-soul', reason: 'premium photographic look' },
           { id: 'openai-gpt-image', reason: 'strong text rendering' },

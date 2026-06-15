@@ -1,6 +1,7 @@
 import { generateImage as higgsfieldImage, higgsfieldConfigured } from '@/lib/higgsfield'
 import { generateGeminiImage, geminiConfigured } from './gemini'
 import { generateOpenAIImage, openaiImageConfigured } from './openai'
+import { generateFalImage, falImageConfigured } from './fal'
 import { DEFAULT_IMAGE_MODEL, IMAGE_MODELS, getImageModel } from './registry'
 import type { AspectRatio, ImageModelAvailability } from './types'
 
@@ -17,12 +18,15 @@ export function providerConfigured(provider: string): boolean {
   if (provider === 'gemini') return geminiConfigured()
   if (provider === 'openai') return openaiImageConfigured()
   if (provider === 'higgsfield') return higgsfieldConfigured()
+  if (provider === 'fal') return falImageConfigured()
   return false
 }
 
 /** True if ANY image provider is configured. */
 export function imageConfigured(): boolean {
-  return geminiConfigured() || openaiImageConfigured() || higgsfieldConfigured()
+  return (
+    geminiConfigured() || openaiImageConfigured() || higgsfieldConfigured() || falImageConfigured()
+  )
 }
 
 /** The image model menu annotated with whether each model's key is present. */
@@ -61,6 +65,7 @@ export async function generateImageWith(
   if (model.provider === 'gemini') imageUrl = await generateGeminiImage(prompt, aspectRatio)
   else if (model.provider === 'openai') imageUrl = await generateOpenAIImage(prompt, aspectRatio)
   else if (model.provider === 'higgsfield') imageUrl = await higgsfieldImage(prompt, aspectRatio)
+  else if (model.provider === 'fal') imageUrl = await generateFalImage(prompt, aspectRatio)
 
   if (!imageUrl) return null
   return { imageUrl, modelId: id, provider: model.provider }

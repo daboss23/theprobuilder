@@ -7,6 +7,14 @@ import type { ImageModel } from './types'
 
 export const IMAGE_MODELS: ImageModel[] = [
   {
+    id: 'fal-flux',
+    label: 'FLUX.1 (fal)',
+    provider: 'fal',
+    aspectRatios: ['1:1', '9:16', '16:9'],
+    tier: 'flagship',
+    notes: 'Photoreal humans and scenes via fal — one FAL_KEY, no per-model subscription. Great for realistic UGC and B-roll stills.',
+  },
+  {
     id: 'nano-banana',
     label: 'Nano Banana 2 (Gemini)',
     provider: 'gemini',

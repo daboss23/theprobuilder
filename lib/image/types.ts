@@ -6,7 +6,7 @@
 
 export type AspectRatio = '1:1' | '9:16' | '16:9'
 
-export type ImageProvider = 'gemini' | 'openai' | 'higgsfield'
+export type ImageProvider = 'gemini' | 'openai' | 'higgsfield' | 'fal'
 
 export type ModelTier = 'flagship' | 'fast' | 'budget'
 
