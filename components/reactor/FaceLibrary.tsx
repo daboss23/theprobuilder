@@ -11,9 +11,12 @@ export interface Face {
 }
 
 /**
- * In-house UGC face roster. Drag-and-drop (or click) to upload reference assets
- * to Supabase Storage, pick which to use, and the selected URLs flow up to the
- * Reactor for Seedance 2.0 reference-to-video (consistent character across clips).
+ * In-house UGC reference library. Drag-and-drop (or click) to upload reference
+ * assets to Supabase Storage, pick which to use, and the selected URLs flow up
+ * to the Reactor for Seedance 2.0 reference-to-video. The reference can be
+ * anything that should stay visually consistent across clips — a person /
+ * character, a specific home or build, an interior, a material/style palette,
+ * or the look pulled from a reference video.
  */
 export function FaceLibrary({
   onChange,
@@ -100,16 +103,16 @@ export function FaceLibrary({
   return (
     <div className="mt-4 rounded-lg border border-border bg-surface/30 p-3">
       <p className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-white/40">
-        <Users size={12} /> Face Library — In-House UGC
+        <Users size={12} /> Reference Library — In-House UGC
       </p>
       <p className="mt-1 text-[11px] text-white/35">
-        Add up to 9 reference images and up to 3 reference videos to lock a consistent character
-        across clips.
+        Add up to 9 reference images and up to 3 reference videos to lock anything consistent across
+        clips — a person, a specific home/build, an interior, a material palette, or a video look.
       </p>
 
       {!configured && (
         <p className="mt-2 rounded-lg border border-warning/30 bg-warning/[0.06] p-2 text-[11px] text-warning">
-          Connect Supabase (URL + service role key) to save a face roster.
+          Connect Supabase (URL + service role key) to save a reference library.
         </p>
       )}
 
@@ -137,7 +140,7 @@ export function FaceLibrary({
         ) : (
           <UploadCloud size={16} />
         )}
-        {uploading ? 'Uploading…' : 'Drag & drop faces / clips, or click to upload'}
+        {uploading ? 'Uploading…' : 'Drag & drop references (people, homes, interiors, clips), or click to upload'}
       </button>
       <input
         ref={inputRef}
@@ -203,7 +206,7 @@ export function FaceLibrary({
       <p className="mt-2 text-[11px] text-white/35">
         {selectedCount > 0
           ? `${selectedCount} selected → use “Generate UGC” on any video concept after firing.`
-          : 'Select faces, then use “Generate UGC” on a video concept.'}
+          : 'Select references, then use “Generate UGC” on a video concept.'}
       </p>
     </div>
   )
