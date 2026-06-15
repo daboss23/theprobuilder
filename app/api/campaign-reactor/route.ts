@@ -2,7 +2,7 @@ import Anthropic from '@anthropic-ai/sdk'
 import { NextRequest } from 'next/server'
 import { searchKnowledge, type KnowledgeSystem } from '@/lib/knowledge'
 import { learnings } from '@/lib/reactor-data'
-import { generateImage, higgsfieldConfigured, type AspectRatio } from '@/lib/higgsfield'
+import { generateImageWith, imageConfigured, listImageModels, type AspectRatio } from '@/lib/image'
 import {
   startVideoJob,
   listVideoModels,
@@ -31,6 +31,7 @@ interface ReactorRequest {
   outputs?: string[]
   builderId?: string | null
   videoModel?: string | null
+  imageModel?: string | null
 }
 
 interface Concept {
@@ -98,6 +99,9 @@ function buildTools(
   const videoModelIds = listVideoModels()
     .filter((m) => m.configured)
     .map((m) => m.id)
+  const imageModelIds = listImageModels()
+    .filter((m) => m.configured)
+    .map((m) => m.id)
   const tools: Anthropic.Beta.Messages.BetaToolUnion[] = [
     {
       name: 'consult_specialist',
@@ -128,12 +132,18 @@ function buildTools(
     tools.push({
       name: 'generate_image',
       description:
-        'Generate a still ad creative with Higgsfield for a visual concept (e.g. Static Concept, Founder Concept, Campaign Concept). Returns the image URL, which also appears on the concept card in the Reactor. Call this for visual concepts before submitting them, and pass the imageUrl into that concept.',
+        'Generate a still ad creative for a visual concept (e.g. Static Concept, Founder Concept, Campaign Concept). Returns the image URL, which also appears on the concept card in the Reactor. Call this for visual concepts before submitting them, and pass the imageUrl into that concept.',
       input_schema: {
         type: 'object',
         properties: {
           prompt: { type: 'string', description: 'A vivid, specific image prompt for the creative.' },
           conceptType: { type: 'string', description: 'The output type this image is for (must match the concept type you will submit).' },
+          model: {
+            type: 'string',
+            enum: imageModelIds.length ? imageModelIds : ['nano-banana'],
+            description:
+              'Image model: nano-banana = fast high-quality variants; openai-gpt-image = best legible text-in-image; higgsfield-soul = premium photographic ad look.',
+          },
           aspectRatio: { type: 'string', enum: ['1:1', '9:16', '16:9'], description: 'Defaults to 1:1.' },
         },
         required: ['prompt', 'conceptType'],
@@ -211,14 +221,20 @@ function coordinatorPrompt(
     image: boolean
     video: boolean
     videoModels: string[]
+    imageModels: string[]
     preferredVideoModel?: string | null
+    preferredImageModel?: string | null
   },
 ): string {
   const metaAdsLine = caps.metaAds
     ? '\n- You also have live Meta Ads tools (meta_ads). Use them to ground concepts in what is actually performing — pull recent campaign/ad performance, top creatives, and spend before drafting.'
     : ''
+  const preferredImageLine =
+    caps.preferredImageModel && caps.imageModels.includes(caps.preferredImageModel)
+      ? ` The user has selected the "${caps.preferredImageModel}" image model — use it unless a concept clearly needs a different one.`
+      : ''
   const imageLine = caps.image
-    ? '\n- For visual output types (Static Concept, Founder Concept, Campaign Concept), call generate_image to produce a still creative. Pass the concept type as conceptType and include the returned imageUrl in the matching concept.'
+    ? `\n- For visual output types (Static Concept, Founder Concept, Campaign Concept), call generate_image to produce a still creative. Available models: ${caps.imageModels.join(', ')}. Pass the concept type as conceptType and include the returned imageUrl in the matching concept.${preferredImageLine}`
     : ''
   const preferredLine =
     caps.preferredVideoModel && caps.videoModels.includes(caps.preferredVideoModel)
@@ -354,14 +370,15 @@ export async function POST(request: NextRequest) {
 
         const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
         const mcpServer = metaAdsServer()
-        const useImage = higgsfieldConfigured()
+        const useImage = imageConfigured()
         const useVideo = videoConfigured()
         const availableVideoModels = listVideoModels().filter((m) => m.configured).map((m) => m.id)
+        const availableImageModels = listImageModels().filter((m) => m.configured).map((m) => m.id)
         const tools = buildTools(useImage, useVideo, Boolean(mcpServer))
 
         sse(controller, { type: 'step', text: 'Coordinator online. Briefing the specialist team…' })
         if (mcpServer) sse(controller, { type: 'step', text: 'Live Meta Ads performance feed connected.' })
-        if (useImage) sse(controller, { type: 'step', text: 'Higgsfield image engine ready.' })
+        if (useImage) sse(controller, { type: 'step', text: `Image engine ready · models: ${availableImageModels.join(', ')}` })
         if (useVideo) sse(controller, { type: 'step', text: `Video engine ready · models: ${availableVideoModels.join(', ')}` })
 
         const messages: Anthropic.Beta.Messages.BetaMessageParam[] = [
@@ -380,7 +397,9 @@ export async function POST(request: NextRequest) {
               image: useImage,
               video: useVideo,
               videoModels: availableVideoModels,
+              imageModels: availableImageModels,
               preferredVideoModel: body.videoModel ?? null,
+              preferredImageModel: body.imageModel ?? null,
             }),
             tools,
             messages,
@@ -437,19 +456,30 @@ export async function POST(request: NextRequest) {
                 content: learnings.map((l) => `• ${l.insight} — ${l.recommendation} (evidence: ${l.evidence})`).join('\n'),
               })
             } else if (tu.name === 'generate_image') {
-              const { prompt, conceptType, aspectRatio } = tu.input as {
+              const { prompt, conceptType, aspectRatio, model } = tu.input as {
                 prompt: string
                 conceptType?: string
                 aspectRatio?: AspectRatio
+                model?: string
               }
               sse(controller, {
                 type: 'step',
-                text: `Generating still creative via Higgsfield${conceptType ? ` · ${conceptType}` : ''}…`,
+                text: `Generating still creative via ${model ?? 'default model'}${conceptType ? ` · ${conceptType}` : ''}…`,
               })
-              const url = await generateImage(prompt, aspectRatio ?? '1:1')
-              if (url) {
-                sse(controller, { type: 'media', mediaType: 'image', conceptType: conceptType ?? '', url })
-                results.push({ type: 'tool_result', tool_use_id: tu.id, content: JSON.stringify({ imageUrl: url }) })
+              const result = await generateImageWith(model, prompt, aspectRatio ?? '1:1')
+              if (result) {
+                sse(controller, {
+                  type: 'media',
+                  mediaType: 'image',
+                  conceptType: conceptType ?? '',
+                  model: result.modelId,
+                  url: result.imageUrl,
+                })
+                results.push({
+                  type: 'tool_result',
+                  tool_use_id: tu.id,
+                  content: JSON.stringify({ imageUrl: result.imageUrl, model: result.modelId }),
+                })
               } else {
                 results.push({
                   type: 'tool_result',

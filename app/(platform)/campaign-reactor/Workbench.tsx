@@ -6,6 +6,8 @@ import { Panel, PanelHeader, Pill } from '@/components/reactor/ui'
 import { reactorInputs, reactorOutputTypes, winningAngles } from '@/lib/reactor-data'
 import { recommendVideoModel } from '@/lib/video/recommend'
 import type { ModelAvailability } from '@/lib/video/types'
+import { recommendImageModel } from '@/lib/image/recommend'
+import type { ImageModelAvailability } from '@/lib/image/types'
 
 interface Concept {
   type: string
@@ -44,17 +46,25 @@ export function Workbench() {
   const [agentMedia, setAgentMedia] = useState<Record<string, { image?: string; video?: VideoUiState }>>({})
   // Manually triggered "Animate" renders, keyed by concept text.
   const [manualVideos, setManualVideos] = useState<Record<string, VideoUiState>>({})
-  // Available video models (from the API) + the user's pick ('auto' = recommended).
+  // Available models (from the API) + the user's pick ('auto' = recommended).
   const [videoModels, setVideoModels] = useState<ModelAvailability[]>([])
   const [videoModel, setVideoModel] = useState<string>('auto')
+  const [imageModels, setImageModels] = useState<ImageModelAvailability[]>([])
+  const [imageModel, setImageModel] = useState<string>('auto')
   const feedRef = useRef<HTMLDivElement>(null)
 
-  // Load the video model menu once so the user can pick (and we can recommend).
+  // Load the model menus once so the user can pick (and we can recommend).
   useEffect(() => {
     fetch('/api/video/models')
       .then((r) => r.json())
       .then((d) => {
         if (Array.isArray(d.models)) setVideoModels(d.models as ModelAvailability[])
+      })
+      .catch(() => {})
+    fetch('/api/image/models')
+      .then((r) => r.json())
+      .then((d) => {
+        if (Array.isArray(d.models)) setImageModels(d.models as ImageModelAvailability[])
       })
       .catch(() => {})
   }, [])
@@ -69,6 +79,17 @@ export function Workbench() {
   const labelFor = (id?: string | null) => videoModels.find((m) => m.id === id)?.label ?? id ?? ''
   const showVideoPicker =
     videoModels.length > 0 && outputs.some((o) => /video|founder|testimonial|event|campaign/i.test(o))
+
+  // Image model: same pattern.
+  const imageRecommendation = useMemo(
+    () => (imageModels.length ? recommendImageModel(outputs, imageModels) : null),
+    [outputs, imageModels],
+  )
+  const resolvedImageModel = imageModel === 'auto' ? imageRecommendation?.modelId : imageModel
+  const imageLabelFor = (id?: string | null) =>
+    imageModels.find((m) => m.id === id)?.label ?? id ?? ''
+  const showImagePicker =
+    imageModels.length > 0 && outputs.some((o) => /concept|static|founder|campaign|testimonial/i.test(o))
 
   const toggle = (arr: string[], set: (v: string[]) => void, val: string) =>
     set(arr.includes(val) ? arr.filter((v) => v !== val) : [...arr, val])
@@ -118,7 +139,13 @@ export function Workbench() {
       const res = await fetch('/api/campaign-reactor', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ angle, inputs: activeInputs, outputs, videoModel: resolvedVideoModel }),
+        body: JSON.stringify({
+          angle,
+          inputs: activeInputs,
+          outputs,
+          videoModel: resolvedVideoModel,
+          imageModel: resolvedImageModel,
+        }),
       })
       if (!res.body) throw new Error('No response stream')
 
@@ -194,6 +221,7 @@ export function Workbench() {
         body: JSON.stringify({
           prompt: `Meta ad creative for The Professional Builder. ${c.text} Photographic, on-site builder context, premium, high contrast, leave room for text overlay.`,
           aspectRatio: '1:1',
+          model: resolvedImageModel,
         }),
       }).then((r) => r.json())
 
@@ -331,6 +359,43 @@ export function Workbench() {
               )
             })}
           </div>
+
+          {showImagePicker && (
+            <div className="mt-4">
+              <p className="mb-2 flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-white/40">
+                <ImageIcon size={12} /> Image Model
+              </p>
+              <select
+                value={imageModel}
+                onChange={(e) => setImageModel(e.target.value)}
+                className="w-full rounded-lg border border-border bg-surface/60 px-3 py-2.5 text-sm text-white outline-none focus:border-glow"
+              >
+                <option value="auto" className="bg-card">
+                  Auto — recommended
+                  {imageRecommendation ? ` (${imageLabelFor(imageRecommendation.modelId)})` : ''}
+                </option>
+                {imageModels.map((m) => (
+                  <option key={m.id} value={m.id} className="bg-card" disabled={!m.configured}>
+                    {m.label}
+                    {m.configured ? '' : ' — needs key'}
+                  </option>
+                ))}
+              </select>
+
+              {imageRecommendation && (
+                <div className="mt-2 flex items-start gap-1.5 rounded-lg border border-primary/20 bg-primary/[0.06] px-2.5 py-2 text-[11px] text-white/60">
+                  <Sparkles size={12} className="mt-0.5 shrink-0 text-glow" />
+                  <span>
+                    <span className="text-glow/80">Recommended:</span>{' '}
+                    {imageLabelFor(imageRecommendation.modelId)} — {imageRecommendation.reason}.
+                    {!imageRecommendation.configured && (
+                      <span className="text-warning"> Add its API key to enable.</span>
+                    )}
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
 
           {showVideoPicker && (
             <div className="mt-4">
