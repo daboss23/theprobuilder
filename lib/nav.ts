@@ -9,6 +9,7 @@ import {
   Atom,
   GraduationCap,
   Target,
+  BarChart3,
 } from 'lucide-react'
 
 export interface NavItem {
@@ -28,28 +29,5 @@ export const navItems: NavItem[] = [
   { label: 'Campaign Reactor', href: '/campaign-reactor', icon: Atom, system: '06' },
   { label: 'Creative Learnings', href: '/learnings', icon: GraduationCap, system: '07' },
   { label: 'Recommendations', href: '/recommendations', icon: Target, system: '08' },
-]
-
-/* ----------------------------------------------------------------------------
-   Agent roster shown in the sidebar console — the reactor's working crew.
----------------------------------------------------------------------------- */
-
-export type AgentAccent = 'blue' | 'cyan' | 'violet' | 'emerald' | 'pink' | 'amber'
-
-export interface SidebarAgent {
-  name: string
-  role: string
-  accent: AgentAccent
-}
-
-export const orchestratorAgent: SidebarAgent = {
-  name: 'OPUS',
-  role: 'Orchestrator',
-  accent: 'blue',
-}
-
-export const sidebarAgents: SidebarAgent[] = [
-  { name: 'NOVA', role: 'Research Agent', accent: 'emerald' },
-  { name: 'SPARK', role: 'Creative Agent', accent: 'violet' },
-  { name: 'ECHO', role: 'Copy Agent', accent: 'amber' },
+  { label: 'Meta Intelligence', href: '/meta', icon: BarChart3, system: '09' },
 ]
