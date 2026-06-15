@@ -13,8 +13,8 @@ import type { AspectRatio } from './types'
 
 const RUN_BASE = 'https://fal.run'
 
-// Env-overridable so a fal model rename is a variable change, not a code change.
-const FAL_IMAGE_MODEL = process.env.FAL_IMAGE_MODEL || 'fal-ai/flux/dev'
+// Env-overridable fallback so a fal model rename is a variable change, not a code change.
+const DEFAULT_FAL_IMAGE_ENDPOINT = process.env.FAL_IMAGE_MODEL || 'fal-ai/flux/dev'
 
 function falKey(): string | undefined {
   return process.env.FAL_KEY || process.env.FAL_API_KEY
@@ -39,11 +39,12 @@ export interface FalImageResult {
 export async function generateFalImage(
   prompt: string,
   aspectRatio: AspectRatio = '1:1',
+  endpoint: string = DEFAULT_FAL_IMAGE_ENDPOINT,
 ): Promise<FalImageResult> {
   if (!falImageConfigured()) return { url: null, error: 'FAL_KEY is not set' }
   if (!prompt) return { url: null, error: 'Empty prompt' }
   try {
-    const res = await fetch(`${RUN_BASE}/${FAL_IMAGE_MODEL}`, {
+    const res = await fetch(`${RUN_BASE}/${endpoint}`, {
       method: 'POST',
       headers: {
         Authorization: `Key ${falKey()}`,
@@ -59,7 +60,7 @@ export async function generateFalImage(
     if (!res.ok) {
       const body = (await res.text()).slice(0, 400)
       console.error('fal image failed:', res.status, body)
-      return { url: null, error: `fal ${FAL_IMAGE_MODEL} → HTTP ${res.status}: ${body || res.statusText}` }
+      return { url: null, error: `fal ${endpoint} → HTTP ${res.status}: ${body || res.statusText}` }
     }
     const data = (await res.json()) as {
       images?: { url?: string }[]
