@@ -30,6 +30,7 @@ interface ReactorRequest {
   inputs?: string[]
   outputs?: string[]
   builderId?: string | null
+  videoModel?: string | null
 }
 
 interface Concept {
@@ -205,7 +206,13 @@ function buildTools(
 
 function coordinatorPrompt(
   outputs: string[],
-  caps: { metaAds: boolean; image: boolean; video: boolean; videoModels: string[] },
+  caps: {
+    metaAds: boolean
+    image: boolean
+    video: boolean
+    videoModels: string[]
+    preferredVideoModel?: string | null
+  },
 ): string {
   const metaAdsLine = caps.metaAds
     ? '\n- You also have live Meta Ads tools (meta_ads). Use them to ground concepts in what is actually performing — pull recent campaign/ad performance, top creatives, and spend before drafting.'
@@ -213,8 +220,12 @@ function coordinatorPrompt(
   const imageLine = caps.image
     ? '\n- For visual output types (Static Concept, Founder Concept, Campaign Concept), call generate_image to produce a still creative. Pass the concept type as conceptType and include the returned imageUrl in the matching concept.'
     : ''
+  const preferredLine =
+    caps.preferredVideoModel && caps.videoModels.includes(caps.preferredVideoModel)
+      ? ` The user has selected the "${caps.preferredVideoModel}" model — use it for every generate_video call unless a shot clearly needs a different capability.`
+      : ''
   const videoLine = caps.video
-    ? `\n- For video output types (Video Concept, Founder Concept, Testimonial Concept), call generate_video. Available models: ${caps.videoModels.join(', ')}. Use text-to-video to direct a full scene (e.g. a real builder on-site, a member speaking to camera — use veo-3 when they speak so it has audio; seedance-2.0 or kling-2.5 for cinematic action). Use image-to-video to animate a still from generate_image. Match conceptType to the concept you submit.`
+    ? `\n- For video output types (Video Concept, Founder Concept, Testimonial Concept), call generate_video. Available models: ${caps.videoModels.join(', ')}. Use text-to-video to direct a full scene (e.g. a real builder on-site, a member speaking to camera — use veo-3 when they speak so it has audio; seedance-2.0 or kling-2.5 for cinematic action). Use image-to-video to animate a still from generate_image. Match conceptType to the concept you submit.${preferredLine}`
     : ''
 
   return `You are the Campaign Reactor Coordinator — the lead strategist of The Professional Builder's Creative Intelligence Command Center. You direct a team of specialist sub-agents.
@@ -369,6 +380,7 @@ export async function POST(request: NextRequest) {
               image: useImage,
               video: useVideo,
               videoModels: availableVideoModels,
+              preferredVideoModel: body.videoModel ?? null,
             }),
             tools,
             messages,
