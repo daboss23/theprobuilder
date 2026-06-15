@@ -1,28 +1,92 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { Atom, ChevronLeft, ChevronRight, X } from 'lucide-react'
 import {
-  angleOptions,
-  audienceOptions,
-  awarenessOptions,
-  createDefaultInputs,
-  offerOptions,
-  outputTypeOptions,
-  type ReactorInputs,
-} from '@/lib/reactor-inputs'
+  Atom,
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  Clapperboard,
+  ImageIcon,
+  Loader2,
+  Sparkles,
+  X,
+} from 'lucide-react'
+import { FaceLibrary } from '@/components/reactor/FaceLibrary'
+import type { DirectiveOption } from '@/lib/reactor-inputs'
+import type { ModelAvailability } from '@/lib/video/types'
+import type { ImageModelAvailability } from '@/lib/image/types'
 
-const ORANGE = '#FF5E3A'
+const STEP_LABELS = [
+  'Campaign Brief',
+  'Audience + Offer',
+  'Intelligence + Models',
+  'On Brand',
+  'Ready To Fire',
+] as const
 
-const STEP_LABELS = ['Campaign Brief', 'Audience + Offer', 'On Brand', 'Ready To Fire'] as const
+interface ModelRec {
+  modelId: string
+  reason: string
+  configured: boolean
+}
+
+// Everything the modal needs to render the full input set lives in Workbench
+// state and is threaded through here so the manual controls keep their existing
+// recommendation / reference-library wiring.
+export interface ReactorForm {
+  // Slide 1 — brief, angle, outputs
+  brief: string
+  setBrief: (v: string) => void
+  angleOptions: string[]
+  angle: string
+  setAngle: (v: string) => void
+  outputTypeList: string[]
+  outputs: string[]
+  toggleOutput: (v: string) => void
+  // Slide 2 — awareness, audience, offer
+  awarenessOptions: DirectiveOption[]
+  awareness: DirectiveOption
+  setAwareness: (v: DirectiveOption) => void
+  audienceOptions: DirectiveOption[]
+  audience: DirectiveOption
+  setAudience: (v: DirectiveOption) => void
+  offerOptions: DirectiveOption[]
+  offer: DirectiveOption
+  setOffer: (v: DirectiveOption) => void
+  offerName: string
+  setOfferName: (v: string) => void
+  // Slide 3 — intelligence inputs + models + reference library
+  intelligenceInputs: string[]
+  activeInputs: string[]
+  toggleInput: (v: string) => void
+  imageModels: ImageModelAvailability[]
+  imageModel: string
+  setImageModel: (v: string) => void
+  imageRecommendation: ModelRec | null
+  showImagePicker: boolean
+  videoModels: ModelAvailability[]
+  videoModel: string
+  setVideoModel: (v: string) => void
+  videoRecommendation: ModelRec | null
+  showVideoPicker: boolean
+  onFaceChange: (images: string[], videos: string[]) => void
+  refCount: number
+  // Slide 4 — on brand
+  onBrand: boolean
+  setOnBrand: (v: boolean) => void
+  // Agent pre-selection — which fields the strategist has already chosen, and
+  // whether it is currently thinking.
+  agentPicked: Record<string, boolean>
+  suggesting: boolean
+}
 
 interface ReactorModalProps {
   open: boolean
   onClose: () => void
-  onFire: (inputs: ReactorInputs) => void
+  onFire: () => void
+  form: ReactorForm
 }
-
-/* ----------------------------- Shared fields ------------------------------ */
 
 function FieldLabel({ children }: { children: React.ReactNode }) {
   return (
@@ -32,43 +96,59 @@ function FieldLabel({ children }: { children: React.ReactNode }) {
   )
 }
 
+// Label for an agent-assisted field — shows that the strategist has already
+// chosen (overridable), or that it is still thinking.
+function AgentFieldLabel({
+  children,
+  picked,
+  thinking,
+}: {
+  children: React.ReactNode
+  picked?: boolean
+  thinking?: boolean
+}) {
+  return (
+    <div className="mb-1.5 flex items-center gap-2">
+      <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-white/40">{children}</p>
+      {picked ? (
+        <span className="inline-flex items-center gap-1 rounded-full border border-[#FF5E3A]/40 bg-[#FF5E3A]/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-[#FF5E3A]">
+          <Sparkles size={9} /> Agent&apos;s pick
+        </span>
+      ) : thinking ? (
+        <span className="inline-flex items-center gap-1 text-[9px] uppercase tracking-wide text-white/35">
+          <Loader2 size={9} className="animate-spin" /> choosing…
+        </span>
+      ) : null}
+    </div>
+  )
+}
+
 const selectClass =
   'w-full rounded-lg border border-border bg-surface/60 px-3 py-2.5 text-sm text-white outline-none focus:border-[#FF5E3A]/60'
 
-export function ReactorModal({ open, onClose, onFire }: ReactorModalProps) {
-  const [inputs, setInputs] = useState<ReactorInputs>(createDefaultInputs)
+export function ReactorModal({ open, onClose, onFire, form }: ReactorModalProps) {
   const [step, setStep] = useState(1)
-  const [showOutputs, setShowOutputs] = useState(false)
 
-  // Reset to a clean slate every time the modal opens.
   useEffect(() => {
-    if (open) {
-      setInputs(createDefaultInputs())
-      setStep(1)
-      setShowOutputs(false)
-    }
+    if (open) setStep(1)
   }, [open])
 
-  const dirty = useMemo(() => {
-    const d = createDefaultInputs()
-    return (
-      inputs.brief !== d.brief ||
-      inputs.angle !== d.angle ||
-      inputs.outputTypes.length > 0 ||
-      inputs.awarenessStage !== d.awarenessStage ||
-      inputs.audienceType !== d.audienceType ||
-      inputs.offerType !== d.offerType ||
-      inputs.offerName !== d.offerName ||
-      inputs.onBrandEnabled !== d.onBrandEnabled
-    )
-  }, [inputs])
+  const dirty = useMemo(
+    () =>
+      form.brief.trim() !== '' ||
+      form.offerName.trim() !== '' ||
+      form.awareness !== form.awarenessOptions[0] ||
+      form.audience !== form.audienceOptions[0] ||
+      form.offer !== form.offerOptions[0] ||
+      form.onBrand === false,
+    [form],
+  )
 
   const requestClose = () => {
     if (dirty && !window.confirm('Discard inputs and close?')) return
     onClose()
   }
 
-  // ESC closes (with the dirty-state guard).
   useEffect(() => {
     if (!open) return
     const onKey = (e: KeyboardEvent) => {
@@ -81,23 +161,18 @@ export function ReactorModal({ open, onClose, onFire }: ReactorModalProps) {
 
   if (!open) return null
 
-  const set = (patch: Partial<ReactorInputs>) => setInputs((p) => ({ ...p, ...patch }))
-
-  const toggleOutput = (o: string) => {
-    setInputs((p) => {
-      const next = p.outputTypes.includes(o)
-        ? p.outputTypes.filter((v) => v !== o)
-        : [...p.outputTypes, o]
-      return { ...p, outputTypes: next, outputTypesAgentDecided: next.length === 0 }
-    })
-  }
-
   const fire = () => {
     onClose()
-    onFire(inputs)
+    onFire()
   }
 
-  const progress = step * 25
+  const imageLabelFor = (id?: string | null) =>
+    form.imageModels.find((m) => m.id === id)?.label ?? id ?? ''
+  const videoLabelFor = (id?: string | null) =>
+    form.videoModels.find((m) => m.id === id)?.label ?? id ?? ''
+
+  const agentDecidesAngle = form.angle === form.angleOptions[0]
+  const progress = (step / 5) * 100
 
   return (
     <div
@@ -119,7 +194,7 @@ export function ReactorModal({ open, onClose, onFire }: ReactorModalProps) {
         <div className="flex items-center justify-between gap-3 border-b border-border px-5 py-4">
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-1.5">
-              {[1, 2, 3, 4].map((n) => {
+              {[1, 2, 3, 4, 5].map((n) => {
                 const state = n === step ? 'active' : n < step ? 'done' : 'upcoming'
                 return (
                   <button
@@ -155,7 +230,7 @@ export function ReactorModal({ open, onClose, onFire }: ReactorModalProps) {
         </div>
 
         {/* Body */}
-        <div className="max-h-[60vh] overflow-y-auto px-5 py-5">
+        <div className="max-h-[62vh] overflow-y-auto px-5 py-5">
           {step === 1 && (
             <div className="animate-fade-up space-y-4">
               <div>
@@ -165,124 +240,115 @@ export function ReactorModal({ open, onClose, onFire }: ReactorModalProps) {
                   the agent reads this first.
                 </p>
                 <textarea
-                  value={inputs.brief}
-                  onChange={(e) => set({ brief: e.target.value })}
+                  value={form.brief}
+                  onChange={(e) => form.setBrief(e.target.value)}
                   placeholder={`e.g. "Targeting operators $1.5M–$3M still on the tools. Lead with Jason — 14 months, off tools, margin up. Want identity shift, not another hustle ad."`}
                   className="h-[90px] w-full resize-none rounded-lg border border-border bg-surface/60 px-3 py-2.5 text-sm text-white outline-none focus:border-[#FF5E3A]/60"
                 />
               </div>
 
               <div>
-                <FieldLabel>Campaign Angle</FieldLabel>
+                <AgentFieldLabel picked={form.agentPicked.angle} thinking={form.suggesting}>
+                  Campaign Angle
+                </AgentFieldLabel>
                 <select
-                  value={inputs.angle}
-                  onChange={(e) =>
-                    set({
-                      angle: e.target.value,
-                      angleIsAgentDecided: e.target.value === angleOptions[0],
-                    })
-                  }
+                  value={form.angle}
+                  onChange={(e) => form.setAngle(e.target.value)}
                   className={selectClass}
                 >
-                  {angleOptions.map((a) => (
+                  {form.angleOptions.map((a, i) => (
                     <option key={a} value={a} className="bg-card">
-                      {a === angleOptions[0] ? 'Agent decides (default)' : a}
+                      {i === 0 ? 'Agent’s choice' : a}
                     </option>
                   ))}
                 </select>
               </div>
 
               <div>
-                <button
-                  type="button"
-                  onClick={() => setShowOutputs((v) => !v)}
-                  className="flex items-center gap-1 text-[11px] font-medium uppercase tracking-[0.08em] text-white/40 transition-colors hover:text-white/70"
-                >
-                  <ChevronRight
-                    size={12}
-                    className={`transition-transform ${showOutputs ? 'rotate-90' : ''}`}
-                  />
-                  Advanced: choose output types
-                </button>
-                {showOutputs && (
-                  <div className="mt-3">
-                    <FieldLabel>Output Types (leave blank for agent to decide)</FieldLabel>
-                    <div className="flex flex-wrap gap-1.5">
-                      {outputTypeOptions.map((o) => {
-                        const on = inputs.outputTypes.includes(o)
-                        return (
-                          <button
-                            key={o}
-                            type="button"
-                            onClick={() => toggleOutput(o)}
-                            className={`rounded-full border px-2.5 py-1 text-[11px] transition-colors ${
-                              on
-                                ? 'border-[#FF5E3A] bg-[#FF5E3A]/10 text-[#FF5E3A]'
-                                : 'border-border text-white/40 hover:text-white/60'
-                            }`}
-                          >
-                            {o}
-                          </button>
-                        )
-                      })}
-                    </div>
-                  </div>
-                )}
+                <FieldLabel>Output Types (leave none for agent to decide)</FieldLabel>
+                <div className="flex flex-wrap gap-1.5">
+                  {form.outputTypeList.map((o) => {
+                    const on = form.outputs.includes(o)
+                    return (
+                      <button
+                        key={o}
+                        type="button"
+                        onClick={() => form.toggleOutput(o)}
+                        className={`rounded-full border px-2.5 py-1 text-[11px] transition-colors ${
+                          on
+                            ? 'border-[#FF5E3A] bg-[#FF5E3A]/10 text-[#FF5E3A]'
+                            : 'border-border text-white/40 hover:text-white/60'
+                        }`}
+                      >
+                        {o}
+                      </button>
+                    )
+                  })}
+                </div>
               </div>
             </div>
           )}
 
           {step === 2 && (
             <div className="animate-fade-up space-y-4">
+              <p className="rounded-lg border border-[#FF5E3A]/25 bg-[#FF5E3A]/[0.06] px-3 py-2 text-[11px] leading-relaxed text-white/55">
+                The strategist has already set these from your brief. Change any of them — your pick
+                stays locked.
+              </p>
               <div>
-                <FieldLabel>Awareness Stage</FieldLabel>
+                <AgentFieldLabel picked={form.agentPicked.awareness} thinking={form.suggesting}>
+                  Awareness Stage
+                </AgentFieldLabel>
                 <select
-                  value={inputs.awarenessStage}
-                  onChange={(e) => {
-                    const opt = awarenessOptions.find((o) => o.label === e.target.value)!
-                    set({ awarenessStage: opt.label, awarenessDirective: opt.directive })
-                  }}
+                  value={form.awareness.label}
+                  onChange={(e) =>
+                    form.setAwareness(
+                      form.awarenessOptions.find((o) => o.label === e.target.value)!,
+                    )
+                  }
                   className={selectClass}
                 >
-                  {awarenessOptions.map((o, i) => (
+                  {form.awarenessOptions.map((o, i) => (
                     <option key={o.label} value={o.label} className="bg-card">
-                      {i === 0 ? 'Agent decides — based on brief and angle' : o.label}
+                      {i === 0 ? 'Agent’s choice' : o.label}
                     </option>
                   ))}
                 </select>
               </div>
 
               <div>
-                <FieldLabel>Audience Type</FieldLabel>
+                <AgentFieldLabel picked={form.agentPicked.audience} thinking={form.suggesting}>
+                  Audience Type
+                </AgentFieldLabel>
                 <select
-                  value={inputs.audienceType}
-                  onChange={(e) => {
-                    const opt = audienceOptions.find((o) => o.label === e.target.value)!
-                    set({ audienceType: opt.label, audienceDirective: opt.directive })
-                  }}
+                  value={form.audience.label}
+                  onChange={(e) =>
+                    form.setAudience(form.audienceOptions.find((o) => o.label === e.target.value)!)
+                  }
                   className={selectClass}
                 >
-                  {audienceOptions.map((o, i) => (
+                  {form.audienceOptions.map((o, i) => (
                     <option key={o.label} value={o.label} className="bg-card">
-                      {i === 0 ? 'Agent decides — based on brief and angle' : o.label}
+                      {i === 0 ? 'Agent’s choice' : o.label}
                     </option>
                   ))}
                 </select>
               </div>
 
               <div>
-                <FieldLabel>Offer Type</FieldLabel>
+                <AgentFieldLabel picked={form.agentPicked.offer} thinking={form.suggesting}>
+                  Offer Type
+                </AgentFieldLabel>
                 <select
-                  value={inputs.offerType}
-                  onChange={(e) => {
-                    const opt = offerOptions.find((o) => o.label === e.target.value)!
-                    set({ offerType: opt.label, offerTypeDirective: opt.directive })
-                  }}
+                  value={form.offer.label}
+                  onChange={(e) =>
+                    form.setOffer(form.offerOptions.find((o) => o.label === e.target.value)!)
+                  }
                   className={selectClass}
                 >
-                  {offerOptions.map((o, i) => (
+                  {form.offerOptions.map((o, i) => (
                     <option key={o.label} value={o.label} className="bg-card">
-                      {i === 0 ? 'Agent decides — based on brief and angle' : o.label}
+                      {i === 0 ? 'Agent’s choice' : o.label}
                     </option>
                   ))}
                 </select>
@@ -291,8 +357,8 @@ export function ReactorModal({ open, onClose, onFire }: ReactorModalProps) {
               <div>
                 <FieldLabel>Offer Name</FieldLabel>
                 <input
-                  value={inputs.offerName}
-                  onChange={(e) => set({ offerName: e.target.value })}
+                  value={form.offerName}
+                  onChange={(e) => form.setOfferName(e.target.value)}
                   placeholder={`e.g. "The Owner Freedom Roadmap"`}
                   className={selectClass}
                 />
@@ -302,9 +368,123 @@ export function ReactorModal({ open, onClose, onFire }: ReactorModalProps) {
 
           {step === 3 && (
             <div className="animate-fade-up space-y-4">
+              <div>
+                <FieldLabel>Intelligence Inputs</FieldLabel>
+                <div className="space-y-1.5">
+                  {form.intelligenceInputs.map((i) => {
+                    const on = form.activeInputs.includes(i)
+                    return (
+                      <button
+                        key={i}
+                        type="button"
+                        onClick={() => form.toggleInput(i)}
+                        className={`flex w-full items-center justify-between rounded-lg border px-3 py-2 text-sm transition-all ${
+                          on
+                            ? 'border-primary/30 bg-primary/10 text-white'
+                            : 'border-border bg-surface/30 text-white/45'
+                        }`}
+                      >
+                        {i}
+                        <span
+                          className={`grid h-4 w-4 place-items-center rounded ${
+                            on ? 'bg-glow text-background' : 'border border-border'
+                          }`}
+                        >
+                          {on && <Check size={11} />}
+                        </span>
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+
+              {form.showImagePicker && (
+                <div>
+                  <p className="mb-1.5 flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-[0.08em] text-white/40">
+                    <ImageIcon size={12} /> Image Model
+                  </p>
+                  <select
+                    value={form.imageModel}
+                    onChange={(e) => form.setImageModel(e.target.value)}
+                    className={selectClass}
+                  >
+                    <option value="auto" className="bg-card">
+                      Auto — recommended
+                      {form.imageRecommendation
+                        ? ` (${imageLabelFor(form.imageRecommendation.modelId)})`
+                        : ''}
+                    </option>
+                    {form.imageModels.map((m) => (
+                      <option key={m.id} value={m.id} className="bg-card" disabled={!m.configured}>
+                        {m.label}
+                        {m.configured ? '' : ' — needs key'}
+                      </option>
+                    ))}
+                  </select>
+                  {form.imageRecommendation && (
+                    <div className="mt-2 flex items-start gap-1.5 rounded-lg border border-primary/20 bg-primary/[0.06] px-2.5 py-2 text-[11px] text-white/60">
+                      <Sparkles size={12} className="mt-0.5 shrink-0 text-glow" />
+                      <span>
+                        <span className="text-glow/80">Recommended:</span>{' '}
+                        {imageLabelFor(form.imageRecommendation.modelId)} —{' '}
+                        {form.imageRecommendation.reason}.
+                        {!form.imageRecommendation.configured && (
+                          <span className="text-warning"> Add its API key to enable.</span>
+                        )}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {form.showVideoPicker && (
+                <div>
+                  <p className="mb-1.5 flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-[0.08em] text-white/40">
+                    <Clapperboard size={12} /> Video Model
+                  </p>
+                  <select
+                    value={form.videoModel}
+                    onChange={(e) => form.setVideoModel(e.target.value)}
+                    className={selectClass}
+                  >
+                    <option value="auto" className="bg-card">
+                      Auto — recommended
+                      {form.videoRecommendation
+                        ? ` (${videoLabelFor(form.videoRecommendation.modelId)})`
+                        : ''}
+                    </option>
+                    {form.videoModels.map((m) => (
+                      <option key={m.id} value={m.id} className="bg-card" disabled={!m.configured}>
+                        {m.label}
+                        {m.audio ? ' · audio' : ''}
+                        {m.configured ? '' : ' — needs key'}
+                      </option>
+                    ))}
+                  </select>
+                  {form.videoRecommendation && (
+                    <div className="mt-2 flex items-start gap-1.5 rounded-lg border border-primary/20 bg-primary/[0.06] px-2.5 py-2 text-[11px] text-white/60">
+                      <Sparkles size={12} className="mt-0.5 shrink-0 text-glow" />
+                      <span>
+                        <span className="text-glow/80">Recommended:</span>{' '}
+                        {videoLabelFor(form.videoRecommendation.modelId)} —{' '}
+                        {form.videoRecommendation.reason}.
+                        {!form.videoRecommendation.configured && (
+                          <span className="text-warning"> Add its API key to enable.</span>
+                        )}
+                      </span>
+                    </div>
+                  )}
+                  <FaceLibrary onChange={form.onFaceChange} />
+                </div>
+              )}
+            </div>
+          )}
+
+          {step === 4 && (
+            <div className="animate-fade-up space-y-4">
               <button
                 type="button"
-                onClick={() => set({ onBrandEnabled: !inputs.onBrandEnabled })}
+                onClick={() => form.setOnBrand(!form.onBrand)}
                 className="flex w-full items-start justify-between gap-4 rounded-lg border border-border bg-surface/40 p-4 text-left"
               >
                 <div>
@@ -316,52 +496,86 @@ export function ReactorModal({ open, onClose, onFire }: ReactorModalProps) {
                 </div>
                 <span
                   className={`mt-0.5 flex h-6 w-11 shrink-0 items-center rounded-full p-0.5 transition-colors ${
-                    inputs.onBrandEnabled ? 'bg-[#FF5E3A]' : 'bg-white/15'
+                    form.onBrand ? 'bg-[#FF5E3A]' : 'bg-white/15'
                   }`}
                 >
                   <span
                     className={`h-5 w-5 rounded-full bg-white transition-transform ${
-                      inputs.onBrandEnabled ? 'translate-x-5' : 'translate-x-0'
+                      form.onBrand ? 'translate-x-5' : 'translate-x-0'
                     }`}
                   />
                 </span>
               </button>
               <p className="text-xs leading-relaxed text-white/40">
-                {inputs.onBrandEnabled
-                  ? 'The agent applies your brand voice, tone, and compliance rules, and selects the most relevant intelligence systems for this campaign. Image and video models are chosen automatically for each concept.'
-                  : 'Concepts will be generated without brand anchoring or stored intelligence — the brief and inputs only.'}
+                {form.onBrand
+                  ? 'The agent applies your brand voice, tone, and compliance rules throughout every concept.'
+                  : 'Concepts will be generated without brand anchoring — the brief and inputs only.'}
               </p>
             </div>
           )}
 
-          {step === 4 && (
+          {step === 5 && (
             <div className="animate-fade-up space-y-4">
               <div className="space-y-1.5 rounded-lg border border-border bg-background/60 p-4 text-sm">
-                <SummaryRow label="Angle" value={inputs.angleIsAgentDecided ? 'Agent decides' : inputs.angle} />
+                <SummaryRow label="Angle" value={agentDecidesAngle ? 'Agent decides' : form.angle} />
                 <SummaryRow
                   label="Audience"
-                  value={inputs.audienceType === audienceOptions[0].label ? 'Agent decides' : inputs.audienceType}
+                  value={
+                    form.audience === form.audienceOptions[0] ? 'Agent decides' : form.audience.label
+                  }
                 />
                 <SummaryRow
                   label="Awareness"
-                  value={inputs.awarenessStage === awarenessOptions[0].label ? 'Agent decides' : inputs.awarenessStage}
+                  value={
+                    form.awareness === form.awarenessOptions[0]
+                      ? 'Agent decides'
+                      : form.awareness.label
+                  }
                 />
                 <SummaryRow
                   label="Offer"
-                  value={inputs.offerType === offerOptions[0].label ? 'Agent decides' : inputs.offerType}
+                  value={form.offer === form.offerOptions[0] ? 'Agent decides' : form.offer.label}
                 />
-                <SummaryRow label="CTA name" value={inputs.offerName.trim() || '—'} />
-                <SummaryRow label="On Brand" value={inputs.onBrandEnabled ? 'On' : 'Off'} />
+                <SummaryRow label="CTA name" value={form.offerName.trim() || '—'} />
+                <SummaryRow label="On Brand" value={form.onBrand ? 'On' : 'Off'} />
                 <SummaryRow
                   label="Outputs"
-                  value={inputs.outputTypesAgentDecided ? 'Agent decides' : inputs.outputTypes.join(', ')}
+                  value={form.outputs.length ? form.outputs.join(', ') : 'Agent decides'}
                 />
-                {inputs.brief.trim() && (
+                <SummaryRow
+                  label="Intelligence"
+                  value={
+                    form.activeInputs.length === form.intelligenceInputs.length
+                      ? 'All systems'
+                      : form.activeInputs.join(', ') || 'None'
+                  }
+                />
+                {form.showImagePicker && (
+                  <SummaryRow
+                    label="Image model"
+                    value={
+                      form.imageModel === 'auto'
+                        ? `Auto${form.imageRecommendation ? ` (${imageLabelFor(form.imageRecommendation.modelId)})` : ''}`
+                        : imageLabelFor(form.imageModel)
+                    }
+                  />
+                )}
+                {form.showVideoPicker && (
+                  <SummaryRow
+                    label="Video model"
+                    value={
+                      form.videoModel === 'auto'
+                        ? `Auto${form.videoRecommendation ? ` (${videoLabelFor(form.videoRecommendation.modelId)})` : ''}`
+                        : videoLabelFor(form.videoModel)
+                    }
+                  />
+                )}
+                {form.brief.trim() && (
                   <div className="flex gap-3 border-t border-border pt-1.5">
                     <span className="w-24 shrink-0 text-[11px] uppercase tracking-[0.08em] text-white/35">
                       Brief
                     </span>
-                    <span className="truncate text-white/70">{inputs.brief.trim()}</span>
+                    <span className="truncate text-white/70">{form.brief.trim()}</span>
                   </div>
                 )}
               </div>
@@ -397,10 +611,10 @@ export function ReactorModal({ open, onClose, onFire }: ReactorModalProps) {
           )}
 
           <span className="text-[11px] uppercase tracking-[0.14em] text-white/35">
-            Step {step} of 4
+            Step {step} of 5
           </span>
 
-          {step < 4 ? (
+          {step < 5 ? (
             <button
               type="button"
               onClick={() => setStep((s) => s + 1)}
