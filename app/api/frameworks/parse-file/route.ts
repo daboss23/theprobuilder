@@ -24,18 +24,15 @@ export async function POST(request: NextRequest) {
 
     if (ext === 'pdf') {
       const arrayBuffer = await file.arrayBuffer()
-      const buffer = Buffer.from(arrayBuffer)
 
-      // require inside the function body defers module load until runtime,
-      // avoiding pdf-parse's worker initialisation at build time.
-      // pdf-parse v2 exports a PDFParse class (the v1 callable default is gone).
-      const { PDFParse } = require('pdf-parse') as {
-        PDFParse: new (opts: { data: Buffer }) => { getText(): Promise<{ text: string }> }
-      } // eslint-disable-line
-      const parser = new PDFParse({ data: buffer })
-      const data = await parser.getText()
+      // unpdf ships a serverless-friendly build of pdf.js that runs in Node
+      // without the browser globals (DOMMatrix/Path2D) that pdf-parse's pdf.js
+      // build assumes. Dynamic import defers the load to runtime.
+      const { extractText, getDocumentProxy } = await import('unpdf')
+      const pdf = await getDocumentProxy(new Uint8Array(arrayBuffer))
+      const { text } = await extractText(pdf, { mergePages: true })
 
-      const content = data.text
+      const content = (Array.isArray(text) ? text.join('\n') : text)
         .replace(/\n{3,}/g, '\n\n')
         .trim()
 
