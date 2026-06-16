@@ -619,6 +619,11 @@ body {
 .vault-door-overlay {
   background: #04060c;
 }
+.vault-interior-scrim {
+  background:
+    radial-gradient(120% 90% at 50% 18%, rgba(8, 16, 30, 0.35), transparent 55%),
+    linear-gradient(180deg, rgba(4, 8, 16, 0.78) 0%, rgba(4, 6, 12, 0.88) 55%, rgba(4, 6, 12, 0.95) 100%);
+}
 .vault-door-plating {
   background-image:
     linear-gradient(rgba(120, 180, 255, 0.05) 1px, transparent 1px),
