@@ -60,6 +60,10 @@ export async function POST(request: NextRequest) {
     )
   } catch (error) {
     console.error('File parse error:', error)
-    return NextResponse.json({ success: false, error: 'Failed to parse file' }, { status: 500 })
+    const detail = error instanceof Error ? error.message : ''
+    const message = detail
+      ? `Couldn't read this file — ${detail}. Try a .md or .txt export instead.`
+      : "Couldn't read this file. Try a .md or .txt export instead."
+    return NextResponse.json({ success: false, error: message }, { status: 500 })
   }
 }
