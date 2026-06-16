@@ -10,6 +10,7 @@ import {
   type GenMode,
 } from '@/lib/video'
 import { logGeneration } from '@/lib/video/persistence'
+import { outputTypeOptions, type ReactorInputs } from '@/lib/reactor-inputs'
 
 export const runtime = 'nodejs'
 export const maxDuration = 300
@@ -32,6 +33,7 @@ interface ReactorRequest {
   builderId?: string | null
   videoModel?: string | null
   imageModel?: string | null
+  reactorInputs?: ReactorInputs
 }
 
 interface Concept {
@@ -285,6 +287,99 @@ Process:
 Voice: confident, specific, builder-native. Engineered for performance.`
 }
 
+/* --------------------- Reactor modal input → prompt ----------------------- */
+
+const SOPHISTICATION_BLOCK =
+  'MARKET SOPHISTICATION: This is a highly sophisticated market. Direct claims and basic mechanism claims are exhausted. Differentiate through a named proprietary mechanism, a contrarian angle, or identification so precise the prospect feels seen. Avoid generic claims any competitor could make. If the Vault contains Unique Mechanism documents, retrieve the most relevant one for this angle and awareness stage and anchor the concept on it.'
+
+const INTELLIGENCE_BLOCK =
+  'INTELLIGENCE SYSTEMS: Use your judgment to select which intelligence systems to search (via consult_specialist) based on the campaign angle, audience type, and brief. You are not restricted to specific systems — query whichever will give you the most relevant evidence for this run.'
+
+const COMPLIANCE_BLOCK = `HARD COMPLIANCE CONSTRAINTS — these override all creative instructions:
+- Attribute every income or results figure to a named individual as THEIR result. Never imply typical or guaranteed outcomes for the viewer.
+- Never use: "guaranteed", "you will make", "passive income", "get rich", "earn from home".
+- Where a concept references a member result, it must carry: "Results are individual and not typical. Building a business involves risk."
+- Reject and rewrite any concept of your own that violates these constraints before calling submit_concepts.`
+
+const BLOCK_SEP = '\n\n─────────────────────────────────────────────\n\n'
+
+// Build the ordered injection blocks from the modal inputs. Order is fixed:
+// brief → angle → awareness → audience → sophistication → offer → outputs →
+// intelligence systems → on-brand → compliance (always last, overrides all).
+function buildInputBlocks(inputs: ReactorInputs | undefined): string {
+  // No guided inputs → classic left-panel run: leave the prompt exactly as it
+  // was so the existing agent behaviour is untouched.
+  if (!inputs) return ''
+
+  const parts: string[] = []
+
+  if (inputs) {
+    // Block 1 — Campaign Brief (only when provided)
+    if (inputs.brief?.trim()) {
+      parts.push(
+        `CAMPAIGN BRIEF (human director's intent — read this first and let it shape every creative decision):\n${inputs.brief.trim()}`,
+      )
+    }
+
+    // Block 2 — Angle
+    parts.push(
+      `Campaign angle: ${inputs.angle}${
+        inputs.angleIsAgentDecided
+          ? '\nSelect the strongest angle based on the brief and available intelligence.'
+          : ''
+      }`,
+    )
+
+    // Block 3 — Awareness Stage
+    if (inputs.awarenessDirective) parts.push(`AWARENESS STAGE: ${inputs.awarenessDirective}`)
+
+    // Block 4 — Audience Type
+    if (inputs.audienceDirective) parts.push(`AUDIENCE TYPE: ${inputs.audienceDirective}`)
+  }
+
+  // Block 5 — Market sophistication (every run)
+  parts.push(SOPHISTICATION_BLOCK)
+
+  if (inputs) {
+    // Block 6 — Offer
+    let offer = `OFFER: ${inputs.offerTypeDirective}`
+    if (inputs.offerName?.trim()) {
+      offer += `\nThe campaign drives to: ${inputs.offerName.trim()}. Use this exact name in all CTAs.`
+    }
+    parts.push(offer)
+
+    // Block 7 — Output Types
+    if (inputs.outputTypesAgentDecided) {
+      parts.push(
+        `Select the most appropriate output types for this campaign angle, awareness stage, and audience type. Available types: ${outputTypeOptions.join(
+          ', ',
+        )}. Choose what will perform best for this specific brief.`,
+      )
+    } else {
+      parts.push(`Generate the following output types: ${inputs.outputTypes.join(', ')}.`)
+    }
+  }
+
+  // Block 8 — Intelligence systems (every run)
+  parts.push(INTELLIGENCE_BLOCK)
+
+  if (inputs) {
+    // Block 9 — On Brand
+    if (inputs.onBrandEnabled) {
+      parts.push(
+        `ON BRAND SETTINGS ACTIVE:\n${inputs.brandSettings.voiceGuidelines}\n${inputs.brandSettings.toneRules}\nStrictly apply these brand settings to every concept generated.`,
+      )
+    } else {
+      parts.push('ON BRAND is disabled. Generate without brand anchoring.')
+    }
+  }
+
+  // Block 10 — Compliance (every run, always last, overrides everything)
+  parts.push(COMPLIANCE_BLOCK)
+
+  return BLOCK_SEP + parts.join(BLOCK_SEP)
+}
+
 /* --------------------------- Specialist runner ---------------------------- */
 
 async function runSpecialist(
@@ -365,7 +460,7 @@ async function runDemo(controller: ReadableStreamDefaultController, body: Reacto
     text: 'Live Meta Ads performance + Higgsfield image/video creatives activate with API keys.',
   })
 
-  const a = body.angle
+  const a = body.angle && body.angle !== 'Agent decides' ? body.angle : 'Profit'
   const al = a.toLowerCase()
   const pool: Concept[] = [
     { type: 'Hook', text: `Most builders don't have a ${al} problem. They have a ${al} leak hiding in plain sight.`, basis: 'Copy Specialist + Research Analyst', learningCheck: 'Specific, contrarian framing', score: 9 },
@@ -409,6 +504,7 @@ export async function POST(request: NextRequest) {
         const availableVideoModels = listVideoModels().filter((m) => m.configured).map((m) => m.id)
         const availableImageModels = listImageModels().filter((m) => m.configured).map((m) => m.id)
         const tools = buildTools(useImage, useVideo, Boolean(mcpServer))
+        const inputBlocks = buildInputBlocks(body.reactorInputs)
 
         sse(controller, { type: 'step', text: 'Coordinator online. Briefing the specialist team…' })
         if (mcpServer) sse(controller, { type: 'step', text: 'Live Meta Ads performance feed connected.' })
@@ -426,15 +522,16 @@ export async function POST(request: NextRequest) {
           const params: Anthropic.Beta.Messages.MessageCreateParamsNonStreaming = {
             model: COORDINATOR_MODEL,
             max_tokens: 4000,
-            system: coordinatorPrompt(outputs, {
-              metaAds: Boolean(mcpServer),
-              image: useImage,
-              video: useVideo,
-              videoModels: availableVideoModels,
-              imageModels: availableImageModels,
-              preferredVideoModel: body.videoModel ?? null,
-              preferredImageModel: body.imageModel ?? null,
-            }),
+            system:
+              coordinatorPrompt(outputs, {
+                metaAds: Boolean(mcpServer),
+                image: useImage,
+                video: useVideo,
+                videoModels: availableVideoModels,
+                imageModels: availableImageModels,
+                preferredVideoModel: body.videoModel ?? null,
+                preferredImageModel: body.imageModel ?? null,
+              }) + inputBlocks,
             tools,
             messages,
           }

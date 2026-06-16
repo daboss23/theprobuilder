@@ -2,17 +2,29 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
-import { Menu, X, Search, Bell } from 'lucide-react'
+import { usePathname, useRouter } from 'next/navigation'
+import { Menu, X, Search, Bell, Atom } from 'lucide-react'
 import { navItems } from '@/lib/nav'
 import { ReactorLogo } from '@/components/reactor/ReactorLogo'
 import { cn } from '@/lib/utils'
 
 export function Topbar() {
   const pathname = usePathname()
+  const router = useRouter()
   const [open, setOpen] = useState(false)
   const current = navItems.find((n) => n.href === pathname)
   const heading = pathname === '/' ? 'Reactor Dashboard' : current?.label ?? 'Reactor Dashboard'
+
+  // Launch a new campaign from anywhere. On the reactor page the modal is
+  // already mounted, so signal it directly; elsewhere, navigate in with the
+  // ?modal=open flag the Workbench reads on arrival.
+  const newCampaign = () => {
+    if (pathname === '/campaign-reactor') {
+      window.dispatchEvent(new Event('open-reactor-modal'))
+    } else {
+      router.push('/campaign-reactor?modal=open')
+    }
+  }
 
   return (
     <header className="reactor-topbar sticky top-0 z-30">
@@ -42,6 +54,15 @@ export function Topbar() {
         </div>
 
         <div className="ml-auto flex items-center gap-2">
+          <button
+            type="button"
+            onClick={newCampaign}
+            className="fire-btn inline-flex items-center gap-2 rounded-xl px-3 py-2 font-display text-xs font-bold uppercase tracking-wide text-white sm:px-4 sm:text-sm"
+          >
+            <Atom size={15} />
+            <span className="hidden sm:inline">New Creative Campaign</span>
+            <span className="sm:hidden">New</span>
+          </button>
           <div className="topbar-control hidden w-64 items-center gap-2 rounded-xl border border-border bg-surface/50 px-3 py-2 text-sm text-white/40 md:flex">
             <Search size={15} />
             <span className="text-xs">Search intelligence…</span>

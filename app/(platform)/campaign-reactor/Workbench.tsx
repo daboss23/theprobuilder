@@ -1,14 +1,23 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Atom, Zap, Check, Loader2, Copy as CopyIcon, Radar, Trophy, ImageIcon, Film, Clapperboard, Sparkles, Users } from 'lucide-react'
+import { Atom, Check, Loader2, Copy as CopyIcon, Radar, Trophy, ImageIcon, Film, Users } from 'lucide-react'
 import { Panel, PanelHeader, Pill } from '@/components/reactor/ui'
-import { FaceLibrary } from '@/components/reactor/FaceLibrary'
+import { ReactorModal, type ReactorForm } from '@/components/campaign-reactor/ReactorModal'
 import { reactorInputs, reactorOutputTypes, winningAngles } from '@/lib/reactor-data'
+import {
+  awarenessOptions,
+  audienceOptions,
+  offerOptions,
+  defaultBrandSettings,
+  type ReactorInputs,
+} from '@/lib/reactor-inputs'
 import { recommendVideoModel } from '@/lib/video/recommend'
 import type { ModelAvailability } from '@/lib/video/types'
 import { recommendImageModel } from '@/lib/image/recommend'
 import type { ImageModelAvailability } from '@/lib/image/types'
+
+const ANGLE_OPTIONS = ['Agent decides', ...winningAngles.map((a) => a.name)]
 
 interface Concept {
   type: string
@@ -31,9 +40,18 @@ type VideoUiState = { status: 'rendering' | 'done' | 'error'; url?: string; mess
 const normType = (s: string) => s.toLowerCase().replace(/s$/, '').trim()
 
 export function Workbench() {
+  const [modalOpen, setModalOpen] = useState(false)
+  // Manual controls (original left-panel inputs, now collected inside the modal)
   const [activeInputs, setActiveInputs] = useState<string[]>(reactorInputs)
   const [angle, setAngle] = useState(winningAngles[0].name)
   const [outputs, setOutputs] = useState<string[]>(reactorOutputTypes)
+  // Strategic fields (the guided step-by-step inputs)
+  const [brief, setBrief] = useState('')
+  const [awareness, setAwareness] = useState(awarenessOptions[0])
+  const [audience, setAudience] = useState(audienceOptions[0])
+  const [offer, setOffer] = useState(offerOptions[0])
+  const [offerName, setOfferName] = useState('')
+  const [onBrand, setOnBrand] = useState(true)
   const [phase, setPhase] = useState<'idle' | 'firing' | 'done'>('idle')
   const [concepts, setConcepts] = useState<Concept[]>([])
   const [telemetry, setTelemetry] = useState<TelemetryLine[]>([])
@@ -81,6 +99,26 @@ export function Workbench() {
       .catch(() => {})
   }, [])
 
+  // Dashboard's "New Creative Campaign" CTA links here with ?modal=open — open
+  // the guided modal on arrival, then strip the param so refresh doesn't reopen.
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('modal') === 'open') {
+      setModalOpen(true)
+      params.delete('modal')
+      const qs = params.toString()
+      window.history.replaceState(null, '', window.location.pathname + (qs ? `?${qs}` : ''))
+    }
+  }, [])
+
+  // Topbar "New Creative Campaign" button signals this when already on the page.
+  useEffect(() => {
+    const open = () => setModalOpen(true)
+    window.addEventListener('open-reactor-modal', open)
+    return () => window.removeEventListener('open-reactor-modal', open)
+  }, [])
+
   // System recommendation based on the selected output types, recomputed live.
   const recommendation = useMemo(
     () => (videoModels.length ? recommendVideoModel(outputs, videoModels) : null),
@@ -88,7 +126,6 @@ export function Workbench() {
   )
   // What we actually send: the explicit pick, or the recommendation when on Auto.
   const resolvedVideoModel = videoModel === 'auto' ? recommendation?.modelId : videoModel
-  const labelFor = (id?: string | null) => videoModels.find((m) => m.id === id)?.label ?? id ?? ''
   const showVideoPicker =
     videoModels.length > 0 && outputs.some((o) => /video|founder|testimonial|event|campaign/i.test(o))
 
@@ -98,13 +135,94 @@ export function Workbench() {
     [outputs, imageModels],
   )
   const resolvedImageModel = imageModel === 'auto' ? imageRecommendation?.modelId : imageModel
-  const imageLabelFor = (id?: string | null) =>
-    imageModels.find((m) => m.id === id)?.label ?? id ?? ''
   const showImagePicker =
     imageModels.length > 0 && outputs.some((o) => /concept|static|founder|campaign|testimonial/i.test(o))
 
   const toggle = (arr: string[], set: (v: string[]) => void, val: string) =>
     set(arr.includes(val) ? arr.filter((v) => v !== val) : [...arr, val])
+  const toggleInput = (val: string) => toggle(activeInputs, setActiveInputs, val)
+  const toggleOutput = (val: string) => toggle(outputs, setOutputs, val)
+
+  /* ----------------------- Agent pre-selection (suggest) ------------------- */
+  // The reactor strategist pre-picks a concrete angle / awareness / audience /
+  // offer from the brief, so each field already shows the agent's choice. The
+  // user can override any of them; a manual change locks that field.
+  const [suggesting, setSuggesting] = useState(false)
+  const [agentPicked, setAgentPicked] = useState<Record<string, boolean>>({})
+  const touchedRef = useRef<Set<string>>(new Set())
+  const markTouched = (field: string) => {
+    touchedRef.current.add(field)
+    setAgentPicked((p) => ({ ...p, [field]: false }))
+  }
+  // User-driven setters (lock the field against further auto-suggestion).
+  const setAngleUser = (v: string) => {
+    markTouched('angle')
+    setAngle(v)
+  }
+  const setAwarenessUser = (v: (typeof awarenessOptions)[number]) => {
+    markTouched('awareness')
+    setAwareness(v)
+  }
+  const setAudienceUser = (v: (typeof audienceOptions)[number]) => {
+    markTouched('audience')
+    setAudience(v)
+  }
+  const setOfferUser = (v: (typeof offerOptions)[number]) => {
+    markTouched('offer')
+    setOffer(v)
+  }
+
+  // Debounced: once the brief has enough substance, ask the agent for its picks
+  // and apply them to any field the user hasn't manually set.
+  useEffect(() => {
+    if (!modalOpen || brief.trim().length < 12) return
+    const t = setTimeout(async () => {
+      setSuggesting(true)
+      try {
+        const { suggestion } = await fetch('/api/campaign-reactor/suggest', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ brief, angle }),
+        }).then((r) => r.json())
+        if (!suggestion) return
+        const touched = touchedRef.current
+        const picked: Record<string, boolean> = {}
+        if (!touched.has('angle') && ANGLE_OPTIONS.includes(suggestion.angle)) {
+          setAngle(suggestion.angle)
+          picked.angle = true
+        }
+        if (!touched.has('awareness')) {
+          const o = awarenessOptions.find((x) => x.label === suggestion.awareness)
+          if (o) {
+            setAwareness(o)
+            picked.awareness = true
+          }
+        }
+        if (!touched.has('audience')) {
+          const o = audienceOptions.find((x) => x.label === suggestion.audience)
+          if (o) {
+            setAudience(o)
+            picked.audience = true
+          }
+        }
+        if (!touched.has('offer')) {
+          const o = offerOptions.find((x) => x.label === suggestion.offer)
+          if (o) {
+            setOffer(o)
+            picked.offer = true
+          }
+        }
+        setAgentPicked((p) => ({ ...p, ...picked }))
+      } catch {
+        /* suggestion is best-effort — leave fields as they are */
+      } finally {
+        setSuggesting(false)
+      }
+    }, 800)
+    return () => clearTimeout(t)
+    // angle is read as a hint only; excluded from deps to avoid a re-suggest loop.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [brief, modalOpen])
 
   const pushTelemetry = (line: TelemetryLine) => {
     setTelemetry((prev) => [...prev, line])
@@ -141,7 +259,9 @@ export function Workbench() {
     onUpdate({ status: 'error' })
   }
 
-  const fire = async () => {
+  // Shared streaming runner — both the classic left panel and the guided modal
+  // post into the same SSE pipeline; only the request payload differs.
+  const streamReactor = async (payload: Record<string, unknown>) => {
     setPhase('firing')
     setConcepts([])
     setTelemetry([])
@@ -153,13 +273,7 @@ export function Workbench() {
       const res = await fetch('/api/campaign-reactor', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          angle,
-          inputs: activeInputs,
-          outputs,
-          videoModel: resolvedVideoModel,
-          imageModel: resolvedImageModel,
-        }),
+        body: JSON.stringify(payload),
       })
       if (!res.body) throw new Error('No response stream')
 
@@ -220,6 +334,35 @@ export function Workbench() {
       setError(err instanceof Error ? err.message : 'Reactor failed')
       setPhase('done')
     }
+  }
+
+  // Fire from the modal — assembles the full ReactorInputs from every step plus
+  // the classic payload fields, then posts into the shared SSE pipeline.
+  const fire = () => {
+    const reactorInputsPayload: ReactorInputs = {
+      brief,
+      angle,
+      angleIsAgentDecided: angle === 'Agent decides',
+      outputTypes: outputs,
+      outputTypesAgentDecided: outputs.length === 0,
+      awarenessStage: awareness.label,
+      awarenessDirective: awareness.directive,
+      audienceType: audience.label,
+      audienceDirective: audience.directive,
+      offerType: offer.label,
+      offerTypeDirective: offer.directive,
+      offerName,
+      onBrandEnabled: onBrand,
+      brandSettings: defaultBrandSettings,
+    }
+    streamReactor({
+      angle,
+      inputs: activeInputs,
+      outputs: outputs.length ? outputs : reactorOutputTypes,
+      videoModel: resolvedVideoModel,
+      imageModel: resolvedImageModel,
+      reactorInputs: reactorInputsPayload,
+    })
   }
 
   const copy = (text: string) => {
@@ -408,172 +551,76 @@ export function Workbench() {
   const videoFor = (c: Concept): VideoUiState | undefined =>
     manualVideos[c.text] || agentMedia[normType(c.type)]?.video
 
+  // Everything the modal renders, threaded from this component's state so the
+  // manual controls keep their recommendation + reference-library wiring.
+  const form: ReactorForm = {
+    brief,
+    setBrief,
+    angleOptions: ANGLE_OPTIONS,
+    angle,
+    setAngle: setAngleUser,
+    outputTypeList: reactorOutputTypes,
+    outputs,
+    toggleOutput,
+    awarenessOptions,
+    awareness,
+    setAwareness: setAwarenessUser,
+    audienceOptions,
+    audience,
+    setAudience: setAudienceUser,
+    offerOptions,
+    offer,
+    setOffer: setOfferUser,
+    offerName,
+    setOfferName,
+    agentPicked,
+    suggesting,
+    intelligenceInputs: reactorInputs,
+    activeInputs,
+    toggleInput,
+    imageModels,
+    imageModel,
+    setImageModel,
+    imageRecommendation: imageRecommendation ?? null,
+    showImagePicker,
+    videoModels,
+    videoModel,
+    setVideoModel,
+    videoRecommendation: recommendation ?? null,
+    showVideoPicker,
+    onFaceChange: handleFaceSelection,
+    refCount: faceUrls.length + refVideos.length,
+    onBrand,
+    setOnBrand,
+  }
+
   return (
-    <div className="grid grid-cols-1 gap-6 xl:grid-cols-[360px_1fr]">
-      {/* Inputs */}
-      <div className="space-y-4">
-        <Panel>
-          <PanelHeader icon={<Zap size={16} />} accent="amber" title="Intelligence Inputs" subtitle="Feed the reactor" />
-          <div className="space-y-1.5 p-4">
-            {reactorInputs.map((i) => {
-              const on = activeInputs.includes(i)
-              return (
-                <button
-                  key={i}
-                  type="button"
-                  onClick={() => toggle(activeInputs, setActiveInputs, i)}
-                  className={`flex w-full items-center justify-between rounded-lg border px-3 py-2 text-sm transition-all ${
-                    on
-                      ? 'border-primary/30 bg-primary/10 text-white'
-                      : 'border-border bg-surface/30 text-white/45'
-                  }`}
-                >
-                  {i}
-                  <span
-                    className={`grid h-4 w-4 place-items-center rounded ${
-                      on ? 'bg-glow text-background' : 'border border-border'
-                    }`}
-                  >
-                    {on && <Check size={11} />}
-                  </span>
-                </button>
-              )
-            })}
-          </div>
-        </Panel>
-
-        <Panel className="p-4">
-          <label className="mb-2 block text-[11px] font-medium uppercase tracking-wider text-white/40">
-            Campaign Angle
-          </label>
-          <select
-            value={angle}
-            onChange={(e) => setAngle(e.target.value)}
-            className="w-full rounded-lg border border-border bg-surface/60 px-3 py-2.5 text-sm text-white outline-none focus:border-glow"
-          >
-            {winningAngles.map((a) => (
-              <option key={a.name} value={a.name} className="bg-card">
-                {a.name}
-              </option>
-            ))}
-          </select>
-
-          <p className="mb-2 mt-4 text-[11px] font-medium uppercase tracking-wider text-white/40">
-            Output Types
+    <div className="space-y-6">
+      {/* Trigger — the modal is the single input induction for the reactor */}
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <h2 className="font-display text-lg font-semibold text-white">Configure your campaign</h2>
+          <p className="mt-0.5 text-sm text-white/45">
+            Brief, audience, offer, intelligence, and models — collected across five quick steps,
+            then fire the reactor.
           </p>
-          <div className="flex flex-wrap gap-1.5">
-            {reactorOutputTypes.map((o) => {
-              const on = outputs.includes(o)
-              return (
-                <button
-                  key={o}
-                  type="button"
-                  onClick={() => toggle(outputs, setOutputs, o)}
-                  className={`rounded-full border px-2.5 py-1 text-[11px] transition-all ${
-                    on
-                      ? 'border-primary/30 bg-primary/10 text-glow'
-                      : 'border-border text-white/40'
-                  }`}
-                >
-                  {o}
-                </button>
-              )
-            })}
-          </div>
-
-          {showImagePicker && (
-            <div className="mt-4">
-              <p className="mb-2 flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-white/40">
-                <ImageIcon size={12} /> Image Model
-              </p>
-              <select
-                value={imageModel}
-                onChange={(e) => setImageModel(e.target.value)}
-                className="w-full rounded-lg border border-border bg-surface/60 px-3 py-2.5 text-sm text-white outline-none focus:border-glow"
-              >
-                <option value="auto" className="bg-card">
-                  Auto — recommended
-                  {imageRecommendation ? ` (${imageLabelFor(imageRecommendation.modelId)})` : ''}
-                </option>
-                {imageModels.map((m) => (
-                  <option key={m.id} value={m.id} className="bg-card" disabled={!m.configured}>
-                    {m.label}
-                    {m.configured ? '' : ' — needs key'}
-                  </option>
-                ))}
-              </select>
-
-              {imageRecommendation && (
-                <div className="mt-2 flex items-start gap-1.5 rounded-lg border border-primary/20 bg-primary/[0.06] px-2.5 py-2 text-[11px] text-white/60">
-                  <Sparkles size={12} className="mt-0.5 shrink-0 text-glow" />
-                  <span>
-                    <span className="text-glow/80">Recommended:</span>{' '}
-                    {imageLabelFor(imageRecommendation.modelId)} — {imageRecommendation.reason}.
-                    {!imageRecommendation.configured && (
-                      <span className="text-warning"> Add its API key to enable.</span>
-                    )}
-                  </span>
-                </div>
-              )}
-            </div>
+        </div>
+        <button
+          type="button"
+          onClick={() => setModalOpen(true)}
+          disabled={phase === 'firing'}
+          className="fire-btn inline-flex items-center gap-2 rounded-full px-6 py-3.5 font-display text-base font-bold uppercase tracking-wide text-white"
+        >
+          {phase === 'firing' ? (
+            <>
+              <Loader2 size={16} className="animate-spin" /> Firing Reactor…
+            </>
+          ) : (
+            <>
+              <Atom size={16} /> New Creative Campaign
+            </>
           )}
-
-          {showVideoPicker && (
-            <div className="mt-4">
-              <p className="mb-2 flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-white/40">
-                <Clapperboard size={12} /> Video Model
-              </p>
-              <select
-                value={videoModel}
-                onChange={(e) => setVideoModel(e.target.value)}
-                className="w-full rounded-lg border border-border bg-surface/60 px-3 py-2.5 text-sm text-white outline-none focus:border-glow"
-              >
-                <option value="auto" className="bg-card">
-                  Auto — recommended{recommendation ? ` (${labelFor(recommendation.modelId)})` : ''}
-                </option>
-                {videoModels.map((m) => (
-                  <option key={m.id} value={m.id} className="bg-card" disabled={!m.configured}>
-                    {m.label}
-                    {m.audio ? ' · audio' : ''}
-                    {m.configured ? '' : ' — needs key'}
-                  </option>
-                ))}
-              </select>
-
-              {recommendation && (
-                <div className="mt-2 flex items-start gap-1.5 rounded-lg border border-primary/20 bg-primary/[0.06] px-2.5 py-2 text-[11px] text-white/60">
-                  <Sparkles size={12} className="mt-0.5 shrink-0 text-glow" />
-                  <span>
-                    <span className="text-glow/80">Recommended:</span>{' '}
-                    {labelFor(recommendation.modelId)} — {recommendation.reason}.
-                    {!recommendation.configured && (
-                      <span className="text-warning"> Add its API key to enable.</span>
-                    )}
-                  </span>
-                </div>
-              )}
-
-              <FaceLibrary onChange={handleFaceSelection} />
-            </div>
-          )}
-
-          <button
-            type="button"
-            onClick={fire}
-            disabled={phase === 'firing' || outputs.length === 0}
-            className="fire-btn mt-5 flex w-full items-center justify-center gap-2 rounded-full px-4 py-4 font-display text-base font-bold uppercase tracking-wide text-white"
-          >
-            {phase === 'firing' ? (
-              <>
-                <Loader2 size={16} className="animate-spin" /> Firing Reactor…
-              </>
-            ) : (
-              <>
-                <Atom size={16} /> Fire Reactor
-              </>
-            )}
-          </button>
-        </Panel>
+        </button>
       </div>
 
       {/* Output */}
@@ -778,6 +825,8 @@ export function Workbench() {
           </div>
         )}
       </Panel>
+
+      <ReactorModal open={modalOpen} onClose={() => setModalOpen(false)} onFire={fire} form={form} />
     </div>
   )
 }
