@@ -27,9 +27,13 @@ export async function POST(request: NextRequest) {
       const buffer = Buffer.from(arrayBuffer)
 
       // require inside the function body defers module load until runtime,
-      // avoiding pdf-parse's test-file initialisation at build time.
-      const pdfParse = require('pdf-parse') as (buf: Buffer) => Promise<{ text: string }> // eslint-disable-line
-      const data = await pdfParse(buffer)
+      // avoiding pdf-parse's worker initialisation at build time.
+      // pdf-parse v2 exports a PDFParse class (the v1 callable default is gone).
+      const { PDFParse } = require('pdf-parse') as {
+        PDFParse: new (opts: { data: Buffer }) => { getText(): Promise<{ text: string }> }
+      } // eslint-disable-line
+      const parser = new PDFParse({ data: buffer })
+      const data = await parser.getText()
 
       const content = data.text
         .replace(/\n{3,}/g, '\n\n')
