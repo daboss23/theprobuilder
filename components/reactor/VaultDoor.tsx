@@ -59,8 +59,8 @@ export function VaultDoor({ children }: { children: React.ReactNode }) {
         {useVideo ? (
           <video
             ref={videoRef}
-            className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-1000 ease-out ${
-              entered ? 'opacity-30' : 'opacity-100'
+            className={`absolute inset-0 h-full w-full transition-opacity duration-1000 ease-out ${
+              entered ? 'object-cover opacity-30' : 'object-contain opacity-100'
             }`}
             src="/vault/vault-door.mp4"
             autoPlay
