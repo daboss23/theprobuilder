@@ -615,6 +615,20 @@ body {
   box-shadow: inset 0 0 14px -5px rgba(160, 215, 255, 0.8);
 }
 
+/* Vault artifact tiles — knowledge on display inside the vault */
+.vault-artifact {
+  transition: border-color 0.25s ease, box-shadow 0.25s ease, transform 0.25s ease;
+}
+.vault-artifact:hover {
+  border-color: rgba(94, 168, 255, 0.45);
+  box-shadow: 0 0 28px -10px rgba(60, 150, 255, 0.55);
+  transform: translateY(-2px);
+}
+.vault-artifact-icon {
+  background: radial-gradient(circle at 50% 35%, rgba(40, 110, 210, 0.4), rgba(4, 10, 20, 0.85) 78%);
+  box-shadow: inset 0 0 12px -4px rgba(160, 215, 255, 0.75);
+}
+
 /* Vault blast-door reveal (Knowledge Vault entrance) */
 .vault-door-overlay {
   background: #04060c;

@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Search,
   Plus,
@@ -17,6 +17,13 @@ import {
   Clapperboard,
   UploadCloud,
   Download,
+  FileType2,
+  Image as ImageIcon,
+  Film,
+  Music,
+  Globe,
+  Layers,
+  type LucideIcon,
 } from 'lucide-react'
 import { Panel, PanelHeader, Pill } from '@/components/reactor/ui'
 import { vaultCategories } from '@/lib/reactor-data'
@@ -68,6 +75,76 @@ function liveCategoryGroups(groups: VaultStatGroup[]): CategoryGroup[] {
       items: items.sort((a, b) => b.count - a.count),
     }))
     .sort((a, b) => a.group.localeCompare(b.group))
+}
+
+// A vault artifact = one document, grouped from its underlying chunks.
+type AssetKind = 'pdf' | 'doc' | 'link' | 'image' | 'video' | 'audio' | 'text'
+
+interface VaultArtifact {
+  key: string
+  title: string
+  system: string
+  category: string | null
+  kind: AssetKind
+  preview: string
+  chunkCount: number
+  ids: string[]
+  similarity?: number
+}
+
+const KIND_META: Record<AssetKind, { icon: LucideIcon; label: string }> = {
+  pdf: { icon: FileType2, label: 'PDF' },
+  doc: { icon: FileText, label: 'Doc' },
+  link: { icon: Globe, label: 'Web' },
+  image: { icon: ImageIcon, label: 'Image' },
+  video: { icon: Film, label: 'Video' },
+  audio: { icon: Music, label: 'Audio' },
+  text: { icon: Type, label: 'Text' },
+}
+
+// Infer an asset kind from the document title (extension) — the data layer
+// doesn't yet carry an explicit kind, so the filename is the best signal.
+function inferKind(title: string): AssetKind {
+  const t = title.toLowerCase()
+  if (/\.pdf$/.test(t)) return 'pdf'
+  if (/\.(md|txt|docx?|rtf)$/.test(t)) return 'doc'
+  if (/\.(png|jpe?g|webp|gif|svg)$/.test(t)) return 'image'
+  if (/\.(mp4|mov|webm|mkv)$/.test(t)) return 'video'
+  if (/\.(mp3|wav|m4a|aac)$/.test(t)) return 'audio'
+  if (/^https?:\/\//.test(t) || /youtube|youtu\.be/.test(t)) return 'link'
+  return 'text'
+}
+
+// Roll the flat chunk rows up into one artifact per document.
+function groupArtifacts(items: VaultItem[]): VaultArtifact[] {
+  const byDoc = new Map<string, VaultArtifact>()
+  for (const it of items) {
+    const key = `${it.system}|${it.category ?? ''}|${it.title}`
+    const existing = byDoc.get(key)
+    if (existing) {
+      existing.chunkCount += 1
+      if (it.id) existing.ids.push(it.id)
+      if (typeof it.similarity === 'number')
+        existing.similarity = Math.max(existing.similarity ?? 0, it.similarity)
+    } else {
+      byDoc.set(key, {
+        key,
+        title: it.title,
+        system: it.system,
+        category: it.category,
+        kind: inferKind(it.title),
+        preview: it.content,
+        chunkCount: 1,
+        ids: it.id ? [it.id] : [],
+        similarity: it.similarity,
+      })
+    }
+  }
+  const arr = Array.from(byDoc.values())
+  // Surface best semantic matches first when searching; otherwise keep order.
+  if (arr.some((a) => typeof a.similarity === 'number'))
+    arr.sort((a, b) => (b.similarity ?? 0) - (a.similarity ?? 0))
+  return arr
 }
 
 const SYSTEMS: { value: KnowledgeSystem; label: string }[] = [
@@ -277,14 +354,27 @@ export function VaultManager({ initialStats }: { initialStats: Stats }) {
     }
   }
 
-  const remove = async (id: string) => {
-    setItems((prev) => prev.filter((i) => i.id !== id))
+  // Remove a whole document — delete every chunk it was split into.
+  const removeDoc = async (artifact: VaultArtifact) => {
+    const ids = new Set(artifact.ids)
+    setItems((prev) => prev.filter((i) => !i.id || !ids.has(i.id)))
     try {
-      await fetch(`/api/vault/list?id=${encodeURIComponent(id)}`, { method: 'DELETE' })
+      await Promise.all(
+        artifact.ids.map((id) =>
+          fetch(`/api/vault/list?id=${encodeURIComponent(id)}`, { method: 'DELETE' }),
+        ),
+      )
     } finally {
       load(query, systemFilter)
     }
   }
+
+  // Group chunks into document artifacts, then page them so the vault never
+  // becomes an endless wall regardless of how much knowledge is stored.
+  const artifacts = useMemo(() => groupArtifacts(items), [items])
+  const [visibleCount, setVisibleCount] = useState(12)
+  useEffect(() => setVisibleCount(12), [query, systemFilter])
+  const visibleArtifacts = artifacts.slice(0, visibleCount)
 
   const categoriesLive = live && stats.groups.length > 0
   const categoryGroups: CategoryGroup[] = categoriesLive
@@ -629,7 +719,7 @@ export function VaultManager({ initialStats }: { initialStats: Stats }) {
             <div className="flex items-center justify-center gap-2 py-12 text-sm text-white/40">
               <Loader2 size={16} className="animate-spin" /> Loading vault…
             </div>
-          ) : items.length === 0 ? (
+          ) : artifacts.length === 0 ? (
             <div className="flex flex-col items-center justify-center gap-2 py-12 text-center">
               <FileText size={24} className="text-white/20" />
               <p className="text-sm text-white/40">
@@ -639,40 +729,72 @@ export function VaultManager({ initialStats }: { initialStats: Stats }) {
               </p>
             </div>
           ) : (
-            <ul className="space-y-2">
-              {items.map((item, i) => (
-                <li
-                  key={item.id ?? `${item.title}-${i}`}
-                  className="glass-hover group flex items-start gap-3 rounded-xl border border-border bg-surface/40 p-3.5"
-                >
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <h3 className="truncate text-sm font-medium text-white">{item.title}</h3>
-                      <Pill tone="primary">{item.system}</Pill>
-                      {item.category && <Pill>{item.category}</Pill>}
-                      {typeof item.similarity === 'number' && (
-                        <span className="font-mono text-[10px] text-glow/70">
-                          {Math.round(item.similarity * 100)}% match
-                        </span>
-                      )}
-                    </div>
-                    <p className="mt-1.5 line-clamp-2 text-xs leading-relaxed text-white/50">
-                      {item.content}
-                    </p>
-                  </div>
-                  {item.id && (
-                    <button
-                      type="button"
-                      onClick={() => remove(item.id as string)}
-                      aria-label={`Delete ${item.title}`}
-                      className="shrink-0 rounded-lg border border-border p-2 text-white/30 opacity-0 transition-all hover:border-danger/40 hover:bg-danger/10 hover:text-danger group-hover:opacity-100"
+            <>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                {visibleArtifacts.map((art) => {
+                  const Icon = KIND_META[art.kind].icon
+                  return (
+                    <div
+                      key={art.key}
+                      className="vault-artifact group relative flex flex-col rounded-xl border border-border bg-surface/40 p-4"
                     >
-                      <Trash2 size={14} />
-                    </button>
-                  )}
-                </li>
-              ))}
-            </ul>
+                      <div className="mb-2 flex items-start gap-3">
+                        <span className="vault-artifact-icon grid h-10 w-10 shrink-0 place-items-center rounded-lg">
+                          <Icon size={18} className="text-glow" />
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <h3 className="truncate text-sm font-semibold text-white" title={art.title}>
+                            {art.title}
+                          </h3>
+                          <p className="mt-0.5 text-[10px] uppercase tracking-wider text-white/35">
+                            {KIND_META[art.kind].label} · {art.chunkCount} chunk
+                            {art.chunkCount === 1 ? '' : 's'}
+                          </p>
+                        </div>
+                        {art.ids.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => removeDoc(art)}
+                            aria-label={`Delete ${art.title}`}
+                            className="shrink-0 rounded-lg border border-border p-1.5 text-white/30 opacity-0 transition-all hover:border-danger/40 hover:bg-danger/10 hover:text-danger group-hover:opacity-100"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        )}
+                      </div>
+                      <p className="line-clamp-3 flex-1 text-xs leading-relaxed text-white/50">
+                        {art.preview}
+                      </p>
+                      <div className="mt-3 flex flex-wrap items-center gap-1.5">
+                        <Pill tone="primary">{art.system}</Pill>
+                        {art.category && <Pill>{art.category}</Pill>}
+                        {typeof art.similarity === 'number' && (
+                          <span className="ml-auto font-mono text-[10px] text-glow/70">
+                            {Math.round(art.similarity * 100)}% match
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+
+              <div className="flex items-center justify-between pt-1 text-[11px] text-white/35">
+                <span>
+                  Showing {visibleArtifacts.length} of {artifacts.length} artifact
+                  {artifacts.length === 1 ? '' : 's'}
+                </span>
+                {visibleCount < artifacts.length && (
+                  <button
+                    type="button"
+                    onClick={() => setVisibleCount((c) => c + 12)}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-surface/60 px-3 py-1.5 font-medium text-white/70 transition-all hover:border-glow/40 hover:text-glow"
+                  >
+                    <Layers size={13} /> Load more
+                  </button>
+                )}
+              </div>
+            </>
           )}
         </div>
       </Panel>

@@ -1,23 +1,40 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { Database, Lock, Unlock } from 'lucide-react'
+import { createPortal } from 'react-dom'
+import Link from 'next/link'
+import { Database, Lock, Unlock, X } from 'lucide-react'
 
 type DoorPhase = 'sealed' | 'unlocking' | 'opening'
 
 /**
- * Immersive Knowledge Vault shell. Plays the rendered blast-door clip (camera
- * pushes inside), then keeps that interior as a living, dimmed backdrop while
- * the vault knowledge floats on top of it — you never leave the vault. Falls
- * back to a CSS blast-door when the clip can't load, and enters instantly under
- * reduced-motion. Plays on every visit; skippable on click.
+ * Immersive full-screen Knowledge Vault shell. Takes over the viewport, plays
+ * the rendered blast-door clip (camera pushes inside), then keeps that interior
+ * as a living, dimmed backdrop while the vault knowledge lives on top of it —
+ * you stay sealed inside the vault. An "Exit Vault" control returns to the app.
+ * Falls back to a CSS blast-door when the clip can't load, and enters instantly
+ * under reduced-motion. Plays on every visit; skippable on click.
  */
 export function VaultDoor({ children }: { children: React.ReactNode }) {
   const [entered, setEntered] = useState(false)
   const [phase, setPhase] = useState<DoorPhase>('sealed')
   const [useVideo, setUseVideo] = useState(true)
+  const [mounted, setMounted] = useState(false)
   const videoRef = useRef<HTMLVideoElement>(null)
   const timers = useRef<ReturnType<typeof setTimeout>[]>([])
+
+  // Portal to <body> so the takeover escapes the platform layout's stacking
+  // context and covers the sidebar/topbar.
+  useEffect(() => setMounted(true), [])
+
+  // Lock body scroll while the vault owns the screen.
+  useEffect(() => {
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = prev
+    }
+  }, [])
 
   // Respect reduced-motion: drop straight into the interior.
   useEffect(() => {
@@ -37,7 +54,7 @@ export function VaultDoor({ children }: { children: React.ReactNode }) {
     return () => t.forEach(clearTimeout)
   }, [useVideo, entered])
 
-  // Click anywhere on the sealed door to drop straight inside.
+  // Click the sealed door to drop straight inside.
   const skip = () => {
     if (entered) return
     timers.current.forEach(clearTimeout)
@@ -52,10 +69,12 @@ export function VaultDoor({ children }: { children: React.ReactNode }) {
 
   const opening = phase === 'opening'
 
-  return (
-    <div className="vault-shell relative isolate min-h-[calc(100vh-150px)] overflow-hidden rounded-2xl">
+  if (!mounted) return null
+
+  return createPortal(
+    <div className="fixed inset-0 z-[100] overflow-hidden bg-[#04060c]">
       {/* ---- Living vault interior backdrop ---------------------------------- */}
-      <div className="absolute inset-0 -z-10 bg-[#04060c]">
+      <div className="absolute inset-0">
         {useVideo ? (
           <video
             ref={videoRef}
@@ -98,12 +117,12 @@ export function VaultDoor({ children }: { children: React.ReactNode }) {
         />
       </div>
 
-      {/* ---- Sealed-door messaging (only before entry) ---------------------- */}
+      {/* ---- Sealed-door prompt (only before entry) ------------------------- */}
       {!entered && (
         <button
           type="button"
           onClick={skip}
-          className="absolute inset-0 z-20 grid place-items-end justify-center pb-10"
+          className="absolute inset-0 z-20 grid place-items-end justify-center pb-12"
           aria-label="Enter the Knowledge Vault"
         >
           <span className="flex flex-col items-center gap-3 text-center">
@@ -130,14 +149,27 @@ export function VaultDoor({ children }: { children: React.ReactNode }) {
         </button>
       )}
 
+      {/* ---- Exit control --------------------------------------------------- */}
+      {entered && (
+        <Link
+          href="/"
+          aria-label="Exit the Knowledge Vault"
+          className="group absolute right-4 top-4 z-30 flex items-center gap-2 rounded-full border border-glow/30 bg-black/40 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-white/70 backdrop-blur-sm transition-all hover:border-glow/60 hover:text-glow sm:right-6 sm:top-6"
+        >
+          <X size={14} className="transition-transform group-hover:rotate-90" />
+          Exit Vault
+        </Link>
+      )}
+
       {/* ---- The knowledge, living inside the vault ------------------------- */}
       <div
-        className={`relative z-10 px-4 py-6 transition-all duration-1000 ease-out sm:px-6 ${
+        className={`relative z-10 h-full overflow-y-auto transition-all duration-1000 ease-out ${
           entered ? 'translate-y-0 opacity-100' : 'pointer-events-none translate-y-3 opacity-0'
         }`}
       >
-        {children}
+        <div className="mx-auto max-w-[1320px] px-4 py-16 sm:px-8 sm:py-20">{children}</div>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }
