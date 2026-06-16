@@ -13,6 +13,7 @@ import {
   CalendarDays,
   Mic,
   MonitorPlay,
+  BookOpen,
   UploadCloud,
   Check,
   Loader2,
@@ -34,6 +35,7 @@ const iconMap: Record<string, LucideIcon> = {
   CalendarDays,
   Mic,
   MonitorPlay,
+  BookOpen,
 }
 
 // Map each upload tile to the intelligence system + category it ingests into.
@@ -49,6 +51,7 @@ const routing: Record<string, { system: KnowledgeSystem; category: string }> = {
   'Upload Event Content': { system: 'vault', category: 'Event Content' },
   'Upload Podcast Transcript': { system: 'vault', category: 'Podcast Transcript' },
   'Upload Webinar': { system: 'vault', category: 'Webinar' },
+  'META Frameworks / SOP': { system: 'vault', category: 'META Frameworks / SOP' },
 }
 
 const TEXT_EXT = ['md', 'txt', 'pdf']
