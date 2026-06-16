@@ -148,6 +148,7 @@ export const uploadCards: UploadCard[] = [
   { title: 'Upload Event Content', accept: 'Video / Deck', icon: 'CalendarDays' },
   { title: 'Upload Podcast Transcript', accept: 'Audio / Text', icon: 'Mic' },
   { title: 'Upload Webinar', accept: 'Video / Deck', icon: 'MonitorPlay' },
+  { title: 'META Frameworks / SOP', accept: 'Doc / PDF', icon: 'BookOpen' },
 ]
 
 export interface VaultCategory {
