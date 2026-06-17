@@ -615,6 +615,25 @@ body {
   box-shadow: inset 0 0 14px -5px rgba(160, 215, 255, 0.8);
 }
 
+/* Vault sealed-door poster (shown before the user clicks to unlock) */
+.vault-seal-cover {
+  background:
+    radial-gradient(circle at 50% 42%, rgba(30, 90, 180, 0.18), transparent 55%),
+    radial-gradient(circle at 50% 50%, #0b1322 0%, #070d18 45%, #04060c 100%);
+}
+.vault-enter-cta {
+  transition: border-color 0.25s ease, color 0.25s ease, box-shadow 0.25s ease;
+  box-shadow: 0 0 24px -8px rgba(60, 150, 255, 0.5);
+}
+.vault-seal-cover:hover .vault-enter-cta {
+  border-color: rgba(120, 190, 255, 0.8);
+  color: #fff;
+  box-shadow: 0 0 36px -6px rgba(80, 170, 255, 0.85);
+}
+.vault-seal-cover:hover .vault-seal {
+  box-shadow: 0 0 50px -8px rgba(70, 160, 255, 0.7);
+}
+
 /* Vault artifact tiles — knowledge on display inside the vault */
 .vault-artifact {
   transition: border-color 0.25s ease, box-shadow 0.25s ease, transform 0.25s ease;
