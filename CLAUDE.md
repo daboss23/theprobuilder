@@ -262,16 +262,27 @@ To run the *real* agent end to end: set `ANTHROPIC_API_KEY` (agent),
 
 ## CURRENT BUILD STATUS
 
+**Core platform**
 - [x] Platform redesigned as TPB Creative Reactor (9 intelligence systems)
 - [x] Dark glass command-center UI + logo + sidebar/topbar shell
 - [x] RAG knowledge layer: pgvector schema + Voyage embeddings + ingest route
 - [x] Agentic Campaign Reactor (Claude Opus 4.8 tool-use loop, streamed)
 - [x] Learnings-as-rubric self-critique
-- [x] Outcome logging + winner re-ingest (learning loop)
 - [x] Higgsfield image + video creatives as agent tools (`@higgsfield/client`)
 - [x] Meta Ads MCP wired into the orchestrator (Anthropic MCP connector)
-- [ ] Wire Knowledge Vault uploads → `/api/vault/ingest`
-- [ ] Dashboards reading live `knowledge_chunks` counts
-- [ ] Specialist sub-agents / Managed Agents coordinator
-- [ ] Performance ingest (Meta API) → `campaign_outcomes` (live tools done; auto-ingest pending)
+
+**Campaign Reactor V3 — the Creative Operating System**
+- [x] Six-agent intelligence network (`lib/agents.ts`): OPUS · ATLAS · NOVA · SPARK · ECHO · ORACLE — replaces the old specialist coordinator
+- [x] Strategic Intelligence Panel before Fire (`/api/campaign-reactor/intelligence`) — pain/desire/pattern/structures/positioning/consulted-assets/confidence
+- [x] Intelligence-based telemetry (Market/Creative/Copy/Knowledge/Pattern updates + confidence); "Agent's pick" language removed
+- [x] SPARK Winning Creative Intelligence — Creative DNA extraction + store (`lib/spark.ts`, `/api/spark/analyze`, SparkAnalyzer UI)
+- [x] Production Brief system — frame-by-frame briefs drive image/video generation
+- [x] Performance Intelligence (ORACLE): expanded outcome verdicts, strategic attributes, pattern confidence, strategic memory page
+- [x] Agent Network page (`/network`) — living visibility dashboard grounded in live vault + outcome data
+
+**Still open**
+- [ ] SPARK URL-only ingestion for JS-rendered sources (Meta Ad Library / TikTok via oEmbed/transcript APIs; pasted script works today)
+- [ ] Performance ingest (Meta API) → `campaign_outcomes` auto-ingest of live CTR/CPL/ROAS (manual verdicts done; metric columns ready)
+- [ ] More dashboards reading live `knowledge_chunks` counts (Agent Network does; Research/Copy/Pattern still curated)
 - [ ] Deployed + tested end to end with real keys
+
