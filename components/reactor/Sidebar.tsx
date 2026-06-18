@@ -10,6 +10,11 @@ import { cn } from '@/lib/utils'
 export function Sidebar() {
   const pathname = usePathname()
 
+  // The Knowledge Vault gets a dedicated launcher anchored to the foot of the
+  // sidebar — "the foundation everything else is built on" sits at the base.
+  const vaultItem = navItems.find((i) => i.href === '/knowledge-vault')
+  const topItems = navItems.filter((i) => i.href !== '/knowledge-vault')
+
   return (
     <aside className="reactor-sidebar hidden w-[268px] shrink-0 flex-col lg:flex">
       <div className="reactor-brand px-5 py-5">
@@ -19,7 +24,7 @@ export function Sidebar() {
       </div>
 
       <nav className="reactor-nav flex-1 space-y-1.5 overflow-y-auto px-3 py-4">
-        {navItems.map((item) => {
+        {topItems.map((item) => {
           const active = pathname === item.href
           const Icon = item.icon
           return (
@@ -52,6 +57,30 @@ export function Sidebar() {
       </nav>
 
       <div className="space-y-2 border-t border-border/60 px-3 py-3">
+        {vaultItem && (
+          <Link
+            href={vaultItem.href}
+            aria-label="Open the Knowledge Vault"
+            className={cn(
+              'vault-launcher group relative flex items-center gap-3 overflow-hidden rounded-xl px-3 py-3 transition-all',
+              pathname === vaultItem.href ? 'is-active' : '',
+            )}
+          >
+            <span className="vault-launcher-seal grid h-9 w-9 shrink-0 place-items-center rounded-lg">
+              <vaultItem.icon size={17} className="text-glow" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="font-display text-sm font-bold tracking-wide text-white">
+                {vaultItem.label}
+              </p>
+              <p className="truncate text-[10px] uppercase tracking-[0.18em] text-glow/60">
+                Timeless Knowledge
+              </p>
+            </div>
+            <ChevronRight size={14} className="shrink-0 text-glow/50 transition-transform group-hover:translate-x-0.5" />
+          </Link>
+        )}
+
         <div className="sysstatus-module flex items-center gap-2.5 px-3 py-2.5">
           <span className="dot-live h-2 w-2 shrink-0 rounded-full animate-pulse-glow" />
           <div className="min-w-0 flex-1">

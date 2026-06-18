@@ -24,14 +24,15 @@ export async function POST(request: NextRequest) {
 
     if (ext === 'pdf') {
       const arrayBuffer = await file.arrayBuffer()
-      const buffer = Buffer.from(arrayBuffer)
 
-      // require inside the function body defers module load until runtime,
-      // avoiding pdf-parse's test-file initialisation at build time.
-      const pdfParse = require('pdf-parse') as (buf: Buffer) => Promise<{ text: string }> // eslint-disable-line
-      const data = await pdfParse(buffer)
+      // unpdf ships a serverless-friendly build of pdf.js that runs in Node
+      // without the browser globals (DOMMatrix/Path2D) that pdf-parse's pdf.js
+      // build assumes. Dynamic import defers the load to runtime.
+      const { extractText, getDocumentProxy } = await import('unpdf')
+      const pdf = await getDocumentProxy(new Uint8Array(arrayBuffer))
+      const { text } = await extractText(pdf, { mergePages: true })
 
-      const content = data.text
+      const content = (Array.isArray(text) ? text.join('\n') : text)
         .replace(/\n{3,}/g, '\n\n')
         .trim()
 
@@ -56,6 +57,10 @@ export async function POST(request: NextRequest) {
     )
   } catch (error) {
     console.error('File parse error:', error)
-    return NextResponse.json({ success: false, error: 'Failed to parse file' }, { status: 500 })
+    const detail = error instanceof Error ? error.message : ''
+    const message = detail
+      ? `Couldn't read this file — ${detail}. Try a .md or .txt export instead.`
+      : "Couldn't read this file. Try a .md or .txt export instead."
+    return NextResponse.json({ success: false, error: message }, { status: 500 })
   }
 }
