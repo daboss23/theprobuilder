@@ -17,7 +17,11 @@ export interface Concept {
 
 export interface TelemetryLine {
   text: string
-  kind: 'step' | 'retrieval' | 'specialist'
+  kind: 'step' | 'retrieval' | 'intelligence'
+  /** Intelligence layer header, e.g. "Market Intelligence". */
+  label?: string
+  /** Builder-facing confidence band, e.g. "High". */
+  confidence?: string
 }
 
 export type VideoUiState = { status: 'rendering' | 'done' | 'error'; url?: string; message?: string }
@@ -174,9 +178,11 @@ export function ReactorRunProvider({ children }: { children: ReactNode }) {
               pushTelemetry({
                 text:
                   ev.status === 'start'
-                    ? `${ev.specialist} — analyzing…`
-                    : `${ev.specialist} — ${ev.summary}`,
-                kind: 'specialist',
+                    ? 'Analyzing…'
+                    : ((ev.summary as string) || 'Findings ready'),
+                kind: 'intelligence',
+                label: (ev.label as string) || (ev.agent as string) || 'Intelligence',
+                confidence: ev.confidence as string | undefined,
               })
             else if (ev.type === 'media') {
               const key = normType((ev.conceptType as string) || '')

@@ -11,6 +11,7 @@ import {
   offerOptions,
   defaultBrandSettings,
   type ReactorInputs,
+  type StrategicIntelligence,
 } from '@/lib/reactor-inputs'
 import { recommendVideoModel } from '@/lib/video/recommend'
 import type { ModelAvailability } from '@/lib/video/types'
@@ -135,6 +136,9 @@ export function Workbench() {
   // user can override any of them; a manual change locks that field.
   const [suggesting, setSuggesting] = useState(false)
   const [agentPicked, setAgentPicked] = useState<Record<string, boolean>>({})
+  // Strategic Intelligence read, loaded when the modal reaches the final step.
+  const [intelligence, setIntelligence] = useState<StrategicIntelligence | null>(null)
+  const [intelLoading, setIntelLoading] = useState(false)
   const touchedRef = useRef<Set<string>>(new Set())
   const markTouched = (field: string) => {
     touchedRef.current.add(field)
@@ -215,6 +219,30 @@ export function Workbench() {
     requestAnimationFrame(() => feedRef.current?.scrollTo({ top: 1e9, behavior: 'smooth' }))
   }, [telemetry.length])
 
+  // Load the Strategic Intelligence read for the review step. Runs once when the
+  // modal reaches Step 5 (not per keystroke), grounded in the current inputs.
+  const loadIntelligence = useCallback(async () => {
+    setIntelLoading(true)
+    try {
+      const res = await fetch('/api/campaign-reactor/intelligence', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          brief,
+          angle,
+          awareness: awareness.label,
+          audience: audience.label,
+          offer: offer.label,
+        }),
+      }).then((r) => r.json())
+      if (res.intelligence) setIntelligence(res.intelligence as StrategicIntelligence)
+    } catch {
+      /* best-effort — the panel keeps its previous read */
+    } finally {
+      setIntelLoading(false)
+    }
+  }, [brief, angle, awareness, audience, offer])
+
   // Fire from the modal — assembles the full ReactorInputs from every step plus
   // the classic payload fields, then posts into the shared SSE pipeline.
   const fire = () => {
@@ -287,6 +315,9 @@ export function Workbench() {
     setOfferName,
     agentPicked,
     suggesting,
+    intelligence,
+    intelligenceLoading: intelLoading,
+    loadIntelligence,
     intelligenceInputs: reactorInputs,
     activeInputs,
     toggleInput,
@@ -364,27 +395,49 @@ export function Workbench() {
                   <Radar size={12} className={phase === 'firing' ? 'animate-spin text-glow' : ''} />
                   Reactor Telemetry
                 </div>
-                <div ref={feedRef} className="max-h-40 space-y-1 overflow-y-auto font-mono text-[11px]">
-                  {telemetry.map((t, i) => (
-                    <div
-                      key={i}
-                      className={`flex gap-2 ${
-                        t.kind === 'retrieval'
-                          ? 'text-cyan/80'
-                          : t.kind === 'specialist'
-                            ? 'text-warning'
-                            : 'text-white/55'
-                      }`}
-                    >
-                      <span className="text-white/25">
-                        {t.kind === 'retrieval' ? '└▸' : t.kind === 'specialist' ? '▣' : '›'}
-                      </span>
-                      <span>{t.text}</span>
-                    </div>
-                  ))}
+                <div ref={feedRef} className="max-h-48 space-y-1 overflow-y-auto font-mono text-[11px]">
+                  {telemetry.map((t, i) => {
+                    if (t.kind === 'intelligence') {
+                      return (
+                        <div
+                          key={i}
+                          className="my-1 rounded-md border border-glow/20 bg-glow/[0.04] px-2.5 py-1.5"
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-[10px] font-semibold uppercase tracking-wider text-glow/90">
+                              {t.label}
+                            </span>
+                            {t.confidence && (
+                              <span
+                                className={`rounded-full px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide ${
+                                  t.confidence === 'High'
+                                    ? 'bg-success/15 text-success'
+                                    : t.confidence === 'Medium'
+                                      ? 'bg-warning/15 text-warning'
+                                      : 'bg-white/10 text-white/50'
+                                }`}
+                              >
+                                Confidence: {t.confidence}
+                              </span>
+                            )}
+                          </div>
+                          <p className="mt-0.5 text-white/70">{t.text}</p>
+                        </div>
+                      )
+                    }
+                    return (
+                      <div
+                        key={i}
+                        className={`flex gap-2 ${t.kind === 'retrieval' ? 'text-cyan/80' : 'text-white/55'}`}
+                      >
+                        <span className="text-white/25">{t.kind === 'retrieval' ? '└▸' : '›'}</span>
+                        <span>{t.text}</span>
+                      </div>
+                    )
+                  })}
                   {phase === 'firing' && (
                     <div className="flex items-center gap-2 text-glow">
-                      <Loader2 size={11} className="animate-spin" /> working…
+                      <Loader2 size={11} className="animate-spin" /> intelligence operating…
                     </div>
                   )}
                 </div>

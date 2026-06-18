@@ -3,17 +3,19 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
   Atom,
+  Brain,
   Check,
   ChevronLeft,
   ChevronRight,
   Clapperboard,
+  Gauge,
   ImageIcon,
   Loader2,
   Sparkles,
   X,
 } from 'lucide-react'
 import { FaceLibrary } from '@/components/reactor/FaceLibrary'
-import type { DirectiveOption } from '@/lib/reactor-inputs'
+import type { DirectiveOption, StrategicIntelligence } from '@/lib/reactor-inputs'
 import type { ModelAvailability } from '@/lib/video/types'
 import type { ImageModelAvailability } from '@/lib/image/types'
 
@@ -75,10 +77,14 @@ export interface ReactorForm {
   // Slide 4 — on brand
   onBrand: boolean
   setOnBrand: (v: boolean) => void
-  // Agent pre-selection — which fields the strategist has already chosen, and
-  // whether it is currently thinking.
+  // Intelligence pre-selection — which fields already carry a recommendation,
+  // and whether the system is currently analyzing the brief.
   agentPicked: Record<string, boolean>
   suggesting: boolean
+  // Strategic Intelligence — the read OPUS presents before the reactor fires.
+  intelligence: StrategicIntelligence | null
+  intelligenceLoading: boolean
+  loadIntelligence: () => void
 }
 
 interface ReactorModalProps {
@@ -96,8 +102,9 @@ function FieldLabel({ children }: { children: React.ReactNode }) {
   )
 }
 
-// Label for an agent-assisted field — shows that the strategist has already
-// chosen (overridable), or that it is still thinking.
+// Label for an intelligence-assisted field — shows that the system has a
+// recommendation in place (overridable), or that it is still analyzing. We
+// present intelligence, never "chosen by agent".
 function AgentFieldLabel({
   children,
   picked,
@@ -112,11 +119,11 @@ function AgentFieldLabel({
       <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-white/40">{children}</p>
       {picked ? (
         <span className="inline-flex items-center gap-1 rounded-full border border-[#FF5E3A]/40 bg-[#FF5E3A]/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-[#FF5E3A]">
-          <Sparkles size={9} /> Agent&apos;s pick
+          <Sparkles size={9} /> Recommended
         </span>
       ) : thinking ? (
         <span className="inline-flex items-center gap-1 text-[9px] uppercase tracking-wide text-white/35">
-          <Loader2 size={9} className="animate-spin" /> choosing…
+          <Loader2 size={9} className="animate-spin" /> analyzing…
         </span>
       ) : null}
     </div>
@@ -158,6 +165,11 @@ export function ReactorModal({ open, onClose, onFire, form }: ReactorModalProps)
     return () => window.removeEventListener('keydown', onKey)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, dirty])
+
+  useEffect(() => {
+    if (open && step === 5) form.loadIntelligence()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, step])
 
   if (!open) return null
 
@@ -258,7 +270,7 @@ export function ReactorModal({ open, onClose, onFire, form }: ReactorModalProps)
                 >
                   {form.angleOptions.map((a, i) => (
                     <option key={a} value={a} className="bg-card">
-                      {i === 0 ? 'Agent’s choice' : a}
+                      {i === 0 ? 'Recommended' : a}
                     </option>
                   ))}
                 </select>
@@ -292,8 +304,8 @@ export function ReactorModal({ open, onClose, onFire, form }: ReactorModalProps)
           {step === 2 && (
             <div className="animate-fade-up space-y-4">
               <p className="rounded-lg border border-[#FF5E3A]/25 bg-[#FF5E3A]/[0.06] px-3 py-2 text-[11px] leading-relaxed text-white/55">
-                The strategist has already set these from your brief. Change any of them — your pick
-                stays locked.
+                Strategic intelligence has set these from your brief. Change any of them — your
+                choice stays locked.
               </p>
               <div>
                 <AgentFieldLabel picked={form.agentPicked.awareness} thinking={form.suggesting}>
@@ -310,7 +322,7 @@ export function ReactorModal({ open, onClose, onFire, form }: ReactorModalProps)
                 >
                   {form.awarenessOptions.map((o, i) => (
                     <option key={o.label} value={o.label} className="bg-card">
-                      {i === 0 ? 'Agent’s choice' : o.label}
+                      {i === 0 ? 'Recommended' : o.label}
                     </option>
                   ))}
                 </select>
@@ -329,7 +341,7 @@ export function ReactorModal({ open, onClose, onFire, form }: ReactorModalProps)
                 >
                   {form.audienceOptions.map((o, i) => (
                     <option key={o.label} value={o.label} className="bg-card">
-                      {i === 0 ? 'Agent’s choice' : o.label}
+                      {i === 0 ? 'Recommended' : o.label}
                     </option>
                   ))}
                 </select>
@@ -348,7 +360,7 @@ export function ReactorModal({ open, onClose, onFire, form }: ReactorModalProps)
                 >
                   {form.offerOptions.map((o, i) => (
                     <option key={o.label} value={o.label} className="bg-card">
-                      {i === 0 ? 'Agent’s choice' : o.label}
+                      {i === 0 ? 'Recommended' : o.label}
                     </option>
                   ))}
                 </select>
@@ -516,6 +528,11 @@ export function ReactorModal({ open, onClose, onFire, form }: ReactorModalProps)
 
           {step === 5 && (
             <div className="animate-fade-up space-y-4">
+              <StrategicIntelligencePanel
+                intelligence={form.intelligence}
+                loading={form.intelligenceLoading}
+              />
+
               <div className="space-y-1.5 rounded-lg border border-border bg-background/60 p-4 text-sm">
                 <SummaryRow label="Angle" value={agentDecidesAngle ? 'Agent decides' : form.angle} />
                 <SummaryRow
@@ -589,7 +606,7 @@ export function ReactorModal({ open, onClose, onFire, form }: ReactorModalProps)
                   <Atom size={16} /> ⚡ Fire Reactor
                 </button>
                 <p className="mt-2 text-center text-[11px] text-white/35">
-                  Claude Opus 4.8 · Agentic retrieval · Self-critique scoring
+                  OPUS · Strategic synthesis · Self-critique scoring
                 </p>
               </div>
             </div>
@@ -626,6 +643,111 @@ export function ReactorModal({ open, onClose, onFire, form }: ReactorModalProps)
             <span />
           )}
         </div>
+      </div>
+    </div>
+  )
+}
+
+// The Strategic Intelligence read OPUS presents before the reactor fires. This
+// is intelligence — pains, desires, patterns, recommended structures — never
+// exposed agent machinery.
+function StrategicIntelligencePanel({
+  intelligence,
+  loading,
+}: {
+  intelligence: StrategicIntelligence | null
+  loading: boolean
+}) {
+  const confTone =
+    intelligence?.confidence === 'High'
+      ? 'bg-success/15 text-success'
+      : intelligence?.confidence === 'Medium'
+        ? 'bg-warning/15 text-warning'
+        : 'bg-white/10 text-white/55'
+
+  return (
+    <div className="rounded-xl border border-[#FF5E3A]/25 bg-[#FF5E3A]/[0.05] p-4">
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <Brain size={15} className="text-[#FF5E3A]" />
+          <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-white/80">
+            Strategic Intelligence
+          </span>
+        </div>
+        {loading ? (
+          <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wide text-white/40">
+            <Loader2 size={11} className="animate-spin" /> analyzing…
+          </span>
+        ) : intelligence ? (
+          <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${confTone}`}>
+            <Gauge size={10} /> {intelligence.confidence} · {intelligence.confidenceScore}%
+          </span>
+        ) : null}
+      </div>
+
+      {loading && !intelligence ? (
+        <div className="space-y-2">
+          {[0, 1, 2, 3].map((i) => (
+            <div key={i} className="h-3 w-full animate-pulse rounded bg-white/5" />
+          ))}
+        </div>
+      ) : intelligence ? (
+        <div className="space-y-2 text-sm">
+          <IntelRow label="Awareness" value={intelligence.awareness} />
+          <IntelRow label="Primary Pain" value={intelligence.primaryPain} />
+          <IntelRow label="Primary Desire" value={intelligence.primaryDesire} />
+          <IntelRow label="Primary Pattern" value={intelligence.primaryPattern} accent />
+          <IntelRow label="Creative Structure" value={intelligence.recommendedCreativeStructure} />
+          <IntelRow label="Copy Structure" value={intelligence.recommendedCopyStructure} />
+          <IntelRow label="Offer Positioning" value={intelligence.recommendedOfferPositioning} />
+
+          {(intelligence.knowledgeAssetsConsulted.length > 0 ||
+            intelligence.researchSourcesConsulted.length > 0) && (
+            <div className="space-y-2 border-t border-white/10 pt-2.5">
+              {intelligence.knowledgeAssetsConsulted.length > 0 && (
+                <ConsultedRow label="Knowledge Assets" items={intelligence.knowledgeAssetsConsulted} />
+              )}
+              {intelligence.researchSourcesConsulted.length > 0 && (
+                <ConsultedRow label="Research Sources" items={intelligence.researchSourcesConsulted} />
+              )}
+            </div>
+          )}
+        </div>
+      ) : (
+        <p className="text-xs text-white/40">
+          Add a brief on Step 1 and the platform will present its strategic read here.
+        </p>
+      )}
+    </div>
+  )
+}
+
+function IntelRow({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
+  return (
+    <div className="flex gap-3">
+      <span className="w-28 shrink-0 text-[11px] uppercase tracking-[0.08em] text-white/35">
+        {label}
+      </span>
+      <span className={accent ? 'font-medium text-[#FF5E3A]' : 'text-white/75'}>{value}</span>
+    </div>
+  )
+}
+
+function ConsultedRow({ label, items }: { label: string; items: string[] }) {
+  return (
+    <div className="flex gap-3">
+      <span className="w-28 shrink-0 text-[11px] uppercase tracking-[0.08em] text-white/35">
+        {label}
+      </span>
+      <div className="flex flex-wrap gap-1.5">
+        {items.map((it) => (
+          <span
+            key={it}
+            className="rounded-full border border-white/10 bg-white/[0.03] px-2 py-0.5 text-[10px] text-white/55"
+          >
+            {it}
+          </span>
+        ))}
       </div>
     </div>
   )

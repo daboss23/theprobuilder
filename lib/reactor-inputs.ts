@@ -12,6 +12,26 @@ export interface BrandSettings {
   toneRules: string
 }
 
+/**
+ * The Strategic Intelligence read OPUS presents before the reactor fires — the
+ * platform thinking out loud. Sourced from `/api/campaign-reactor/intelligence`
+ * (real retrieval + optional OPUS synthesis), it is intelligence, never exposed
+ * agent machinery.
+ */
+export interface StrategicIntelligence {
+  awareness: string
+  primaryPain: string
+  primaryDesire: string
+  primaryPattern: string
+  recommendedCreativeStructure: string
+  recommendedCopyStructure: string
+  recommendedOfferPositioning: string
+  knowledgeAssetsConsulted: string[]
+  researchSourcesConsulted: string[]
+  confidence: 'High' | 'Medium' | 'Exploratory'
+  confidenceScore: number
+}
+
 export interface ReactorInputs {
   brief: string
   angle: string

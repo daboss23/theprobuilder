@@ -1,7 +1,8 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { NextRequest } from 'next/server'
-import { searchKnowledge, type KnowledgeSystem } from '@/lib/knowledge'
+import { searchKnowledge } from '@/lib/knowledge'
 import { learnings } from '@/lib/reactor-data'
+import { INTELLIGENCE, INTELLIGENCE_IDS, isIntelligenceId, type IntelligenceId } from '@/lib/agents'
 import { generateImageWith, imageConfigured, listImageModels, type AspectRatio } from '@/lib/image'
 import {
   startVideoJob,
@@ -15,10 +16,10 @@ import { outputTypeOptions, type ReactorInputs } from '@/lib/reactor-inputs'
 export const runtime = 'nodejs'
 export const maxDuration = 300
 
-// Coordinator brain (strategy + synthesis) and the cheaper specialists it
-// delegates to. Single source of truth for both models.
-const COORDINATOR_MODEL = 'claude-opus-4-8'
-const SPECIALIST_MODEL = 'claude-sonnet-4-6'
+// OPUS — the Master Strategist brain (strategy + synthesis) — and the cheaper
+// model the intelligence layers (ATLAS/NOVA/SPARK/ECHO/ORACLE) run on.
+const OPUS_MODEL = 'claude-opus-4-8'
+const INTELLIGENCE_MODEL = 'claude-sonnet-4-6'
 const MAX_TURNS = 12
 
 // MCP connector (Messages API) beta — lets the coordinator call remote MCP
@@ -57,32 +58,6 @@ function metaAdsServer(): Anthropic.Beta.Messages.BetaRequestMCPServerURLDefinit
     ? `${baseUrl}${baseUrl.includes('?') ? '&' : '?'}token=${encodeURIComponent(token)}`
     : baseUrl
   return { type: 'url', name: META_ADS_MCP_NAME, url }
-}
-
-/* ----------------------------- Specialists -------------------------------- */
-
-type SpecialistId = 'research' | 'creative' | 'copy'
-
-const SPECIALISTS: Record<
-  SpecialistId,
-  { name: string; systems: KnowledgeSystem[]; focus: string }
-> = {
-  research: {
-    name: 'Research Analyst',
-    systems: ['research', 'transformation'],
-    focus:
-      'market pains, desires, objections, beliefs, and the member transformations that prove change is possible',
-  },
-  creative: {
-    name: 'Creative Strategist',
-    systems: ['creative', 'pattern'],
-    focus: 'winning creative structures, formats, opening patterns, and repeatable winning patterns',
-  },
-  copy: {
-    name: 'Copy Specialist',
-    systems: ['copy'],
-    focus: 'high-performing hooks, headlines, primary text, and offers',
-  },
 }
 
 /* ------------------------------ SSE plumbing ------------------------------ */
@@ -132,20 +107,21 @@ function buildTools(
     .map((m) => m.id)
   const tools: Anthropic.Beta.Messages.BetaToolUnion[] = [
     {
-      name: 'consult_specialist',
+      name: 'consult_intelligence',
       description:
-        'Delegate a focused question to a specialist sub-agent who searches their slice of the knowledge layer and reports findings. Consult the research specialist plus at least one of creative/copy before drafting.',
+        'Delegate a focused question to one of your intelligence layers. Each one searches its slice of the knowledge layer and reports findings. Always consult nova (market) and oracle (pattern), plus at least one of spark/echo, before drafting concepts.',
       input_schema: {
         type: 'object',
         properties: {
-          specialist: {
+          layer: {
             type: 'string',
-            enum: ['research', 'creative', 'copy'],
-            description: 'research = pains/desires/transformations; creative = formats/patterns; copy = hooks/headlines/offers',
+            enum: INTELLIGENCE_IDS,
+            description:
+              'atlas = frameworks/SOPs/knowledge assets; nova = market pains/desires/objections/transformations; spark = winning creative structures & Creative DNA; echo = hooks/headlines/offers & Copy DNA; oracle = winning/losing patterns & strategic memory',
           },
-          question: { type: 'string', description: 'The focused question for the specialist' },
+          question: { type: 'string', description: 'The focused question for that intelligence layer' },
         },
-        required: ['specialist', 'question'],
+        required: ['layer', 'question'],
       },
     },
     {
@@ -211,7 +187,7 @@ function buildTools(
   tools.push({
     name: 'submit_concepts',
     description:
-      'Submit the final campaign concepts once specialists have reported AND you have self-scored each concept against the Creative Learnings rubric. Each concept must cite its evidence and pass the rubric. Include imageUrl for any concept you generated a creative for.',
+      'Submit the final campaign concepts once your intelligence network has reported AND you have self-scored each concept against the Creative Learnings rubric. Each concept must cite its evidence and pass the rubric. Include imageUrl for any concept you generated a creative for.',
     input_schema: {
       type: 'object',
       properties: {
@@ -222,7 +198,7 @@ function buildTools(
             properties: {
               type: { type: 'string', description: 'Output type, e.g. Hook, Headline, Founder Concept' },
               text: { type: 'string' },
-              basis: { type: 'string', description: 'Which specialist finding / asset / pattern this draws from' },
+              basis: { type: 'string', description: 'Which intelligence layer / asset / pattern this draws from' },
               learningCheck: { type: 'string', description: 'How it satisfies the rubric' },
               score: { type: 'integer', description: 'Self-assessed 1-10. Only submit 7+.' },
               imageUrl: { type: 'string', description: 'The Higgsfield image URL for this concept, if one was generated.' },
@@ -272,17 +248,19 @@ function coordinatorPrompt(
     ? `\n- For video output types (Video Concept, Founder Concept, Testimonial Concept), call generate_video. Available models: ${caps.videoModels.join(', ')}. Use text-to-video to direct a full scene (e.g. a real builder on-site, a member speaking to camera — use veo-3 when they speak so it has audio; seedance-2.0 or kling-2.5 for cinematic action). Use image-to-video to animate a still from generate_image. Match conceptType to the concept you submit.${preferredLine}`
     : ''
 
-  return `You are the Campaign Reactor Coordinator — the lead strategist of The Professional Builder's Creative Intelligence Command Center. You direct a team of specialist sub-agents.
+  return `You are OPUS — the Master Strategist of The Professional Builder's Creative Intelligence Command Center. You direct an intelligence network and synthesize it into launch-ready creative.
 
-Your team:
-- Research Analyst — market pains, desires, objections, and member transformations.
-- Creative Strategist — winning creative structures, formats, and repeatable patterns.
-- Copy Specialist — high-performing hooks, headlines, and offers.
+Your intelligence network:
+- ATLAS — Knowledge Intelligence: frameworks, SOPs, calls, and uploaded assets.
+- NOVA — Market Intelligence: pains, desires, objections, beliefs, and member transformations.
+- SPARK — Creative Intelligence: winning creative structures, openings, and Creative DNA.
+- ECHO — Copy Intelligence: high-performing hooks, headlines, offers, and Copy DNA.
+- ORACLE — Pattern Intelligence: which patterns win, which lose, and what is most likely to work next.
 
 Process:
-1. Delegate focused questions to your specialists with consult_specialist. Always consult the Research Analyst plus at least one of Creative/Copy. Use their findings as evidence — don't guess.${metaAdsLine}
+1. Consult your network with consult_intelligence. Always consult NOVA and ORACLE, plus at least one of SPARK/ECHO. Use their findings as evidence — don't guess.${metaAdsLine}
 2. Call get_learnings and self-score every concept against that rubric. Revise or drop anything below 7.${imageLine}${videoLine}
-3. Call submit_concepts exactly once, with concepts ONLY for these requested output types: ${outputs.join(', ')}. Each concept cites which specialist finding it came from.
+3. Call submit_concepts exactly once, with concepts ONLY for these requested output types: ${outputs.join(', ')}. Each concept cites which intelligence layer its evidence came from.
 
 Voice: confident, specific, builder-native. Engineered for performance.`
 }
@@ -293,7 +271,7 @@ const SOPHISTICATION_BLOCK =
   'MARKET SOPHISTICATION: This is a highly sophisticated market. Direct claims and basic mechanism claims are exhausted. Differentiate through a named proprietary mechanism, a contrarian angle, or identification so precise the prospect feels seen. Avoid generic claims any competitor could make. If the Vault contains Unique Mechanism documents, retrieve the most relevant one for this angle and awareness stage and anchor the concept on it.'
 
 const INTELLIGENCE_BLOCK =
-  'INTELLIGENCE SYSTEMS: Use your judgment to select which intelligence systems to search (via consult_specialist) based on the campaign angle, audience type, and brief. You are not restricted to specific systems — query whichever will give you the most relevant evidence for this run.'
+  'INTELLIGENCE NETWORK: Use your judgment to select which intelligence layers to consult (via consult_intelligence) based on the campaign angle, audience type, and brief. You are not restricted to specific layers — query whichever will give you the most relevant evidence for this run.'
 
 const COMPLIANCE_BLOCK = `HARD COMPLIANCE CONSTRAINTS — these override all creative instructions:
 - Attribute every income or results figure to a named individual as THEIR result. Never imply typical or guaranteed outcomes for the viewer.
@@ -380,22 +358,32 @@ function buildInputBlocks(inputs: ReactorInputs | undefined): string {
   return BLOCK_SEP + parts.join(BLOCK_SEP)
 }
 
-/* --------------------------- Specialist runner ---------------------------- */
+/* ------------------------- Intelligence-layer runner ----------------------- */
 
-async function runSpecialist(
+// Map hit volume to a builder-facing confidence band for the telemetry feed.
+function confidenceBand(hits: number): 'High' | 'Medium' | 'Exploratory' {
+  return hits >= 4 ? 'High' : hits >= 1 ? 'Medium' : 'Exploratory'
+}
+
+async function runIntelligence(
   anthropic: Anthropic,
   controller: ReadableStreamDefaultController,
-  id: SpecialistId,
+  id: IntelligenceId,
   question: string,
   builderId: string | null,
 ): Promise<string> {
-  const spec = SPECIALISTS[id]
-  sse(controller, { type: 'delegate', specialist: spec.name, status: 'start' })
+  const agent = INTELLIGENCE[id]
+  sse(controller, {
+    type: 'delegate',
+    agent: agent.codename,
+    label: agent.intelligenceLabel,
+    status: 'start',
+  })
 
-  // Gather scoped evidence across the specialist's systems.
+  // Gather scoped evidence across this layer's knowledge systems.
   const hits = (
     await Promise.all(
-      spec.systems.map((system) => searchKnowledge(question, { system, k: 4, builderId })),
+      agent.systems.map((system) => searchKnowledge(question, { system, k: 4, builderId })),
     )
   ).flat()
   for (const h of hits.slice(0, 5)) {
@@ -409,9 +397,9 @@ async function runSpecialist(
   const response = await withRetry(
     () =>
       anthropic.messages.create({
-        model: SPECIALIST_MODEL,
+        model: INTELLIGENCE_MODEL,
         max_tokens: 700,
-        system: `You are the ${spec.name} for The Professional Builder. You specialise in ${spec.focus}. Given retrieved evidence, return 3-5 tight, specific bullet findings the strategist can build a campaign on. Cite the asset/pattern names. No preamble.`,
+        system: `You are ${agent.codename}, the ${agent.role} layer for The Professional Builder. Your mission: ${agent.mission} Given retrieved evidence, return 3-5 tight, specific bullet findings OPUS can build a campaign on. Cite the asset/pattern names. No preamble.`,
         messages: [
           { role: 'user', content: `Question: ${question}\n\nRetrieved evidence:\n${evidence}` },
         ],
@@ -419,14 +407,21 @@ async function runSpecialist(
     (n, w) =>
       sse(controller, {
         type: 'step',
-        text: `${spec.name}: model busy — retrying (${n}/4) in ${w / 1000}s…`,
+        text: `${agent.intelligenceLabel}: model busy — retrying (${n}/4) in ${w / 1000}s…`,
       }),
   )
 
   const block = response.content.find((b): b is Anthropic.TextBlock => b.type === 'text')
   const findings = block?.text ?? 'No findings.'
-  const summary = findings.split('\n').find((l) => l.trim())?.replace(/^[-•*\s]+/, '').slice(0, 80) ?? 'findings ready'
-  sse(controller, { type: 'delegate', specialist: spec.name, status: 'done', summary })
+  const summary = findings.split('\n').find((l) => l.trim())?.replace(/^[-•*\s]+/, '').slice(0, 90) ?? 'findings ready'
+  sse(controller, {
+    type: 'delegate',
+    agent: agent.codename,
+    label: agent.intelligenceLabel,
+    status: 'done',
+    summary,
+    confidence: confidenceBand(hits.length),
+  })
 
   return findings
 }
@@ -435,26 +430,34 @@ async function runSpecialist(
 
 async function runDemo(controller: ReadableStreamDefaultController, body: ReactorRequest) {
   const outputs = body.outputs ?? ['Hook', 'Headline', 'Campaign Concept']
-  sse(controller, { type: 'step', text: 'Coordinator online (demo mode — set ANTHROPIC_API_KEY for the live team)' })
+  sse(controller, { type: 'step', text: 'OPUS online (demo mode — set ANTHROPIC_API_KEY for the live network)' })
 
-  const demoSummaries: Record<SpecialistId, string> = {
-    research: 'Builders fear margin erosion despite record revenue; "profit leak" language resonates',
-    creative: 'Founder videos (71% win) + static proof ads outperform; specific figures beat claims',
-    copy: 'Top hook: "Most builders don\'t have a revenue problem. They have a profit leak."',
+  const demoSummaries: Partial<Record<IntelligenceId, string>> = {
+    nova: 'Builders fear margin erosion despite record revenue; "profit leak" language resonates',
+    spark: 'Founder videos (71% win) + static proof ads outperform; specific figures beat claims',
+    echo: 'Top hook: "Most builders don\'t have a revenue problem. They have a profit leak."',
+    oracle: 'Dominant winning pattern: Time Freedom — owner-dependency relief beats raw growth claims',
   }
 
-  for (const id of ['research', 'creative', 'copy'] as SpecialistId[]) {
-    const spec = SPECIALISTS[id]
-    sse(controller, { type: 'delegate', specialist: spec.name, status: 'start' })
+  for (const id of ['nova', 'spark', 'echo', 'oracle'] as IntelligenceId[]) {
+    const agent = INTELLIGENCE[id]
+    sse(controller, { type: 'delegate', agent: agent.codename, label: agent.intelligenceLabel, status: 'start' })
     const hits = (
-      await Promise.all(spec.systems.map((s) => searchKnowledge(body.angle, { system: s, k: 2 })))
+      await Promise.all(agent.systems.map((s) => searchKnowledge(body.angle, { system: s, k: 2 })))
     ).flat()
     for (const h of hits.slice(0, 3)) sse(controller, { type: 'retrieval', system: h.system, title: h.title })
-    sse(controller, { type: 'delegate', specialist: spec.name, status: 'done', summary: demoSummaries[id] })
+    sse(controller, {
+      type: 'delegate',
+      agent: agent.codename,
+      label: agent.intelligenceLabel,
+      status: 'done',
+      summary: demoSummaries[id],
+      confidence: confidenceBand(hits.length || 2),
+    })
   }
 
-  sse(controller, { type: 'step', text: 'Loading Creative Learnings rubric for self-critique…' })
-  sse(controller, { type: 'step', text: 'Coordinator synthesizing + scoring concepts…' })
+  sse(controller, { type: 'step', text: 'ORACLE — loading the Creative Learnings rubric for self-critique…' })
+  sse(controller, { type: 'step', text: 'OPUS synthesizing strategy + scoring concepts…' })
   sse(controller, {
     type: 'step',
     text: 'Live Meta Ads performance + Higgsfield image/video creatives activate with API keys.',
@@ -463,16 +466,16 @@ async function runDemo(controller: ReadableStreamDefaultController, body: Reacto
   const a = body.angle && body.angle !== 'Agent decides' ? body.angle : 'Profit'
   const al = a.toLowerCase()
   const pool: Concept[] = [
-    { type: 'Hook', text: `Most builders don't have a ${al} problem. They have a ${al} leak hiding in plain sight.`, basis: 'Copy Specialist + Research Analyst', learningCheck: 'Specific, contrarian framing', score: 9 },
-    { type: 'Headline', text: `From struggling to systemized — how ${a} became TPB's unfair advantage.`, basis: 'Research Analyst (member transformations)', learningCheck: 'Transformation arc over features', score: 8 },
-    { type: 'Primary Text', text: `You didn't get into building to babysit jobs. This is the ${a} system that gave 500+ builders their margin — and their weekends — back.`, basis: 'Research Analyst + Copy Specialist', learningCheck: 'Concrete proof (500+ builders)', score: 8 },
-    { type: 'VSL Opener', text: `In the next few minutes I'll show you the exact ${a} mechanism most builders never see until it's too late.`, basis: 'Copy Specialist (VSL openers)', learningCheck: 'Mechanism + curiosity', score: 7 },
-    { type: 'Static Concept', text: `Dark background, one bold profit figure, named member underneath, single cyan accent. Angle: ${a}.`, basis: 'Creative Strategist (static proof ad)', learningCheck: 'Specific $ numbers beat vague claims', score: 9 },
-    { type: 'Video Concept', text: `Founder direct-to-camera on-site: 1.5s pattern interrupt, contrarian ${al} belief, member proof, soft CTA.`, basis: 'Creative Strategist (Founder Video, 71% win)', learningCheck: 'Founder videos beat talking heads', score: 9 },
-    { type: 'Founder Concept', text: `Handheld walk-through of a finished site while the founder breaks down the ${a} turning point.`, basis: 'Creative Strategist (Founder Video, 71% win)', learningCheck: 'Founder-led, on-site, real proof', score: 9 },
-    { type: 'Testimonial Concept', text: `Member states old hours/margin, the ${al} turning point, then the after. B-roll of their jobs.`, basis: 'Research Analyst (transformations)', learningCheck: 'Named member win over generic promise', score: 8 },
-    { type: 'Event Concept', text: `High-energy room montage tied to one ${a} insight and community proof.`, basis: 'Creative Strategist (Authority Pattern)', learningCheck: 'Community proof', score: 7 },
-    { type: 'Campaign Concept', text: `The ${a} Reactor: founder video + static proof ad + member testimonial, sequenced cold → warm → apply.`, basis: 'Coordinator (stacks highest-win formats)', learningCheck: 'Stacks the three highest-win formats', score: 9 },
+    { type: 'Hook', text: `Most builders don't have a ${al} problem. They have a ${al} leak hiding in plain sight.`, basis: 'ECHO + NOVA', learningCheck: 'Specific, contrarian framing', score: 9 },
+    { type: 'Headline', text: `From struggling to systemized — how ${a} became TPB's unfair advantage.`, basis: 'NOVA (member transformations)', learningCheck: 'Transformation arc over features', score: 8 },
+    { type: 'Primary Text', text: `You didn't get into building to babysit jobs. This is the ${a} system that gave 500+ builders their margin — and their weekends — back.`, basis: 'NOVA + ECHO', learningCheck: 'Concrete proof (500+ builders)', score: 8 },
+    { type: 'VSL Opener', text: `In the next few minutes I'll show you the exact ${a} mechanism most builders never see until it's too late.`, basis: 'ECHO (VSL openers)', learningCheck: 'Mechanism + curiosity', score: 7 },
+    { type: 'Static Concept', text: `Dark background, one bold profit figure, named member underneath, single cyan accent. Angle: ${a}.`, basis: 'SPARK (static proof ad)', learningCheck: 'Specific $ numbers beat vague claims', score: 9 },
+    { type: 'Video Concept', text: `Founder direct-to-camera on-site: 1.5s pattern interrupt, contrarian ${al} belief, member proof, soft CTA.`, basis: 'SPARK (Founder Video, 71% win)', learningCheck: 'Founder videos beat talking heads', score: 9 },
+    { type: 'Founder Concept', text: `Handheld walk-through of a finished site while the founder breaks down the ${a} turning point.`, basis: 'SPARK (Founder Video, 71% win)', learningCheck: 'Founder-led, on-site, real proof', score: 9 },
+    { type: 'Testimonial Concept', text: `Member states old hours/margin, the ${al} turning point, then the after. B-roll of their jobs.`, basis: 'NOVA (transformations)', learningCheck: 'Named member win over generic promise', score: 8 },
+    { type: 'Event Concept', text: `High-energy room montage tied to one ${a} insight and community proof.`, basis: 'SPARK (Authority Pattern)', learningCheck: 'Community proof', score: 7 },
+    { type: 'Campaign Concept', text: `The ${a} Reactor: founder video + static proof ad + member testimonial, sequenced cold → warm → apply.`, basis: 'OPUS (stacks highest-win formats)', learningCheck: 'Stacks the three highest-win formats', score: 9 },
   ]
   const norm = (s: string) => s.toLowerCase().replace(/s$/, '').trim()
   const wanted = outputs.map(norm)
@@ -506,7 +509,7 @@ export async function POST(request: NextRequest) {
         const tools = buildTools(useImage, useVideo, Boolean(mcpServer))
         const inputBlocks = buildInputBlocks(body.reactorInputs)
 
-        sse(controller, { type: 'step', text: 'Coordinator online. Briefing the specialist team…' })
+        sse(controller, { type: 'step', text: 'OPUS online. Directing the intelligence network…' })
         if (mcpServer) sse(controller, { type: 'step', text: 'Live Meta Ads performance feed connected.' })
         if (useImage) sse(controller, { type: 'step', text: `Image engine ready · models: ${availableImageModels.join(', ')}` })
         if (useVideo) sse(controller, { type: 'step', text: `Video engine ready · models: ${availableVideoModels.join(', ')}` })
@@ -520,7 +523,7 @@ export async function POST(request: NextRequest) {
 
         for (let turn = 0; turn < MAX_TURNS; turn++) {
           const params: Anthropic.Beta.Messages.MessageCreateParamsNonStreaming = {
-            model: COORDINATOR_MODEL,
+            model: OPUS_MODEL,
             max_tokens: 4000,
             system:
               coordinatorPrompt(outputs, {
@@ -576,18 +579,22 @@ export async function POST(request: NextRequest) {
 
           const results: Anthropic.Beta.Messages.BetaToolResultBlockParam[] = []
           for (const tu of toolUses) {
-            if (tu.name === 'consult_specialist') {
-              const { specialist, question } = tu.input as { specialist: SpecialistId; question: string }
-              const findings = await runSpecialist(
+            if (tu.name === 'consult_intelligence') {
+              const { layer, question } = tu.input as { layer: string; question: string }
+              if (!isIntelligenceId(layer)) {
+                results.push({ type: 'tool_result', tool_use_id: tu.id, content: 'Unknown intelligence layer', is_error: true })
+                continue
+              }
+              const findings = await runIntelligence(
                 anthropic,
                 controller,
-                specialist,
+                layer,
                 question,
                 body.builderId ?? null,
               )
               results.push({ type: 'tool_result', tool_use_id: tu.id, content: findings })
             } else if (tu.name === 'get_learnings') {
-              sse(controller, { type: 'step', text: 'Loading Creative Learnings rubric for self-critique…' })
+              sse(controller, { type: 'step', text: 'ORACLE — loading the Creative Learnings rubric for self-critique…' })
               results.push({
                 type: 'tool_result',
                 tool_use_id: tu.id,
