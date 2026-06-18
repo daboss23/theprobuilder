@@ -11,7 +11,7 @@ import {
   type GenMode,
 } from '@/lib/video'
 import { logGeneration } from '@/lib/video/persistence'
-import { outputTypeOptions, type ReactorInputs } from '@/lib/reactor-inputs'
+import { outputTypeOptions, type ReactorInputs, type ProductionBrief } from '@/lib/reactor-inputs'
 
 export const runtime = 'nodejs'
 export const maxDuration = 300
@@ -44,6 +44,7 @@ interface Concept {
   learningCheck?: string
   score?: number
   imageUrl?: string
+  productionBrief?: ProductionBrief
 }
 
 /* ------------------------------ Meta Ads MCP ------------------------------ */
@@ -202,6 +203,30 @@ function buildTools(
               learningCheck: { type: 'string', description: 'How it satisfies the rubric' },
               score: { type: 'integer', description: 'Self-assessed 1-10. Only submit 7+.' },
               imageUrl: { type: 'string', description: 'The Higgsfield image URL for this concept, if one was generated.' },
+              productionBrief: {
+                type: 'object',
+                description:
+                  'REQUIRED for visual concepts (Static/Video/Founder/Testimonial/Event/Campaign Concept): a frame-by-frame production plan. Image and video are generated from this brief.',
+                properties: {
+                  creativeType: { type: 'string' },
+                  pattern: { type: 'string', description: 'e.g. Member Win, Profit Leak, Time Freedom' },
+                  audience: { type: 'string' },
+                  awareness: { type: 'string' },
+                  frames: {
+                    type: 'array',
+                    description: '4-6 frames, each a beat of the creative.',
+                    items: {
+                      type: 'object',
+                      properties: {
+                        label: { type: 'string', description: 'e.g. "Frame 1", "Hook", "CTA"' },
+                        description: { type: 'string', description: 'What is on screen / said in this beat.' },
+                      },
+                      required: ['label', 'description'],
+                    },
+                  },
+                },
+                required: ['creativeType', 'frames'],
+              },
             },
             required: ['type', 'text'],
           },
@@ -238,14 +263,14 @@ function coordinatorPrompt(
       ? ` The user has selected the "${caps.preferredImageModel}" image model — use it unless a concept clearly needs a different one.`
       : ''
   const imageLine = caps.image
-    ? `\n- For visual output types (Static Concept, Founder Concept, Campaign Concept), call generate_image to produce a still creative. Available models: ${caps.imageModels.join(', ')}. Pass the concept type as conceptType and include the returned imageUrl in the matching concept.${preferredImageLine}`
+    ? `\n- For visual output types (Static Concept, Founder Concept, Campaign Concept): FIRST write a frame-by-frame production brief for the concept, THEN build the generate_image prompt FROM that brief. Available models: ${caps.imageModels.join(', ')}. Pass the concept type as conceptType, include the returned imageUrl, and attach the productionBrief to the submitted concept.${preferredImageLine}`
     : ''
   const preferredLine =
     caps.preferredVideoModel && caps.videoModels.includes(caps.preferredVideoModel)
       ? ` The user has selected the "${caps.preferredVideoModel}" model — use it for every generate_video call unless a shot clearly needs a different capability.`
       : ''
   const videoLine = caps.video
-    ? `\n- For video output types (Video Concept, Founder Concept, Testimonial Concept), call generate_video. Available models: ${caps.videoModels.join(', ')}. Use text-to-video to direct a full scene (e.g. a real builder on-site, a member speaking to camera — use veo-3 when they speak so it has audio; seedance-2.0 or kling-2.5 for cinematic action). Use image-to-video to animate a still from generate_image. Match conceptType to the concept you submit.${preferredLine}`
+    ? `\n- For video output types (Video Concept, Founder Concept, Testimonial Concept): FIRST write a frame-by-frame production brief, THEN build the generate_video prompt FROM that brief, and attach the productionBrief to the submitted concept. Available models: ${caps.videoModels.join(', ')}. Use text-to-video to direct a full scene (e.g. a real builder on-site, a member speaking to camera — use veo-3 when they speak so it has audio; seedance-2.0 or kling-2.5 for cinematic action). Use image-to-video to animate a still from generate_image. Match conceptType to the concept you submit.${preferredLine}`
     : ''
 
   return `You are OPUS — the Master Strategist of The Professional Builder's Creative Intelligence Command Center. You direct an intelligence network and synthesize it into launch-ready creative.
@@ -428,6 +453,25 @@ async function runIntelligence(
 
 /* --------------------------- Demo fallback flow --------------------------- */
 
+// A frame-by-frame production brief for a visual demo concept, so demo mode also
+// shows the production-brief-driven workflow.
+function demoBrief(creativeType: string, angle: string): ProductionBrief {
+  const al = angle.toLowerCase()
+  return {
+    creativeType,
+    pattern: angle === 'Profit' ? 'Profit Leak' : angle,
+    audience: 'Builders $1M–$3M',
+    awareness: 'Problem-Aware',
+    frames: [
+      { label: 'Frame 1', description: 'Builder overwhelmed on a chaotic job site.' },
+      { label: 'Frame 2', description: `The hidden ${al} problem exposed with one stark figure.` },
+      { label: 'Frame 3', description: 'The system / turning point introduced.' },
+      { label: 'Frame 4', description: 'The after — margin, time, and control restored.' },
+      { label: 'Frame 5', description: 'Soft, qualifying call to action to the next step.' },
+    ],
+  }
+}
+
 async function runDemo(controller: ReadableStreamDefaultController, body: ReactorRequest) {
   const outputs = body.outputs ?? ['Hook', 'Headline', 'Campaign Concept']
   sse(controller, { type: 'step', text: 'OPUS online (demo mode — set ANTHROPIC_API_KEY for the live network)' })
@@ -477,6 +521,12 @@ async function runDemo(controller: ReadableStreamDefaultController, body: Reacto
     { type: 'Event Concept', text: `High-energy room montage tied to one ${a} insight and community proof.`, basis: 'SPARK (Authority Pattern)', learningCheck: 'Community proof', score: 7 },
     { type: 'Campaign Concept', text: `The ${a} Reactor: founder video + static proof ad + member testimonial, sequenced cold → warm → apply.`, basis: 'OPUS (stacks highest-win formats)', learningCheck: 'Stacks the three highest-win formats', score: 9 },
   ]
+  // Visual concepts carry a production brief — the platform plans before it renders.
+  for (const c of pool) {
+    if (/static|video|founder|testimonial|event|campaign/i.test(c.type) && /concept/i.test(c.type)) {
+      c.productionBrief = demoBrief(c.type, a)
+    }
+  }
   const norm = (s: string) => s.toLowerCase().replace(/s$/, '').trim()
   const wanted = outputs.map(norm)
   for (const c of pool.filter((c) => wanted.includes(norm(c.type)) && (c.score ?? 0) >= 7)) {

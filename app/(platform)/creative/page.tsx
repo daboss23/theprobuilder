@@ -1,6 +1,7 @@
 import { Sparkles, Video, Layers, Play, Megaphone, type LucideIcon } from 'lucide-react'
 import { PageHeader, Panel, ProgressBar, Pill, accentClass, type Accent } from '@/components/reactor/ui'
 import { creativeAnalyses } from '@/lib/reactor-data'
+import { SparkAnalyzer } from './SparkAnalyzer'
 import { cn } from '@/lib/utils'
 
 const creativeStats: { label: string; icon: LucideIcon; n: number; accent: Accent }[] = [
@@ -43,6 +44,8 @@ export default function CreativePage() {
           </div>
         ))}
       </div>
+
+      <SparkAnalyzer />
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         {creativeAnalyses.map((c, i) => {

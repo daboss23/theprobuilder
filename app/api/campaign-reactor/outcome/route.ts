@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { recordOutcome } from '@/lib/outcomes'
+import { recordOutcome, type OutcomeAttributes, type Verdict } from '@/lib/outcomes'
 
 export const runtime = 'nodejs'
 
-// Log how a generated concept performed. Marking a concept a "winner" feeds it
-// back into the knowledge layer as a new pattern (the learning loop).
+// Log how a generated concept performed. Wins (winner / high performer) feed back
+// into the knowledge layer as new patterns (the Performance Intelligence loop).
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
@@ -23,9 +23,10 @@ export async function POST(request: NextRequest) {
     const result = await recordOutcome({
       angle,
       concept,
+      attributes: body.attributes as OutcomeAttributes | undefined,
       metricName: body.metricName,
       metricValue: body.metricValue,
-      verdict: body.verdict ?? 'winner',
+      verdict: (body.verdict as Verdict) ?? 'winner',
       builderId: body.builderId ?? null,
       notes: body.notes,
     })

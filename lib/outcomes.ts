@@ -1,16 +1,46 @@
-// Closed-loop learning: log how generated campaigns performed, and feed winners
-// back into the knowledge layer as new patterns so future retrieval surfaces
-// them. This is the mechanism that makes the Reactor smarter over time.
+// Performance Intelligence (ORACLE's memory layer). Logs how generated campaigns
+// actually performed, feeds winners back into the knowledge layer as new
+// patterns, and aggregates outcomes into pattern confidence — the mechanism that
+// makes the Reactor compound intelligence over time.
 
 import { getSupabaseAdmin } from '@/lib/supabase'
 import { ingestKnowledge } from '@/lib/knowledge'
 
+export type Verdict = 'pending' | 'winner' | 'loser' | 'high_performer' | 'average' | 'unknown'
+
+// Verdicts that count as a success and get re-ingested as retrievable patterns.
+const WIN_VERDICTS: Verdict[] = ['winner', 'high_performer']
+
+export const VERDICT_LABELS: Record<Verdict, string> = {
+  winner: 'Winner',
+  high_performer: 'High Performer',
+  average: 'Average Performer',
+  loser: 'Loser',
+  unknown: 'Unknown',
+  pending: 'Pending',
+}
+
+// Structured campaign attributes captured at outcome time. Optional — the MVP
+// works with whatever is present, and the schema is ready for CTR/CPL/ROAS later.
+export interface OutcomeAttributes {
+  campaignType?: string
+  audience?: string
+  awareness?: string
+  offer?: string
+  pattern?: string
+  creativeStructure?: string
+  copyStructure?: string
+  platform?: string
+  assetType?: string
+}
+
 export interface OutcomeInput {
   angle: string
-  concept: { type: string; text: string; basis?: string }
+  concept: { type: string; text: string; basis?: string; attributes?: OutcomeAttributes }
+  attributes?: OutcomeAttributes
   metricName?: string
   metricValue?: number
-  verdict?: 'pending' | 'winner' | 'loser'
+  verdict?: Verdict
   builderId?: string | null
   notes?: string
 }
@@ -27,7 +57,11 @@ function dbConfigured(): boolean {
 }
 
 export async function recordOutcome(input: OutcomeInput): Promise<OutcomeResult> {
-  const verdict = input.verdict ?? 'pending'
+  const verdict: Verdict = input.verdict ?? 'pending'
+  const attributes = input.attributes ?? input.concept.attributes ?? {}
+  // Fold the structured attributes into the concept jsonb so no schema migration
+  // is required, while staying queryable for pattern confidence.
+  const conceptRecord = { ...input.concept, attributes }
 
   if (!dbConfigured()) {
     return { ok: true, logged: false, reingested: false, reason: 'Supabase not configured' }
@@ -36,7 +70,7 @@ export async function recordOutcome(input: OutcomeInput): Promise<OutcomeResult>
   const { error } = await getSupabaseAdmin().from('campaign_outcomes').insert([
     {
       angle: input.angle,
-      concept: input.concept,
+      concept: conceptRecord,
       metric_name: input.metricName ?? null,
       metric_value: input.metricValue ?? null,
       verdict,
@@ -46,20 +80,19 @@ export async function recordOutcome(input: OutcomeInput): Promise<OutcomeResult>
   ])
   if (error) throw error
 
-  // Winners become new retrievable knowledge — the smartening loop.
+  // Wins become new retrievable knowledge — the smartening loop.
   let reingested = false
-  if (verdict === 'winner') {
+  if (WIN_VERDICTS.includes(verdict)) {
     try {
-      const metric = input.metricName
-        ? ` (${input.metricName}: ${input.metricValue ?? '—'})`
-        : ''
+      const metric = input.metricName ? ` (${input.metricName}: ${input.metricValue ?? '—'})` : ''
+      const pattern = attributes.pattern ? `\nPattern: ${attributes.pattern}` : ''
       await ingestKnowledge({
         system: 'pattern',
-        title: `Proven winner — ${input.angle}${metric}`,
-        content: `${input.concept.type}: ${input.concept.text}${input.concept.basis ? `\nGrounded in: ${input.concept.basis}` : ''}\nVerified winning campaign for the ${input.angle} angle.`,
-        category: input.concept.type,
+        title: `Proven ${VERDICT_LABELS[verdict].toLowerCase()} — ${input.angle}${metric}`,
+        content: `${input.concept.type}: ${input.concept.text}${input.concept.basis ? `\nGrounded in: ${input.concept.basis}` : ''}${pattern}\nVerified ${VERDICT_LABELS[verdict].toLowerCase()} for the ${input.angle} angle.`,
+        category: attributes.pattern || input.concept.type,
         builderId: input.builderId ?? null,
-        metadata: { source: 'campaign_outcome', verdict, metric: input.metricName },
+        metadata: { source: 'campaign_outcome', verdict, attributes, metric: input.metricName },
       })
       reingested = true
     } catch (err) {
@@ -68,4 +101,82 @@ export async function recordOutcome(input: OutcomeInput): Promise<OutcomeResult>
   }
 
   return { ok: true, logged: true, reingested }
+}
+
+/* ----------------------------- Strategic memory --------------------------- */
+
+export interface OutcomeRow {
+  id: string
+  created_at: string | null
+  angle: string
+  verdict: Verdict
+  conceptType: string
+  conceptText: string
+  attributes: OutcomeAttributes
+}
+
+interface RawOutcome {
+  id: string
+  created_at: string | null
+  angle: string
+  verdict: string
+  concept: { type?: string; text?: string; attributes?: OutcomeAttributes } | null
+}
+
+// Recent logged outcomes — powers the Performance Intelligence feed. Degrades to
+// an empty list when Supabase isn't configured (page shows its empty state).
+export async function listOutcomes(limit = 50): Promise<OutcomeRow[]> {
+  if (!dbConfigured()) return []
+  try {
+    const { data, error } = await getSupabaseAdmin()
+      .from('campaign_outcomes')
+      .select('id, created_at, angle, verdict, concept')
+      .order('created_at', { ascending: false })
+      .limit(limit)
+    if (error) throw error
+    return (data as RawOutcome[]).map((r) => ({
+      id: r.id,
+      created_at: r.created_at,
+      angle: r.angle,
+      verdict: (r.verdict as Verdict) ?? 'pending',
+      conceptType: r.concept?.type ?? '—',
+      conceptText: r.concept?.text ?? '',
+      attributes: r.concept?.attributes ?? {},
+    }))
+  } catch (err) {
+    console.error('listOutcomes failed:', err)
+    return []
+  }
+}
+
+export interface PatternConfidence {
+  pattern: string
+  wins: number
+  total: number
+  confidence: number
+}
+
+// Aggregate outcomes into per-pattern confidence: wins / total, weighted by the
+// verdict. This is ORACLE's read on "what is most likely to work next".
+export async function patternConfidence(): Promise<PatternConfidence[]> {
+  const rows = await listOutcomes(500)
+  if (rows.length === 0) return []
+
+  const map = new Map<string, { wins: number; total: number }>()
+  for (const r of rows) {
+    const pattern = r.attributes.pattern || r.angle || 'Uncategorized'
+    const entry = map.get(pattern) ?? { wins: 0, total: 0 }
+    entry.total += 1
+    if (WIN_VERDICTS.includes(r.verdict)) entry.wins += 1
+    map.set(pattern, entry)
+  }
+
+  return Array.from(map.entries())
+    .map(([pattern, { wins, total }]) => ({
+      pattern,
+      wins,
+      total,
+      confidence: Math.round((wins / Math.max(total, 1)) * 100),
+    }))
+    .sort((a, b) => b.confidence - a.confidence || b.total - a.total)
 }

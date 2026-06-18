@@ -18,8 +18,18 @@ import type { ModelAvailability } from '@/lib/video/types'
 import { recommendImageModel } from '@/lib/image/recommend'
 import type { ImageModelAvailability } from '@/lib/image/types'
 import { useReactorRun, type Concept } from '@/components/campaign-reactor/ReactorRunContext'
+import type { Verdict, OutcomeAttributes } from '@/lib/outcomes'
 
 const ANGLE_OPTIONS = ['Agent decides', ...winningAngles.map((a) => a.name)]
+
+// Client-safe verdict menu (no import from lib/outcomes runtime — that module is
+// server-only). Mirrors the Performance Intelligence verdict set.
+const VERDICT_OPTIONS: { value: Verdict; label: string }[] = [
+  { value: 'winner', label: 'Winner' },
+  { value: 'high_performer', label: 'High Performer' },
+  { value: 'average', label: 'Average' },
+  { value: 'loser', label: 'Loser' },
+]
 
 export function Workbench() {
   // Run + media state lives in the persistent platform-layout provider, so an
@@ -34,7 +44,7 @@ export function Workbench() {
     generateCreative,
     animate,
     generateUGC,
-    markWinner,
+    markOutcome,
     imageFor,
     videoFor,
     creativeStateFor,
@@ -282,6 +292,20 @@ export function Workbench() {
   // video ad; everything else renders a still.
   const isVideoConcept = (c: Concept) => /video|testimonial/i.test(c.type)
 
+  // The strategic attributes captured with every logged outcome — what ORACLE
+  // learns from. Sourced from the current run inputs + the concept itself.
+  const outcomeAttributes = (c: Concept): OutcomeAttributes => ({
+    campaignType: angle,
+    audience: audience.label,
+    awareness: awareness.label,
+    offer: offer.label,
+    pattern: c.productionBrief?.pattern || intelligence?.primaryPattern || angle,
+    creativeStructure: intelligence?.recommendedCreativeStructure,
+    copyStructure: intelligence?.recommendedCopyStructure,
+    platform: 'Meta',
+    assetType: c.type,
+  })
+
   // Thin wrappers: the run logic lives in the persistent provider; here we just
   // thread the current model picks + reference library into each call.
   const runCreative = (c: Concept) =>
@@ -509,15 +533,30 @@ export function Workbench() {
                           Animate
                         </button>
                       )}
-                      <button
-                        type="button"
-                        onClick={() => markWinner(c, angle)}
-                        disabled={logged.has(c.text)}
-                        className="flex items-center gap-1 text-[11px] text-white/40 hover:text-success disabled:text-success"
-                      >
-                        <Trophy size={12} />
-                        {logged.has(c.text) ? 'Logged' : 'Mark winner'}
-                      </button>
+                      {logged.has(c.text) ? (
+                        <span className="flex items-center gap-1 text-[11px] text-success">
+                          <Trophy size={12} /> Logged
+                        </span>
+                      ) : (
+                        <select
+                          defaultValue=""
+                          title="Log performance outcome"
+                          onChange={(e) => {
+                            const v = e.target.value as Verdict
+                            if (v) markOutcome(c, v, angle, outcomeAttributes(c))
+                          }}
+                          className="rounded-md border border-border bg-surface/60 px-1.5 py-1 text-[11px] text-white/50 outline-none hover:text-white focus:border-success/50"
+                        >
+                          <option value="" className="bg-card">
+                            Log outcome…
+                          </option>
+                          {VERDICT_OPTIONS.map((o) => (
+                            <option key={o.value} value={o.value} className="bg-card">
+                              {o.label}
+                            </option>
+                          ))}
+                        </select>
+                      )}
                       <button
                         type="button"
                         onClick={() => copy(c.text)}
@@ -529,6 +568,26 @@ export function Workbench() {
                     </div>
                   </div>
                   <p className="text-sm text-white/80">{c.text}</p>
+
+                  {c.productionBrief && c.productionBrief.frames?.length > 0 && (
+                    <div className="mt-2.5 rounded-lg border border-primary/15 bg-primary/[0.04] p-2.5">
+                      <div className="mb-1.5 flex flex-wrap items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-glow/80">
+                        <Film size={11} /> Production Brief
+                        {c.productionBrief.pattern && (
+                          <span className="font-normal text-white/30">· {c.productionBrief.pattern}</span>
+                        )}
+                      </div>
+                      <ol className="space-y-1">
+                        {c.productionBrief.frames.map((f, fi) => (
+                          <li key={fi} className="flex gap-2 text-[11px] text-white/60">
+                            <span className="shrink-0 font-mono text-glow/60">{f.label}</span>
+                            <span>{f.description}</span>
+                          </li>
+                        ))}
+                      </ol>
+                    </div>
+                  )}
+
                   {(c.basis || c.learningCheck) && (
                     <div className="mt-2 space-y-1 border-t border-border pt-2 text-[11px] text-white/40">
                       {c.basis && (

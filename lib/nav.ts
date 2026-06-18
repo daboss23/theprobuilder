@@ -7,9 +7,10 @@ import {
   Type,
   Network,
   Atom,
-  GraduationCap,
+  LineChart,
   Target,
   BarChart3,
+  Boxes,
 } from 'lucide-react'
 
 export interface NavItem {
@@ -27,7 +28,8 @@ export const navItems: NavItem[] = [
   { label: 'Copy Intelligence', href: '/copy', icon: Type, system: '04' },
   { label: 'Pattern Intelligence', href: '/patterns', icon: Network, system: '05' },
   { label: 'Campaign Reactor', href: '/campaign-reactor', icon: Atom, system: '06' },
-  { label: 'Creative Learnings', href: '/learnings', icon: GraduationCap, system: '07' },
-  { label: 'Recommendations', href: '/recommendations', icon: Target, system: '08' },
-  { label: 'Meta Intelligence', href: '/meta', icon: BarChart3, system: '09' },
+  { label: 'Performance Intelligence', href: '/learnings', icon: LineChart, system: '07' },
+  { label: 'Agent Network', href: '/network', icon: Boxes, system: '08' },
+  { label: 'Recommendations', href: '/recommendations', icon: Target, system: '09' },
+  { label: 'Meta Intelligence', href: '/meta', icon: BarChart3, system: '10' },
 ]

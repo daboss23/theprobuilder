@@ -1,6 +1,8 @@
 'use client'
 
 import { createContext, useCallback, useContext, useRef, useState, type ReactNode } from 'react'
+import { briefToPrompt, type ProductionBrief } from '@/lib/reactor-inputs'
+import type { Verdict, OutcomeAttributes } from '@/lib/outcomes'
 
 /* -------------------------------------------------------------------------- */
 /*  Shared run types                                                          */
@@ -13,6 +15,7 @@ export interface Concept {
   learningCheck?: string
   score?: number
   imageUrl?: string
+  productionBrief?: ProductionBrief
 }
 
 export interface TelemetryLine {
@@ -65,7 +68,7 @@ interface ReactorRunValue {
   generateCreative: (c: Concept, opts: CreativeOpts) => Promise<void>
   animate: (c: Concept, imageUrl: string, opts: VideoOpts) => Promise<void>
   generateUGC: (c: Concept, opts: UgcOpts) => Promise<void>
-  markWinner: (c: Concept, angle: string) => Promise<void>
+  markOutcome: (c: Concept, verdict: Verdict, angle: string, attributes: OutcomeAttributes) => Promise<void>
   imageFor: (c: Concept) => string | undefined
   videoFor: (c: Concept) => VideoUiState | undefined
   creativeStateFor: (c: Concept) => CreativeState | undefined
@@ -223,7 +226,7 @@ export function ReactorRunProvider({ children }: { children: ReactNode }) {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            prompt: c.text,
+            prompt: c.productionBrief ? briefToPrompt(c.productionBrief, c.text) : c.text,
             mode: 'text-to-video',
             model: videoModel,
             aspectRatio: '9:16',
@@ -266,7 +269,10 @@ export function ReactorRunProvider({ children }: { children: ReactNode }) {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            prompt: `${c.text}\n\nRender as a premium Meta ad creative for The Professional Builder — photographic, on-site builder context, high contrast, leave room for text overlay.`,
+            prompt: briefToPrompt(
+              c.productionBrief,
+              `${c.text}\n\nRender as a premium Meta ad creative for The Professional Builder — photographic, on-site builder context, high contrast, leave room for text overlay.`,
+            ),
             aspectRatio: '1:1',
             model: opts.imageModel,
           }),
@@ -377,19 +383,22 @@ export function ReactorRunProvider({ children }: { children: ReactNode }) {
     [pollVideo],
   )
 
-  // Log a winner — feeds it back into the knowledge layer as a new pattern.
-  const markWinner = useCallback(async (c: Concept, angle: string) => {
-    setLogged((prev) => new Set(prev).add(c.text))
-    try {
-      await fetch('/api/campaign-reactor/outcome', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ angle, concept: c, verdict: 'winner' }),
-      })
-    } catch {
-      /* best-effort logging */
-    }
-  }, [])
+  // Log an outcome — wins feed back into the knowledge layer as new patterns.
+  const markOutcome = useCallback(
+    async (c: Concept, verdict: Verdict, angle: string, attributes: OutcomeAttributes) => {
+      setLogged((prev) => new Set(prev).add(c.text))
+      try {
+        await fetch('/api/campaign-reactor/outcome', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ angle, concept: c, verdict, attributes }),
+        })
+      } catch {
+        /* best-effort logging */
+      }
+    },
+    [],
+  )
 
   const imageFor = useCallback(
     (c: Concept) => c.imageUrl || agentMedia[normType(c.type)]?.image || creatives[c.text]?.url,
@@ -411,7 +420,7 @@ export function ReactorRunProvider({ children }: { children: ReactNode }) {
     generateCreative,
     animate,
     generateUGC,
-    markWinner,
+    markOutcome,
     imageFor,
     videoFor,
     creativeStateFor,

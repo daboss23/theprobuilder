@@ -32,6 +32,33 @@ export interface StrategicIntelligence {
   confidenceScore: number
 }
 
+/**
+ * A structured production brief — SPARK's frame-by-frame plan for a visual
+ * concept. Image and video generation is driven by these briefs rather than raw
+ * prompts so every asset is built from a deliberate creative structure.
+ */
+export interface ProductionFrame {
+  label: string
+  description: string
+}
+
+export interface ProductionBrief {
+  creativeType: string
+  pattern: string
+  audience: string
+  awareness: string
+  frames: ProductionFrame[]
+}
+
+/** Turn a production brief into a single rich generation prompt. */
+export function briefToPrompt(brief: ProductionBrief | undefined, fallback: string): string {
+  if (!brief?.frames?.length) return fallback
+  const frames = brief.frames
+    .map((f, i) => `Frame ${i + 1} — ${f.label}: ${f.description}`)
+    .join('\n')
+  return `${brief.creativeType} ad creative for The Professional Builder. Pattern: ${brief.pattern}. Audience: ${brief.audience}. Awareness: ${brief.awareness}.\n${frames}\n\nRender premium, photographic, on-site builder context, high contrast, room for text overlay.`
+}
+
 export interface ReactorInputs {
   brief: string
   angle: string
