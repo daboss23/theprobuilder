@@ -733,13 +733,15 @@ function profileToText(title: string, profile: Record<string, unknown>): string 
   return `${title}\n\n${lines.join('\n')}`
 }
 
-async function clearDomain(domain: string): Promise<void> {
+// One connected website at a time: clear ALL website chunks before ingesting a
+// scan. Makes refresh (same domain) and switching company (new domain) behave
+// identically — no leftovers, no duplicates, no cross-company contamination.
+async function clearAllWebsites(): Promise<void> {
   if (!persistConfigured()) return
   const { error } = await getSupabaseAdmin()
     .from('knowledge_chunks')
     .delete()
     .eq('system', 'website')
-    .eq('metadata->>domain', domain)
   if (error) throw error
 }
 
@@ -808,9 +810,12 @@ function overviewFrom(profiles: WebsiteProfiles): WebsiteOverview {
 
 /**
  * Run a full website analysis: discover → scan → derive profiles → ingest.
- * Streams polished progress via `emit`. Returns the final summary. A refresh is
- * the same call — existing chunks for the domain are cleared first so refreshing
- * never creates duplicates. Partial page failures never fail the whole scan.
+ * Streams polished progress via `emit`. Returns the final summary. The platform
+ * keeps ONE connected website at a time: any previously connected site is
+ * cleared just before ingest, so a re-scan is a clean refresh and a new URL
+ * swaps the company in a single step. The clear runs only after the scan
+ * succeeds, so a failed fetch never wipes the existing site. Partial page
+ * failures never fail the whole scan.
  */
 export async function analyzeWebsite(
   rawUrl: string,
@@ -859,8 +864,11 @@ export async function analyzeWebsite(
   let pagesIndexed = 0
 
   if (persistConfigured()) {
-    // Refresh-safe: clear prior chunks for this domain, then re-ingest fresh.
-    await clearDomain(domain)
+    // Clear any previously connected website first, then re-ingest this scan.
+    // A new domain replaces the old company; a re-scan of the same domain is a
+    // clean refresh. Runs only after the scan succeeded, so a failed fetch can
+    // never wipe the existing site prematurely.
+    await clearAllWebsites()
 
     for (const page of scanned) {
       const result = await ingestKnowledge({
