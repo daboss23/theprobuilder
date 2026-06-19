@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Atom, Check, Loader2, Copy as CopyIcon, Radar, Trophy, ImageIcon, Film, Users } from 'lucide-react'
+import { Atom, Check, Loader2, Copy as CopyIcon, Radar, Trophy, ImageIcon, Film, Users, Hexagon } from 'lucide-react'
 import { Panel, PanelHeader, Pill } from '@/components/reactor/ui'
 import {
   ReactorModal,
@@ -40,6 +40,25 @@ const VERDICT_OPTIONS: { value: Verdict; label: string }[] = [
   { value: 'loser', label: 'Loser' },
 ]
 
+// Non-destructive provider/model chip overlaid on a generated still or clip.
+// It lives in the card UI only — the asset pixels are never touched, so the
+// downloadable creative stays clean. Renders nothing when no provider is known.
+function ProviderChip({ model, provider }: { model?: string; provider?: string }) {
+  if (!model && !provider) return null
+  return (
+    <span className="absolute right-2 top-2 z-10 inline-flex items-center gap-1 rounded-full border border-white/15 bg-black/60 px-2 py-0.5 text-[10px] font-medium text-white/85 backdrop-blur-sm">
+      <Hexagon size={9} className="text-glow" />
+      {provider && <span className="uppercase tracking-wide text-white/60">{provider}</span>}
+      {model && (
+        <>
+          {provider && <span className="text-white/25">·</span>}
+          <span>{model}</span>
+        </>
+      )}
+    </span>
+  )
+}
+
 export function Workbench() {
   // Run + media state lives in the persistent platform-layout provider, so an
   // in-flight reactor run survives navigating to another dashboard and back.
@@ -55,6 +74,7 @@ export function Workbench() {
     generateUGC,
     markOutcome,
     imageFor,
+    imageMetaFor,
     videoFor,
     creativeStateFor,
   } = useReactorRun()
@@ -618,6 +638,7 @@ export function Workbench() {
 
             {concepts.map((c, i) => {
               const image = imageFor(c)
+              const imageMeta = imageMetaFor(c)
               const video = videoFor(c)
               const wantsVideo = isVideoConcept(c)
               const creativeState = creativeStateFor(c)
@@ -745,20 +766,27 @@ export function Workbench() {
                     </div>
                   )}
 
-                  {/* Generated still creative (Higgsfield agent or manual) */}
+                  {/* Generated still creative (agent or manual) — provider chip
+                      overlaid on the card only; the image file stays untouched. */}
                   {image && (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={image} alt={c.type} className="mt-3 w-full rounded-lg border border-border" />
+                    <div className="relative mt-3">
+                      <ProviderChip model={imageMeta?.model} provider={imageMeta?.provider} />
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={image} alt={c.type} className="w-full rounded-lg border border-border" />
+                    </div>
                   )}
 
-                  {/* Higgsfield video */}
+                  {/* Generated video — provider chip overlaid on the player only. */}
                   {video?.status === 'done' && video.url && (
-                    <video
-                      src={video.url}
-                      controls
-                      playsInline
-                      className="mt-3 w-full rounded-lg border border-border"
-                    />
+                    <div className="relative mt-3">
+                      <ProviderChip model={video.model} provider={video.provider} />
+                      <video
+                        src={video.url}
+                        controls
+                        playsInline
+                        className="w-full rounded-lg border border-border"
+                      />
+                    </div>
                   )}
                   {video?.status === 'rendering' && (
                     <div className="mt-3 grid aspect-video w-full place-items-center rounded-lg border border-border bg-background/40">
