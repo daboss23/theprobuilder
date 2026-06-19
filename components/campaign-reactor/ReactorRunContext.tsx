@@ -288,7 +288,7 @@ export function ReactorRunProvider({ children }: { children: ReactNode }) {
               message:
                 res.error ||
                 (res.demo
-                  ? 'No image API key set — add FAL_KEY, GEMINI_API_KEY, OPENAI_API_KEY, or HF_CREDENTIALS'
+                  ? 'No image API key set — add FAL_KEY or HF_CREDENTIALS'
                   : 'Generation failed'),
             },
           }))

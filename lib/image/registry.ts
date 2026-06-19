@@ -3,6 +3,9 @@ import type { ImageModel } from './types'
 /**
  * The image model menu — TPB's still-creative equivalent of the video registry.
  * Each model is a different provider; one key per provider unlocks it.
+ *
+ * Stills run through fal.ai (one FAL_KEY unlocks frontier image models) or
+ * Higgsfield. Kie.ai can be added here as a second gateway when wired.
  */
 
 export const IMAGE_MODELS: ImageModel[] = [
@@ -15,22 +18,6 @@ export const IMAGE_MODELS: ImageModel[] = [
     notes: 'Photoreal humans and scenes via fal — one FAL_KEY, no per-model subscription. Great for realistic UGC and B-roll stills.',
   },
   {
-    id: 'nano-banana',
-    label: 'Nano Banana 2 (Gemini)',
-    provider: 'gemini',
-    aspectRatios: ['1:1', '9:16', '16:9'],
-    tier: 'flagship',
-    notes: 'Fast, high-quality, strong instruction-following — great for rapid creative variants.',
-  },
-  {
-    id: 'openai-gpt-image',
-    label: 'OpenAI GPT Image',
-    provider: 'openai',
-    aspectRatios: ['1:1', '9:16', '16:9'],
-    tier: 'flagship',
-    notes: 'Best at rendering legible text in the image and precise prompt adherence.',
-  },
-  {
     id: 'higgsfield-soul',
     label: 'Higgsfield Soul',
     provider: 'higgsfield',
@@ -40,7 +27,7 @@ export const IMAGE_MODELS: ImageModel[] = [
   },
 ]
 
-export const DEFAULT_IMAGE_MODEL = 'nano-banana'
+export const DEFAULT_IMAGE_MODEL = 'fal-flux'
 
 export function getImageModel(id: string): ImageModel | undefined {
   return IMAGE_MODELS.find((m) => m.id === id)

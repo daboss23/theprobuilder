@@ -1,6 +1,4 @@
 import { generateImage as higgsfieldImage, higgsfieldConfigured } from '@/lib/higgsfield'
-import { generateGeminiImage, geminiConfigured } from './gemini'
-import { generateOpenAIImage, openaiImageConfigured } from './openai'
 import { generateFalImage, falImageConfigured } from './fal'
 import { DEFAULT_IMAGE_MODEL, IMAGE_MODELS, getImageModel } from './registry'
 import type { AspectRatio, ImageModelAvailability } from './types'
@@ -10,13 +8,11 @@ export { IMAGE_MODELS, DEFAULT_IMAGE_MODEL, getImageModel } from './registry'
 
 /**
  * Unified image "oven" — dispatches a still render to whichever provider backs
- * the requested model (Nano Banana / Gemini, OpenAI, Higgsfield). Callers never
- * branch on provider. Never throws on missing keys — returns null.
+ * the requested model (fal / FLUX, Higgsfield). Callers never branch on
+ * provider. Never throws on missing keys — returns null.
  */
 
 export function providerConfigured(provider: string): boolean {
-  if (provider === 'gemini') return geminiConfigured()
-  if (provider === 'openai') return openaiImageConfigured()
   if (provider === 'higgsfield') return higgsfieldConfigured()
   if (provider === 'fal') return falImageConfigured()
   return false
@@ -24,9 +20,7 @@ export function providerConfigured(provider: string): boolean {
 
 /** True if ANY image provider is configured. */
 export function imageConfigured(): boolean {
-  return (
-    geminiConfigured() || openaiImageConfigured() || higgsfieldConfigured() || falImageConfigured()
-  )
+  return higgsfieldConfigured() || falImageConfigured()
 }
 
 /** The image model menu annotated with whether each model's key is present. */
@@ -64,8 +58,6 @@ async function renderWithModel(
 ): Promise<{ url: string | null; error?: string }> {
   const model = getImageModel(id)
   if (!model) return { url: null, error: `Unknown image model "${id}"` }
-  if (model.provider === 'gemini') return generateGeminiImage(prompt, aspectRatio)
-  if (model.provider === 'openai') return generateOpenAIImage(prompt, aspectRatio)
   if (model.provider === 'fal') return generateFalImage(prompt, aspectRatio)
   if (model.provider === 'higgsfield') {
     const url = await higgsfieldImage(prompt, aspectRatio)

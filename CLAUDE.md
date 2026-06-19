@@ -45,7 +45,7 @@ Tagline: **Engineered For Performance.**
 | Copy AI | Anthropic Claude API — orchestrator `claude-opus-4-8`, bulk `claude-sonnet-4-6` |
 | Embeddings | Voyage AI `voyage-3` (RAG retrieval) |
 | Vector store | Supabase `pgvector` (`knowledge_chunks`) |
-| Image AI | Google Gemini (Nano Banana 2 — `gemini-3.1-flash-image-preview`) + Higgsfield |
+| Image AI | fal.ai (FLUX) + Higgsfield Soul — direct Gemini/OpenAI image removed (fal + Kie only) |
 | Deployment | Vercel |
 
 ---
@@ -129,10 +129,10 @@ end. For destructive writes (Supabase inserts), surface errors clearly.
 - Never throw on missing keys or failed renders — return null/`unknown` so the copy stays usable.
 
 ### Image models (multi-provider "oven")
-- The image layer lives in `lib/image/` and mirrors the video layer. `lib/image/registry.ts` is the menu: **nano-banana** (Gemini, `lib/image/gemini.ts`), **openai-gpt-image** (`lib/image/openai.ts`), **higgsfield-soul** (Higgsfield SDK). One provider key each.
-- `lib/image/index.ts` dispatches `generateImageWith(modelId, prompt, aspectRatio)` → `{ imageUrl, modelId, provider }`, picking the best configured model when none/an unconfigured one is requested. Never throws — returns null.
-- Exposed to the agent as `generate_image` with a `model` selector; `lib/image/recommend.ts` suggests a model from the requested output types (OpenAI for text-heavy statics, Higgsfield Soul for photographic founder/testimonial, Nano Banana for fast variants).
-- API: `GET /api/image/models` lists the menu + configured status; `POST /api/generate-image` is model-aware (backward compatible — prompt only renders on the default/best model).
+- The image layer lives in `lib/image/` and mirrors the video layer. `lib/image/registry.ts` is the menu: **fal-flux** (FLUX via fal, `lib/image/fal.ts`), **higgsfield-soul** (Higgsfield SDK). Direct Gemini/OpenAI image providers were removed — the platform uses fal (and Kie when wired) plus Higgsfield only. One provider key each.
+- `lib/image/index.ts` dispatches `generateImageWith(modelId, prompt, aspectRatio)` → `{ imageUrl, modelId, provider }`, picking the best configured model when none/an unconfigured one is requested, with automatic fallback to any other configured provider. Never throws — returns null.
+- Exposed to the agent as `generate_image` with a `model` selector; `lib/image/recommend.ts` suggests a model from the requested output types (Higgsfield Soul for photographic founder/testimonial, FLUX/fal for everything else).
+- API: `GET /api/image/models` lists the menu + configured status; `POST /api/generate-image` is model-aware and returns `{ model, provider }` (backward compatible — prompt only renders on the default/best model).
 
 ### Video models (multi-provider "oven")
 - The video layer lives in `lib/video/` and is provider-agnostic. `lib/video/registry.ts` is the model menu (Seedance 2.0, Kling 2.5, Veo 3, Wan 2.5, Higgsfield DoP) with capabilities (modes, max duration, aspect ratios, native audio). Endpoints are env-overridable since vendor model paths drift.

@@ -1,12 +1,12 @@
 /**
  * Unified image-generation types — the multi-model still-creative layer.
  * Mirrors lib/video so the agent, routes, and UI treat every image model
- * (Nano Banana / Gemini, OpenAI, Higgsfield) the same way.
+ * (fal / FLUX, Higgsfield) the same way.
  */
 
 export type AspectRatio = '1:1' | '9:16' | '16:9'
 
-export type ImageProvider = 'gemini' | 'openai' | 'higgsfield' | 'fal'
+export type ImageProvider = 'higgsfield' | 'fal'
 
 export type ModelTier = 'flagship' | 'fast' | 'budget'
 

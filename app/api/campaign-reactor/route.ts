@@ -145,9 +145,9 @@ function buildTools(
           conceptType: { type: 'string', description: 'The output type this image is for (must match the concept type you will submit).' },
           model: {
             type: 'string',
-            enum: imageModelIds.length ? imageModelIds : ['nano-banana'],
+            enum: imageModelIds.length ? imageModelIds : ['fal-flux'],
             description:
-              'Image model: fal-flux = photoreal humans/scenes in-house via fal; nano-banana = fast high-quality variants; openai-gpt-image = best legible text-in-image; higgsfield-soul = premium photographic ad look.',
+              'Image model: fal-flux = photoreal humans/scenes in-house via fal; higgsfield-soul = premium photographic ad look.',
           },
           aspectRatio: { type: 'string', enum: ['1:1', '9:16', '16:9'], description: 'Defaults to 1:1.' },
         },
@@ -668,6 +668,7 @@ export async function POST(request: NextRequest) {
                   mediaType: 'image',
                   conceptType: conceptType ?? '',
                   model: result.modelId,
+                  provider: result.provider,
                   url: result.imageUrl,
                 })
                 results.push({
@@ -717,6 +718,7 @@ export async function POST(request: NextRequest) {
                   mediaType: 'video',
                   conceptType: conceptType ?? '',
                   model: started.modelId,
+                  provider: started.provider,
                   requestId: started.requestId,
                   status: started.status,
                   responseUrl: started.responseUrl,
