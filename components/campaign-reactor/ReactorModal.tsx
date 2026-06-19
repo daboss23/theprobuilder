@@ -1,10 +1,11 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Atom,
   Brain,
   Check,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   Clapperboard,
@@ -33,6 +34,31 @@ interface ModelRec {
   configured: boolean
 }
 
+/**
+ * A strategic input field. The platform recommends, the recommendation is
+ * visible and pre-selected, and the user can accept, override, choose No
+ * Preference, or (where allowed) create a custom value — all from one control.
+ */
+export interface StrategicField {
+  options: string[]
+  /** The currently selected native option, or '' when custom / no-preference. */
+  value: string
+  recommended: string | null
+  noPreference: boolean
+  thinking: boolean
+  custom: {
+    allowed: boolean
+    active: boolean
+    value: string
+    placeholder: string
+    examples: string[]
+  }
+  onSelect: (label: string) => void
+  onCustom: () => void
+  onCustomChange: (v: string) => void
+  onNoPreference: () => void
+}
+
 // Everything the modal needs to render the full input set lives in Workbench
 // state and is threaded through here so the manual controls keep their existing
 // recommendation / reference-library wiring.
@@ -40,22 +66,14 @@ export interface ReactorForm {
   // Slide 1 — brief, angle, outputs
   brief: string
   setBrief: (v: string) => void
-  angleOptions: string[]
-  angle: string
-  setAngle: (v: string) => void
+  angleField: StrategicField
   outputTypeList: string[]
   outputs: string[]
   toggleOutput: (v: string) => void
   // Slide 2 — awareness, audience, offer
-  awarenessOptions: DirectiveOption[]
-  awareness: DirectiveOption
-  setAwareness: (v: DirectiveOption) => void
-  audienceOptions: DirectiveOption[]
-  audience: DirectiveOption
-  setAudience: (v: DirectiveOption) => void
-  offerOptions: DirectiveOption[]
-  offer: DirectiveOption
-  setOffer: (v: DirectiveOption) => void
+  awarenessField: StrategicField
+  audienceField: StrategicField
+  offerField: StrategicField
   offerName: string
   setOfferName: (v: string) => void
   // Slide 3 — intelligence inputs + models + reference library
@@ -77,11 +95,9 @@ export interface ReactorForm {
   // Slide 4 — on brand
   onBrand: boolean
   setOnBrand: (v: boolean) => void
-  // Intelligence pre-selection — which fields already carry a recommendation,
-  // and whether the system is currently analyzing the brief.
-  agentPicked: Record<string, boolean>
+  // Whether the system is currently analyzing the brief.
   suggesting: boolean
-  // Strategic Intelligence — the read OPUS presents before the reactor fires.
+  // Strategic Intelligence — the read OPUS presents to explain the recommendations.
   intelligence: StrategicIntelligence | null
   intelligenceLoading: boolean
   loadIntelligence: () => void
@@ -102,26 +118,19 @@ function FieldLabel({ children }: { children: React.ReactNode }) {
   )
 }
 
-// Label for an intelligence-assisted field — shows that the system has a
-// recommendation in place (overridable), or that it is still analyzing. We
-// present intelligence, never "chosen by agent".
+// Label for an intelligence-assisted field — shows that the system is still
+// analyzing the brief. The recommendation itself is shown inside the control.
 function AgentFieldLabel({
   children,
-  picked,
   thinking,
 }: {
   children: React.ReactNode
-  picked?: boolean
   thinking?: boolean
 }) {
   return (
     <div className="mb-1.5 flex items-center gap-2">
       <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-white/40">{children}</p>
-      {picked ? (
-        <span className="inline-flex items-center gap-1 rounded-full border border-[#FF5E3A]/40 bg-[#FF5E3A]/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-[#FF5E3A]">
-          <Sparkles size={9} /> Recommended
-        </span>
-      ) : thinking ? (
+      {thinking ? (
         <span className="inline-flex items-center gap-1 text-[9px] uppercase tracking-wide text-white/35">
           <Loader2 size={9} className="animate-spin" /> analyzing…
         </span>
@@ -132,6 +141,178 @@ function AgentFieldLabel({
 
 const selectClass =
   'w-full rounded-lg border border-border bg-surface/60 px-3 py-2.5 text-sm text-white outline-none focus:border-[#FF5E3A]/60'
+
+const CUSTOM_SENTINEL = '__custom__'
+const NO_PREF_LABEL = 'No Preference'
+
+/**
+ * Recommendation-aware dropdown. Renders the recommended option at the top with
+ * a glow + checkmark + "Recommended" badge, then the other options, then a
+ * Custom… reveal (when allowed) and a universal No Preference. The current
+ * selection is visible on the trigger without opening the menu.
+ */
+function StrategicSelect({ field }: { field: StrategicField }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    const onDown = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    window.addEventListener('mousedown', onDown)
+    return () => window.removeEventListener('mousedown', onDown)
+  }, [open])
+
+  const { value, recommended, noPreference, custom } = field
+  const isRecommendedSelected = !custom.active && !noPreference && !!value && value === recommended
+
+  // Ordered menu: recommended first (if any), then the rest, deduped.
+  const ordered = useMemo(() => {
+    if (!recommended || !field.options.includes(recommended)) return field.options
+    return [recommended, ...field.options.filter((o) => o !== recommended)]
+  }, [field.options, recommended])
+
+  const choose = (label: string) => {
+    if (label === CUSTOM_SENTINEL) field.onCustom()
+    else if (label === NO_PREF_LABEL) field.onNoPreference()
+    else field.onSelect(label)
+    setOpen(false)
+  }
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className={`flex w-full items-center justify-between gap-2 rounded-lg border px-3 py-2.5 text-left text-sm outline-none transition-colors ${
+          isRecommendedSelected
+            ? 'border-[#FF5E3A]/50 bg-[#FF5E3A]/[0.06] text-white shadow-[0_0_0_1px_rgba(255,94,58,0.15),0_0_22px_-6px_rgba(255,94,58,0.45)]'
+            : 'border-border bg-surface/60 text-white hover:border-white/20'
+        }`}
+      >
+        <span className="flex min-w-0 items-center gap-2">
+          {isRecommendedSelected && <Sparkles size={13} className="shrink-0 text-[#FF5E3A]" />}
+          <span className="truncate">
+            {custom.active ? (
+              custom.value || 'Custom…'
+            ) : noPreference ? (
+              <span className="text-white/55">No Preference</span>
+            ) : value ? (
+              <>
+                {value}
+                {isRecommendedSelected && (
+                  <span className="ml-1.5 text-[#FF5E3A]">• Recommended</span>
+                )}
+              </>
+            ) : (
+              <span className="text-white/40">Select…</span>
+            )}
+          </span>
+        </span>
+        <ChevronDown
+          size={15}
+          className={`shrink-0 text-white/40 transition-transform ${open ? 'rotate-180' : ''}`}
+        />
+      </button>
+
+      {open && (
+        <div className="absolute z-[60] mt-1.5 max-h-64 w-full overflow-y-auto rounded-lg border border-border bg-card p-1 shadow-2xl">
+          {ordered.map((opt) => {
+            const isRec = opt === recommended
+            const isSel = !custom.active && !noPreference && opt === value
+            return (
+              <button
+                key={opt}
+                type="button"
+                onClick={() => choose(opt)}
+                className={`flex w-full items-center justify-between gap-2 rounded-md px-2.5 py-2 text-left text-sm transition-colors ${
+                  isRec
+                    ? 'bg-[#FF5E3A]/[0.08] text-white hover:bg-[#FF5E3A]/15'
+                    : 'text-white/80 hover:bg-white/[0.06]'
+                }`}
+              >
+                <span className="flex min-w-0 items-center gap-2">
+                  {isRec ? (
+                    <Check size={13} className="shrink-0 text-[#FF5E3A]" />
+                  ) : isSel ? (
+                    <Check size={13} className="shrink-0 text-white/60" />
+                  ) : (
+                    <span className="w-[13px] shrink-0" />
+                  )}
+                  <span className={`truncate ${isRec ? 'font-semibold' : ''}`}>{opt}</span>
+                </span>
+                {isRec && (
+                  <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-[#FF5E3A]/40 bg-[#FF5E3A]/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-[#FF5E3A]">
+                    <Sparkles size={8} /> Recommended
+                  </span>
+                )}
+              </button>
+            )
+          })}
+
+          <div className="my-1 h-px bg-border" />
+
+          {custom.allowed && (
+            <button
+              type="button"
+              onClick={() => choose(CUSTOM_SENTINEL)}
+              className={`flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-sm transition-colors ${
+                custom.active ? 'bg-white/[0.06] text-white' : 'text-white/70 hover:bg-white/[0.06]'
+              }`}
+            >
+              {custom.active ? (
+                <Check size={13} className="shrink-0 text-white/60" />
+              ) : (
+                <span className="w-[13px] shrink-0" />
+              )}
+              <span>Custom…</span>
+            </button>
+          )}
+
+          <button
+            type="button"
+            onClick={() => choose(NO_PREF_LABEL)}
+            className={`flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-sm transition-colors ${
+              noPreference ? 'bg-white/[0.06] text-white' : 'text-white/55 hover:bg-white/[0.06]'
+            }`}
+          >
+            {noPreference ? (
+              <Check size={13} className="shrink-0 text-white/60" />
+            ) : (
+              <span className="w-[13px] shrink-0" />
+            )}
+            <span>No Preference</span>
+          </button>
+        </div>
+      )}
+
+      {custom.active && (
+        <div className="mt-2">
+          <input
+            value={custom.value}
+            onChange={(e) => field.onCustomChange(e.target.value)}
+            placeholder={custom.placeholder}
+            autoFocus
+            className={selectClass}
+          />
+          {custom.examples.length > 0 && (
+            <p className="mt-1.5 text-[11px] text-white/35">
+              e.g. {custom.examples.join(' · ')}
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// What a strategic field shows in the final review summary.
+function fieldSummary(field: StrategicField): string {
+  if (field.custom.active) return field.custom.value.trim() || 'Custom (unset)'
+  if (field.noPreference) return 'No Preference — Reactor decides'
+  return field.value || 'No Preference — Reactor decides'
+}
 
 export function ReactorModal({ open, onClose, onFire, form }: ReactorModalProps) {
   const [step, setStep] = useState(1)
@@ -144,9 +325,9 @@ export function ReactorModal({ open, onClose, onFire, form }: ReactorModalProps)
     () =>
       form.brief.trim() !== '' ||
       form.offerName.trim() !== '' ||
-      form.awareness !== form.awarenessOptions[0] ||
-      form.audience !== form.audienceOptions[0] ||
-      form.offer !== form.offerOptions[0] ||
+      !form.awarenessField.noPreference ||
+      !form.audienceField.noPreference ||
+      !form.offerField.noPreference ||
       form.onBrand === false,
     [form],
   )
@@ -166,8 +347,11 @@ export function ReactorModal({ open, onClose, onFire, form }: ReactorModalProps)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, dirty])
 
+  // Load the Strategic Intelligence read as soon as the user reaches the
+  // strategic step (so the recommendations have visible reasoning), and again at
+  // the final review.
   useEffect(() => {
-    if (open && step === 5) form.loadIntelligence()
+    if (open && (step === 2 || step === 5)) form.loadIntelligence()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, step])
 
@@ -183,7 +367,6 @@ export function ReactorModal({ open, onClose, onFire, form }: ReactorModalProps)
   const videoLabelFor = (id?: string | null) =>
     form.videoModels.find((m) => m.id === id)?.label ?? id ?? ''
 
-  const agentDecidesAngle = form.angle === form.angleOptions[0]
   const progress = (step / 5) * 100
 
   return (
@@ -260,20 +443,8 @@ export function ReactorModal({ open, onClose, onFire, form }: ReactorModalProps)
               </div>
 
               <div>
-                <AgentFieldLabel picked={form.agentPicked.angle} thinking={form.suggesting}>
-                  Campaign Angle
-                </AgentFieldLabel>
-                <select
-                  value={form.angle}
-                  onChange={(e) => form.setAngle(e.target.value)}
-                  className={selectClass}
-                >
-                  {form.angleOptions.map((a, i) => (
-                    <option key={a} value={a} className="bg-card">
-                      {i === 0 ? 'Recommended' : a}
-                    </option>
-                  ))}
-                </select>
+                <AgentFieldLabel thinking={form.suggesting}>Campaign Angle</AgentFieldLabel>
+                <StrategicSelect field={form.angleField} />
               </div>
 
               <div>
@@ -303,67 +474,29 @@ export function ReactorModal({ open, onClose, onFire, form }: ReactorModalProps)
 
           {step === 2 && (
             <div className="animate-fade-up space-y-4">
-              <p className="rounded-lg border border-[#FF5E3A]/25 bg-[#FF5E3A]/[0.06] px-3 py-2 text-[11px] leading-relaxed text-white/55">
-                Strategic intelligence has set these from your brief. Change any of them — your
-                choice stays locked.
+              <p className="rounded-lg border border-[#FF5E3A]/25 bg-[#FF5E3A]/[0.06] px-3 py-2 text-[11px] leading-relaxed text-white/60">
+                Strategic Intelligence analysed your brief and pre-selected the highest-confidence
+                options. Override any recommendation if desired.
               </p>
+
+              <StrategicIntelligencePanel
+                intelligence={form.intelligence}
+                loading={form.intelligenceLoading}
+              />
+
               <div>
-                <AgentFieldLabel picked={form.agentPicked.awareness} thinking={form.suggesting}>
-                  Awareness Stage
-                </AgentFieldLabel>
-                <select
-                  value={form.awareness.label}
-                  onChange={(e) =>
-                    form.setAwareness(
-                      form.awarenessOptions.find((o) => o.label === e.target.value)!,
-                    )
-                  }
-                  className={selectClass}
-                >
-                  {form.awarenessOptions.map((o, i) => (
-                    <option key={o.label} value={o.label} className="bg-card">
-                      {i === 0 ? 'Recommended' : o.label}
-                    </option>
-                  ))}
-                </select>
+                <AgentFieldLabel thinking={form.suggesting}>Awareness Stage</AgentFieldLabel>
+                <StrategicSelect field={form.awarenessField} />
               </div>
 
               <div>
-                <AgentFieldLabel picked={form.agentPicked.audience} thinking={form.suggesting}>
-                  Audience Type
-                </AgentFieldLabel>
-                <select
-                  value={form.audience.label}
-                  onChange={(e) =>
-                    form.setAudience(form.audienceOptions.find((o) => o.label === e.target.value)!)
-                  }
-                  className={selectClass}
-                >
-                  {form.audienceOptions.map((o, i) => (
-                    <option key={o.label} value={o.label} className="bg-card">
-                      {i === 0 ? 'Recommended' : o.label}
-                    </option>
-                  ))}
-                </select>
+                <AgentFieldLabel thinking={form.suggesting}>Audience Type</AgentFieldLabel>
+                <StrategicSelect field={form.audienceField} />
               </div>
 
               <div>
-                <AgentFieldLabel picked={form.agentPicked.offer} thinking={form.suggesting}>
-                  Offer Type
-                </AgentFieldLabel>
-                <select
-                  value={form.offer.label}
-                  onChange={(e) =>
-                    form.setOffer(form.offerOptions.find((o) => o.label === e.target.value)!)
-                  }
-                  className={selectClass}
-                >
-                  {form.offerOptions.map((o, i) => (
-                    <option key={o.label} value={o.label} className="bg-card">
-                      {i === 0 ? 'Recommended' : o.label}
-                    </option>
-                  ))}
-                </select>
+                <AgentFieldLabel thinking={form.suggesting}>Offer Type</AgentFieldLabel>
+                <StrategicSelect field={form.offerField} />
               </div>
 
               <div>
@@ -534,25 +667,10 @@ export function ReactorModal({ open, onClose, onFire, form }: ReactorModalProps)
               />
 
               <div className="space-y-1.5 rounded-lg border border-border bg-background/60 p-4 text-sm">
-                <SummaryRow label="Angle" value={agentDecidesAngle ? 'Agent decides' : form.angle} />
-                <SummaryRow
-                  label="Audience"
-                  value={
-                    form.audience === form.audienceOptions[0] ? 'Agent decides' : form.audience.label
-                  }
-                />
-                <SummaryRow
-                  label="Awareness"
-                  value={
-                    form.awareness === form.awarenessOptions[0]
-                      ? 'Agent decides'
-                      : form.awareness.label
-                  }
-                />
-                <SummaryRow
-                  label="Offer"
-                  value={form.offer === form.offerOptions[0] ? 'Agent decides' : form.offer.label}
-                />
+                <SummaryRow label="Angle" value={fieldSummary(form.angleField)} />
+                <SummaryRow label="Audience" value={fieldSummary(form.audienceField)} />
+                <SummaryRow label="Awareness" value={fieldSummary(form.awarenessField)} />
+                <SummaryRow label="Offer" value={fieldSummary(form.offerField)} />
                 <SummaryRow label="CTA name" value={form.offerName.trim() || '—'} />
                 <SummaryRow label="On Brand" value={form.onBrand ? 'On' : 'Off'} />
                 <SummaryRow
@@ -648,9 +766,9 @@ export function ReactorModal({ open, onClose, onFire, form }: ReactorModalProps)
   )
 }
 
-// The Strategic Intelligence read OPUS presents before the reactor fires. This
-// is intelligence — pains, desires, patterns, recommended structures — never
-// exposed agent machinery.
+// The Strategic Intelligence read OPUS presents to explain the recommendations.
+// This is intelligence — pains, desires, patterns, recommended structures —
+// never exposed agent machinery.
 function StrategicIntelligencePanel({
   intelligence,
   loading,

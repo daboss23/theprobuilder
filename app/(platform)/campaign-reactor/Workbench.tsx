@@ -3,13 +3,20 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Atom, Check, Loader2, Copy as CopyIcon, Radar, Trophy, ImageIcon, Film, Users } from 'lucide-react'
 import { Panel, PanelHeader, Pill } from '@/components/reactor/ui'
-import { ReactorModal, type ReactorForm } from '@/components/campaign-reactor/ReactorModal'
+import {
+  ReactorModal,
+  type ReactorForm,
+  type StrategicField,
+} from '@/components/campaign-reactor/ReactorModal'
 import { reactorInputs, reactorOutputTypes, winningAngles } from '@/lib/reactor-data'
 import {
   awarenessOptions,
   audienceOptions,
   offerOptions,
   defaultBrandSettings,
+  customDirective,
+  NO_PREFERENCE,
+  type DirectiveOption,
   type ReactorInputs,
   type StrategicIntelligence,
 } from '@/lib/reactor-inputs'
@@ -20,7 +27,9 @@ import type { ImageModelAvailability } from '@/lib/image/types'
 import { useReactorRun, type Concept } from '@/components/campaign-reactor/ReactorRunContext'
 import type { Verdict, OutcomeAttributes } from '@/lib/outcomes'
 
-const ANGLE_OPTIONS = ['Agent decides', ...winningAngles.map((a) => a.name)]
+// The native campaign-angle choices (the No Preference / Custom sentinels are
+// added by the dropdown itself).
+const ANGLE_NAMES = winningAngles.map((a) => a.name)
 
 // Client-safe verdict menu (no import from lib/outcomes runtime — that module is
 // server-only). Mirrors the Performance Intelligence verdict set.
@@ -52,7 +61,10 @@ export function Workbench() {
   const [modalOpen, setModalOpen] = useState(false)
   // Manual controls (original left-panel inputs, now collected inside the modal)
   const [activeInputs, setActiveInputs] = useState<string[]>(reactorInputs)
-  const [angle, setAngle] = useState(winningAngles[0].name)
+  // Strategic fields start at No Preference; Strategic Intelligence fills in the
+  // recommendation once the brief has substance. The user can override, choose
+  // No Preference, or enter a custom value.
+  const [angle, setAngle] = useState<string>(NO_PREFERENCE)
   const [outputs, setOutputs] = useState<string[]>(reactorOutputTypes)
   // Strategic fields (the guided step-by-step inputs)
   const [brief, setBrief] = useState('')
@@ -60,6 +72,22 @@ export function Workbench() {
   const [audience, setAudience] = useState(audienceOptions[0])
   const [offer, setOffer] = useState(offerOptions[0])
   const [offerName, setOfferName] = useState('')
+  // Custom strategic values — advanced users can supply an angle / audience /
+  // offer the menu doesn't have. The custom text becomes the live value.
+  const [angleCustom, setAngleCustom] = useState(false)
+  const [customAngle, setCustomAngle] = useState('')
+  const [audienceCustom, setAudienceCustom] = useState(false)
+  const [customAudience, setCustomAudience] = useState('')
+  const [offerCustom, setOfferCustom] = useState(false)
+  const [customOffer, setCustomOffer] = useState('')
+  // The labels Strategic Intelligence recommends for each field (drives the
+  // visible "• Recommended" badge, independent of what the user has selected).
+  const [rec, setRec] = useState<{
+    angle?: string
+    awareness?: string
+    audience?: string
+    offer?: string
+  }>({})
   const [onBrand, setOnBrand] = useState(true)
   const [copied, setCopied] = useState<string | null>(null)
   // Available models (from the API) + the user's pick ('auto' = recommended).
@@ -145,29 +173,27 @@ export function Workbench() {
   // offer from the brief, so each field already shows the agent's choice. The
   // user can override any of them; a manual change locks that field.
   const [suggesting, setSuggesting] = useState(false)
-  const [agentPicked, setAgentPicked] = useState<Record<string, boolean>>({})
-  // Strategic Intelligence read, loaded when the modal reaches the final step.
+  // Strategic Intelligence read, loaded when the modal reaches the strategic step.
   const [intelligence, setIntelligence] = useState<StrategicIntelligence | null>(null)
   const [intelLoading, setIntelLoading] = useState(false)
   const touchedRef = useRef<Set<string>>(new Set())
   const markTouched = (field: string) => {
     touchedRef.current.add(field)
-    setAgentPicked((p) => ({ ...p, [field]: false }))
   }
   // User-driven setters (lock the field against further auto-suggestion).
   const setAngleUser = (v: string) => {
     markTouched('angle')
     setAngle(v)
   }
-  const setAwarenessUser = (v: (typeof awarenessOptions)[number]) => {
+  const setAwarenessUser = (v: DirectiveOption) => {
     markTouched('awareness')
     setAwareness(v)
   }
-  const setAudienceUser = (v: (typeof audienceOptions)[number]) => {
+  const setAudienceUser = (v: DirectiveOption) => {
     markTouched('audience')
     setAudience(v)
   }
-  const setOfferUser = (v: (typeof offerOptions)[number]) => {
+  const setOfferUser = (v: DirectiveOption) => {
     markTouched('offer')
     setOffer(v)
   }
@@ -185,34 +211,37 @@ export function Workbench() {
           body: JSON.stringify({ brief, angle }),
         }).then((r) => r.json())
         if (!suggestion) return
+        // Record what the platform recommends — drives the visible badge even if
+        // the user later overrides.
+        setRec({
+          angle: ANGLE_NAMES.includes(suggestion.angle) ? suggestion.angle : undefined,
+          awareness: awarenessOptions.some((x) => x.label === suggestion.awareness)
+            ? suggestion.awareness
+            : undefined,
+          audience: audienceOptions.some((x) => x.label === suggestion.audience)
+            ? suggestion.audience
+            : undefined,
+          offer: offerOptions.some((x) => x.label === suggestion.offer)
+            ? suggestion.offer
+            : undefined,
+        })
         const touched = touchedRef.current
-        const picked: Record<string, boolean> = {}
-        if (!touched.has('angle') && ANGLE_OPTIONS.includes(suggestion.angle)) {
+        // Auto-select the recommendation only where the user hasn't acted.
+        if (!touched.has('angle') && ANGLE_NAMES.includes(suggestion.angle)) {
           setAngle(suggestion.angle)
-          picked.angle = true
         }
         if (!touched.has('awareness')) {
           const o = awarenessOptions.find((x) => x.label === suggestion.awareness)
-          if (o) {
-            setAwareness(o)
-            picked.awareness = true
-          }
+          if (o) setAwareness(o)
         }
         if (!touched.has('audience')) {
           const o = audienceOptions.find((x) => x.label === suggestion.audience)
-          if (o) {
-            setAudience(o)
-            picked.audience = true
-          }
+          if (o) setAudience(o)
         }
         if (!touched.has('offer')) {
           const o = offerOptions.find((x) => x.label === suggestion.offer)
-          if (o) {
-            setOffer(o)
-            picked.offer = true
-          }
+          if (o) setOffer(o)
         }
-        setAgentPicked((p) => ({ ...p, ...picked }))
       } catch {
         /* suggestion is best-effort — leave fields as they are */
       } finally {
@@ -259,7 +288,7 @@ export function Workbench() {
     const reactorInputsPayload: ReactorInputs = {
       brief,
       angle,
-      angleIsAgentDecided: angle === 'Agent decides',
+      angleIsAgentDecided: angle === NO_PREFERENCE || angle.trim() === '',
       outputTypes: outputs,
       outputTypesAgentDecided: outputs.length === 0,
       awarenessStage: awareness.label,
@@ -315,29 +344,142 @@ export function Workbench() {
   const runUGC = (c: Concept) =>
     generateUGC(c, { videoModel: resolvedVideoModel, faceUrls, refVideos })
 
+  // Keep the custom audience/offer DirectiveOption in sync with the typed text so
+  // its directive instructs OPUS to treat the value as a hard constraint.
+  const applyCustomAudience = (v: string) =>
+    setAudience({ label: v, directive: customDirective('audience', v) })
+  const applyCustomOffer = (v: string) =>
+    setOffer({ label: v, directive: customDirective('offer', v) })
+
+  // The four strategic dropdowns, each recommendation-aware and override-friendly.
+  const angleField: StrategicField = {
+    options: ANGLE_NAMES,
+    value: angleCustom || angle === NO_PREFERENCE ? '' : angle,
+    recommended: rec.angle ?? null,
+    noPreference: angle === NO_PREFERENCE && !angleCustom,
+    thinking: suggesting,
+    custom: {
+      allowed: true,
+      active: angleCustom,
+      value: customAngle,
+      placeholder: 'Name your campaign angle',
+      examples: ['Profit Leak', 'Margin Erosion', 'Builder Burnout', 'Owner Dependency'],
+    },
+    onSelect: (label) => {
+      setAngleCustom(false)
+      setAngleUser(label)
+    },
+    onCustom: () => {
+      markTouched('angle')
+      setAngleCustom(true)
+      setAngle(customAngle)
+    },
+    onCustomChange: (v) => {
+      setCustomAngle(v)
+      setAngle(v)
+    },
+    onNoPreference: () => {
+      setAngleCustom(false)
+      setAngleUser(NO_PREFERENCE)
+    },
+  }
+
+  const awarenessField: StrategicField = {
+    options: awarenessOptions.slice(1).map((o) => o.label),
+    value: awareness === awarenessOptions[0] ? '' : awareness.label,
+    recommended: rec.awareness ?? null,
+    noPreference: awareness === awarenessOptions[0],
+    thinking: suggesting,
+    custom: { allowed: false, active: false, value: '', placeholder: '', examples: [] },
+    onSelect: (label) => {
+      const o = awarenessOptions.find((x) => x.label === label)
+      if (o) setAwarenessUser(o)
+    },
+    onCustom: () => {},
+    onCustomChange: () => {},
+    onNoPreference: () => setAwarenessUser(awarenessOptions[0]),
+  }
+
+  const audienceField: StrategicField = {
+    options: audienceOptions.slice(1).map((o) => o.label),
+    value: audienceCustom || audience === audienceOptions[0] ? '' : audience.label,
+    recommended: rec.audience ?? null,
+    noPreference: audience === audienceOptions[0] && !audienceCustom,
+    thinking: suggesting,
+    custom: {
+      allowed: true,
+      active: audienceCustom,
+      value: customAudience,
+      placeholder: 'Describe the audience',
+      examples: ['Residential Builders', '$2M–$10M Revenue', '5–20 Staff', 'Owner Operators'],
+    },
+    onSelect: (label) => {
+      setAudienceCustom(false)
+      const o = audienceOptions.find((x) => x.label === label)
+      if (o) setAudienceUser(o)
+    },
+    onCustom: () => {
+      markTouched('audience')
+      setAudienceCustom(true)
+      applyCustomAudience(customAudience)
+    },
+    onCustomChange: (v) => {
+      setCustomAudience(v)
+      applyCustomAudience(v)
+    },
+    onNoPreference: () => {
+      setAudienceCustom(false)
+      setAudienceUser(audienceOptions[0])
+    },
+  }
+
+  const offerField: StrategicField = {
+    options: offerOptions.slice(1).map((o) => o.label),
+    value: offerCustom || offer === offerOptions[0] ? '' : offer.label,
+    recommended: rec.offer ?? null,
+    noPreference: offer === offerOptions[0] && !offerCustom,
+    thinking: suggesting,
+    custom: {
+      allowed: true,
+      active: offerCustom,
+      value: customOffer,
+      placeholder: 'Name your offer',
+      examples: ['Builder Profit Audit', 'The Owner Freedom Blueprint', 'The 45-Hour Builder System'],
+    },
+    onSelect: (label) => {
+      setOfferCustom(false)
+      const o = offerOptions.find((x) => x.label === label)
+      if (o) setOfferUser(o)
+    },
+    onCustom: () => {
+      markTouched('offer')
+      setOfferCustom(true)
+      applyCustomOffer(customOffer)
+    },
+    onCustomChange: (v) => {
+      setCustomOffer(v)
+      applyCustomOffer(v)
+    },
+    onNoPreference: () => {
+      setOfferCustom(false)
+      setOfferUser(offerOptions[0])
+    },
+  }
+
   // Everything the modal renders, threaded from this component's state so the
   // manual controls keep their recommendation + reference-library wiring.
   const form: ReactorForm = {
     brief,
     setBrief,
-    angleOptions: ANGLE_OPTIONS,
-    angle,
-    setAngle: setAngleUser,
+    angleField,
     outputTypeList: reactorOutputTypes,
     outputs,
     toggleOutput,
-    awarenessOptions,
-    awareness,
-    setAwareness: setAwarenessUser,
-    audienceOptions,
-    audience,
-    setAudience: setAudienceUser,
-    offerOptions,
-    offer,
-    setOffer: setOfferUser,
+    awarenessField,
+    audienceField,
+    offerField,
     offerName,
     setOfferName,
-    agentPicked,
     suggesting,
     intelligence,
     intelligenceLoading: intelLoading,

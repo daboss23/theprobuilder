@@ -77,6 +77,37 @@ export interface ReactorInputs {
 }
 
 /* ----------------------------------------------------------------------------
+   Strategic-input vocabulary shared by the modal and the orchestrator.
+
+   NO_PREFERENCE is the universal "let Reactor decide dynamically" sentinel — it
+   sits at index 0 of every strategic option list. CUSTOM_* are the labels that
+   reveal a free-text field so an advanced user can supply an angle / audience /
+   offer that isn't in the menu. Both the UI and the route treat a custom value
+   exactly like a native one.
+---------------------------------------------------------------------------- */
+
+export const NO_PREFERENCE = 'No Preference'
+export const CUSTOM_ANGLE = 'Custom Angle…'
+export const CUSTOM_AUDIENCE = 'Custom Audience…'
+export const CUSTOM_OFFER = 'Custom Offer…'
+
+/**
+ * Directive injected when the user supplies a custom value. OPUS must treat it
+ * as a hard strategic constraint that flows through research, creative, copy,
+ * and pattern analysis — without breaking the recommendation system.
+ */
+export function customDirective(field: 'angle' | 'audience' | 'offer', value: string): string {
+  const v = value.trim()
+  if (field === 'angle') {
+    return `The user supplied a CUSTOM campaign angle: "${v}". Treat this as a hard strategic constraint. Build every concept, hook, and production brief around this angle. Ground research, creative, copy, and pattern selection in it — do not substitute a different angle.`
+  }
+  if (field === 'audience') {
+    return `The user supplied a CUSTOM target audience: "${v}". Treat this as a hard strategic constraint. Tailor research, creative, copy, and pattern selection to this exact audience. Do not substitute a generic segment.`
+  }
+  return `The user supplied a CUSTOM offer: "${v}". Treat this as the campaign's offer and CTA frame. Build research, creative, copy, and pattern analysis around delivering and converting on this specific offer. Use this exact offer in every CTA.`
+}
+
+/* ----------------------------------------------------------------------------
    Brand settings — sourced from the Settings tab once that store exists. Until
    then this curated default stands in so the ON BRAND toggle still drives the
    prompt injection. Wire this to the real settings store when it ships.
@@ -92,7 +123,7 @@ export const defaultBrandSettings: BrandSettings = {
 /* ------------------------------- Slide 1 ---------------------------------- */
 
 export const angleOptions = [
-  'Agent decides',
+  NO_PREFERENCE,
   'Profit',
   'Time Freedom',
   'Systems',
@@ -119,9 +150,9 @@ export interface DirectiveOption {
 
 export const awarenessOptions: DirectiveOption[] = [
   {
-    label: 'Agent decides',
+    label: NO_PREFERENCE,
     directive:
-      'Determine the most appropriate awareness stage from the campaign brief and angle. If no clear signal, default to Problem-Aware for cold traffic.',
+      'The user has no awareness-stage preference — determine the most appropriate awareness stage from the campaign brief and angle. If no clear signal, default to Problem-Aware for cold traffic.',
   },
   {
     label: 'Unaware',
@@ -152,9 +183,9 @@ export const awarenessOptions: DirectiveOption[] = [
 
 export const audienceOptions: DirectiveOption[] = [
   {
-    label: 'Agent decides',
+    label: NO_PREFERENCE,
     directive:
-      'Determine audience temperature and ad type from the brief and angle. If no clear signal, default to cold prospecting.',
+      'The user has no audience preference — determine audience temperature and ad type from the brief and angle. If no clear signal, default to cold prospecting.',
   },
   {
     label: 'Cold — new audience',
@@ -190,9 +221,9 @@ export const audienceOptions: DirectiveOption[] = [
 
 export const offerOptions: DirectiveOption[] = [
   {
-    label: 'Agent decides',
+    label: NO_PREFERENCE,
     directive:
-      'Select the most appropriate offer type and CTA frame based on the campaign brief, angle, and awareness stage.',
+      'The user has no offer preference — select the most appropriate offer type and CTA frame based on the campaign brief, angle, and awareness stage.',
   },
   {
     label: 'Strategy Call / Application',

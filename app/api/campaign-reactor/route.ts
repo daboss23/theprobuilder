@@ -507,7 +507,8 @@ async function runDemo(controller: ReadableStreamDefaultController, body: Reacto
     text: 'Live Meta Ads performance + Higgsfield image/video creatives activate with API keys.',
   })
 
-  const a = body.angle && body.angle !== 'Agent decides' ? body.angle : 'Profit'
+  const angleIsSentinel = !body.angle || body.angle === 'Agent decides' || body.angle === 'No Preference'
+  const a = angleIsSentinel ? 'Profit' : (body.angle as string)
   const al = a.toLowerCase()
   const pool: Concept[] = [
     { type: 'Hook', text: `Most builders don't have a ${al} problem. They have a ${al} leak hiding in plain sight.`, basis: 'ECHO + NOVA', learningCheck: 'Specific, contrarian framing', score: 9 },
@@ -564,10 +565,14 @@ export async function POST(request: NextRequest) {
         if (useImage) sse(controller, { type: 'step', text: `Image engine ready · models: ${availableImageModels.join(', ')}` })
         if (useVideo) sse(controller, { type: 'step', text: `Video engine ready · models: ${availableVideoModels.join(', ')}` })
 
+        const angleClause =
+          !body.angle || body.angle === 'Agent decides' || body.angle === 'No Preference'
+            ? 'Select the strongest campaign angle from the brief and intelligence'
+            : `Design campaign concepts for the "${body.angle}" angle`
         const messages: Anthropic.Beta.Messages.BetaMessageParam[] = [
           {
             role: 'user',
-            content: `Design campaign concepts for the "${body.angle}" angle. Active intelligence inputs: ${(body.inputs ?? []).join(', ') || 'all'}. Requested output types: ${outputs.join(', ')}.`,
+            content: `${angleClause}. Active intelligence inputs: ${(body.inputs ?? []).join(', ') || 'all'}. Requested output types: ${outputs.join(', ')}.`,
           },
         ]
 

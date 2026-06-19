@@ -40,7 +40,8 @@ export async function POST(request: NextRequest) {
     builderId = null,
   } = (await request.json()) as IntelRequest
 
-  const seed = `${angle !== 'Agent decides' ? angle : ''} ${brief}`.trim() || 'builder profit time freedom systems'
+  const angleIsSentinel = angle === 'Agent decides' || angle === 'No Preference'
+  const seed = `${angleIsSentinel ? '' : angle} ${brief}`.trim() || 'builder profit time freedom systems'
 
   // NOVA (research + transformation), SPARK (creative), ECHO (copy), ORACLE
   // (pattern), ATLAS (vault) — retrieved in parallel so the panel stays fast.
