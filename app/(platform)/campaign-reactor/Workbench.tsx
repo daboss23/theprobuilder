@@ -8,7 +8,8 @@ import {
   type ReactorForm,
   type StrategicField,
 } from '@/components/campaign-reactor/ReactorModal'
-import { reactorInputs, reactorOutputTypes, winningAngles } from '@/lib/reactor-data'
+import { reactorOutputTypes, winningAngles } from '@/lib/reactor-data'
+import { INTEL_SOURCES, intelSourceLabel } from '@/lib/intelligence-sources'
 import {
   awarenessOptions,
   audienceOptions,
@@ -82,7 +83,12 @@ export function Workbench() {
   } = useReactorRun()
   const [modalOpen, setModalOpen] = useState(false)
   // Manual controls (original left-panel inputs, now collected inside the modal)
-  const [activeInputs, setActiveInputs] = useState<string[]>(reactorInputs)
+  // Selected intelligence source IDs (the agents recommend a subset; the user
+  // approves or overrides). Empty until the brief produces recommendations.
+  const [activeInputs, setActiveInputs] = useState<string[]>([])
+  const [intelSourceMeta, setIntelSourceMeta] = useState<
+    Record<string, { recommended: boolean; reason: string }>
+  >({})
   // Strategic fields start at No Preference; Strategic Intelligence fills in the
   // recommendation once the brief has substance. The user can override, choose
   // No Preference, or enter a custom value.
@@ -195,7 +201,10 @@ export function Workbench() {
 
   const toggle = (arr: string[], set: (v: string[]) => void, val: string) =>
     set(arr.includes(val) ? arr.filter((v) => v !== val) : [...arr, val])
-  const toggleInput = (val: string) => toggle(activeInputs, setActiveInputs, val)
+  const toggleInput = (val: string) => {
+    touchedRef.current.add('inputs')
+    toggle(activeInputs, setActiveInputs, val)
+  }
   const toggleOutput = (val: string) => {
     touchedRef.current.add('outputs')
     toggle(outputs, setOutputs, val)
@@ -285,6 +294,17 @@ export function Workbench() {
         if (!touched.has('outputs') && suggestion.deliverables?.length) {
           setOutputs(suggestion.deliverables)
         }
+        // Intelligence sources: store reasons + auto-select what the agents picked.
+        if (suggestion.intelligenceSources?.length) {
+          const meta: Record<string, { recommended: boolean; reason: string }> = {}
+          for (const s of suggestion.intelligenceSources) {
+            meta[s.id] = { recommended: s.recommended, reason: s.reason }
+          }
+          setIntelSourceMeta(meta)
+          if (!touched.has('inputs')) {
+            setActiveInputs(suggestion.intelligenceSources.filter((s) => s.recommended).map((s) => s.id))
+          }
+        }
       } catch {
         /* suggestion is best-effort — leave fields as they are */
       } finally {
@@ -346,7 +366,7 @@ export function Workbench() {
     }
     streamReactor({
       angle,
-      inputs: activeInputs,
+      inputs: activeInputs.map(intelSourceLabel),
       outputs: outputs.length ? outputs : reactorOutputTypes,
       videoModel: resolvedVideoModel,
       imageModel: resolvedImageModel,
@@ -376,6 +396,11 @@ export function Workbench() {
     copyStructure: intelligence?.recommendedCopyStructure,
     platform: 'Meta',
     assetType: c.type,
+    // Full strategic configuration so ORACLE can reuse exactly what won.
+    proofAssets: [c.basis, ...(intelligence?.knowledgeAssetsConsulted ?? [])].filter(
+      (x): x is string => Boolean(x),
+    ),
+    frameworks: activeInputs.map(intelSourceLabel),
   })
 
   // Thin wrappers: the run logic lives in the persistent provider; here we just
@@ -532,9 +557,10 @@ export function Workbench() {
     intelligence,
     intelligenceLoading: intelLoading,
     loadIntelligence,
-    intelligenceInputs: reactorInputs,
+    intelSources: INTEL_SOURCES,
     activeInputs,
     toggleInput,
+    intelSourceMeta,
     imageModels,
     imageModel,
     setImageModel,

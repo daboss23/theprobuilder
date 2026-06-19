@@ -11,7 +11,30 @@ import {
   type GenMode,
 } from '@/lib/video'
 import { logGeneration } from '@/lib/video/persistence'
+import { retrieveWinningConfigs, type WinningConfig } from '@/lib/outcomes'
 import { outputTypeOptions, type ReactorInputs, type ProductionBrief } from '@/lib/reactor-inputs'
+
+// ORACLE strategic memory injected into OPUS at fire time — past winning
+// configurations matching the brief, so generation reuses what worked.
+function memoryBlock(configs: WinningConfig[]): string {
+  if (configs.length === 0) return ''
+  const lines = configs
+    .map((c, i) => {
+      const parts = [
+        `Angle: ${c.angle}`,
+        c.audience && `Audience: ${c.audience}`,
+        c.awareness && `Awareness: ${c.awareness}`,
+        c.offer && `Offer: ${c.offer}`,
+        c.creativeStructure && `Creative: ${c.creativeStructure}`,
+        c.copyStructure && `Copy: ${c.copyStructure}`,
+        typeof c.score === 'number' && `win score ${c.score}`,
+      ].filter(Boolean)
+      const snippet = c.conceptText ? ` — "${c.conceptText.slice(0, 140)}"` : ''
+      return `${i + 1}. ${parts.join(' · ')}${snippet}`
+    })
+    .join('\n')
+  return `\n\nORACLE STRATEGIC MEMORY — past WINNING configurations that match this brief. Reuse what worked (structure, offer framing, proof patterns); adapt, don't copy verbatim:\n${lines}`
+}
 
 export const runtime = 'nodejs'
 export const maxDuration = 300
@@ -560,6 +583,27 @@ export async function POST(request: NextRequest) {
         const tools = buildTools(useImage, useVideo, Boolean(mcpServer))
         const inputBlocks = buildInputBlocks(body.reactorInputs)
 
+        // ORACLE retrieves matching past winners and feeds them into OPUS's
+        // reasoning — the Reactor reuses what worked instead of starting cold.
+        const ri = body.reactorInputs
+        const winningConfigs = await retrieveWinningConfigs({
+          angle: ri?.angle ?? body.angle,
+          audience: ri?.audienceType,
+          awareness: ri?.awarenessStage,
+          offer: ri?.offerType,
+        }).catch(() => [] as WinningConfig[])
+        if (winningConfigs.length > 0) {
+          sse(controller, {
+            type: 'delegate',
+            agent: 'ORACLE',
+            label: 'Strategic Memory',
+            status: 'done',
+            confidence: 'High',
+            summary: `Retrieved ${winningConfigs.length} matching historical winner${winningConfigs.length === 1 ? '' : 's'} — feeding configurations into generation.`,
+          })
+        }
+        const oracleMemory = memoryBlock(winningConfigs)
+
         sse(controller, { type: 'step', text: 'OPUS online. Directing the intelligence network…' })
         if (mcpServer) sse(controller, { type: 'step', text: 'Live Meta Ads performance feed connected.' })
         if (useImage) sse(controller, { type: 'step', text: `Image engine ready · models: ${availableImageModels.join(', ')}` })
@@ -589,7 +633,7 @@ export async function POST(request: NextRequest) {
                 imageModels: availableImageModels,
                 preferredVideoModel: body.videoModel ?? null,
                 preferredImageModel: body.imageModel ?? null,
-              }) + inputBlocks,
+              }) + inputBlocks + oracleMemory,
             tools,
             messages,
           }

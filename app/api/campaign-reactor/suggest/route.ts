@@ -4,10 +4,13 @@ import {
   awarenessOptions,
   audienceOptions,
   offerOptions,
+  type IntelSourceRecommendation,
   type ReactorSuggestion,
 } from '@/lib/reactor-inputs'
 import { reactorOutputTypes } from '@/lib/reactor-data'
+import { INTEL_SOURCES, recommendIntelSources } from '@/lib/intelligence-sources'
 import { angleEvidence } from '@/lib/outcomes'
+import { vaultStats } from '@/lib/knowledge'
 import { parseModelJson } from '@/lib/parse'
 
 export const runtime = 'nodejs'
@@ -116,10 +119,75 @@ function validate(s: Partial<RawSuggestion>, fb: RawSuggestion): RawSuggestion {
   }
 }
 
-async function withEvidence(raw: RawSuggestion, demo: boolean): Promise<NextResponse> {
-  // ORACLE strategic memory — cite real history behind the recommended angle.
-  const evidence = await angleEvidence(raw.angle).catch(() => null)
-  const suggestion: ReactorSuggestion = { ...raw, evidence }
+// Map each intelligence source to a factual count from the live (or curated)
+// knowledge stats, so the "Selected by AGENT" reason is real, not invented.
+function buildIntelSources(
+  brief: string,
+  deliverables: string[],
+  stats: Awaited<ReturnType<typeof vaultStats>>,
+  evidence: Awaited<ReturnType<typeof angleEvidence>>,
+): IntelSourceRecommendation[] {
+  const sum = (re: RegExp) =>
+    stats.groups
+      .filter((g) => re.test(`${g.system} ${g.category ?? ''}`.toLowerCase()))
+      .reduce((n, g) => n + g.count, 0)
+
+  const counts: Record<string, number> = {
+    vault: stats.total,
+    market: sum(/research|market|signal|insight/),
+    creativeDna: sum(/creative|winning|\bad\b|ads|video|static|event footage/),
+    copyDna: sum(/copy|hook|headline|primary text|vsl|webinar script/),
+    frameworks: sum(/framework/),
+    sops: sum(/\bsop\b|sops/),
+    strategicMemory: evidence?.winners ?? 0,
+  }
+
+  const reasonFor = (id: string): string => {
+    const n = counts[id] ?? 0
+    switch (id) {
+      case 'vault':
+        return `${n} relevant assets found`
+      case 'market':
+        return n ? `${n} research signals available` : 'Market intelligence ready'
+      case 'creativeDna':
+        return n ? `${n} matching creative patterns found` : 'Creative DNA ready'
+      case 'copyDna':
+        return n ? `${n} copy assets found` : 'Copy DNA ready'
+      case 'frameworks':
+        return n ? `${n} frameworks available` : 'Framework Vault ready'
+      case 'sops':
+        return n ? `${n} SOPs available` : 'SOP Vault ready'
+      case 'strategicMemory':
+        return evidence?.winners
+          ? `${evidence.winners} historical winners matched`
+          : 'Strategic memory ready'
+      default:
+        return 'Available'
+    }
+  }
+
+  const recSet = new Set<string>(recommendIntelSources(brief, deliverables))
+  // ORACLE memory recommends itself whenever it has matching winners.
+  if (evidence?.winners) recSet.add('strategicMemory')
+
+  return INTEL_SOURCES.map((s) => ({
+    id: s.id,
+    recommended: recSet.has(s.id),
+    reason: reasonFor(s.id),
+  }))
+}
+
+async function withEvidence(brief: string, raw: RawSuggestion, demo: boolean): Promise<NextResponse> {
+  // ORACLE strategic memory + live knowledge stats — cite real history/assets.
+  const [evidence, stats] = await Promise.all([
+    angleEvidence(raw.angle).catch(() => null),
+    vaultStats().catch(() => ({ live: false, total: 0, groups: [] as { system: string; category: string | null; count: number }[] })),
+  ])
+  const suggestion: ReactorSuggestion = {
+    ...raw,
+    evidence,
+    intelligenceSources: buildIntelSources(brief, raw.deliverables, stats, evidence),
+  }
   return NextResponse.json({ suggestion, demo })
 }
 
@@ -133,7 +201,7 @@ export async function POST(request: NextRequest) {
   // No key or nothing to reason over → heuristic pick (still concrete), enriched
   // with whatever ORACLE memory exists.
   if (!process.env.ANTHROPIC_API_KEY || brief.trim().length < 12) {
-    return withEvidence(fb, !process.env.ANTHROPIC_API_KEY)
+    return withEvidence(brief, fb, !process.env.ANTHROPIC_API_KEY)
   }
 
   try {
@@ -152,9 +220,9 @@ export async function POST(request: NextRequest) {
     })
     const text = response.content.find((b): b is Anthropic.TextBlock => b.type === 'text')?.text ?? ''
     const parsed = parseModelJson<Partial<RawSuggestion>>(text)
-    return withEvidence(validate(parsed, fb), false)
+    return withEvidence(brief, validate(parsed, fb), false)
   } catch (err) {
     console.error('Campaign Reactor suggest error:', err)
-    return withEvidence(fb, false)
+    return withEvidence(brief, fb, false)
   }
 }

@@ -118,6 +118,14 @@ export interface ReactorSuggestion {
   deliverables: string[]
   deliverablesReason: string
   evidence: AngleEvidence | null
+  /** Per intelligence-source recommendation + factual reason (asset counts). */
+  intelligenceSources: IntelSourceRecommendation[]
+}
+
+export interface IntelSourceRecommendation {
+  id: string
+  recommended: boolean
+  reason: string
 }
 
 /**

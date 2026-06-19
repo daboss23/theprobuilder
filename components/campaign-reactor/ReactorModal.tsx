@@ -86,10 +86,11 @@ export interface ReactorForm {
   offerField: StrategicField
   offerName: string
   setOfferName: (v: string) => void
-  // Slide 3 — intelligence inputs + models + reference library
-  intelligenceInputs: string[]
+  // Slide 3 — intelligence sources (agent-mapped) + models + reference library
+  intelSources: { id: string; label: string; agent: string }[]
   activeInputs: string[]
   toggleInput: (v: string) => void
+  intelSourceMeta: Record<string, { recommended: boolean; reason: string }>
   imageModels: ImageModelAvailability[]
   imageModel: string
   setImageModel: (v: string) => void
@@ -582,25 +583,44 @@ export function ReactorModal({ open, onClose, onFire, form }: ReactorModalProps)
           {step === 3 && (
             <div className="animate-fade-up space-y-4">
               <div>
-                <FieldLabel>Intelligence Inputs</FieldLabel>
+                <FieldLabel>Intelligence Sources</FieldLabel>
+                <p className="mb-2 text-xs text-white/40">
+                  The agents pick which intelligence matters for your brief. Approve or override.
+                </p>
                 <div className="space-y-1.5">
-                  {form.intelligenceInputs.map((i) => {
-                    const on = form.activeInputs.includes(i)
+                  {form.intelSources.map((s) => {
+                    const on = form.activeInputs.includes(s.id)
+                    const meta = form.intelSourceMeta[s.id]
                     return (
                       <button
-                        key={i}
+                        key={s.id}
                         type="button"
-                        onClick={() => form.toggleInput(i)}
-                        className={`flex w-full items-center justify-between rounded-lg border px-3 py-2 text-sm transition-all ${
+                        onClick={() => form.toggleInput(s.id)}
+                        className={`flex w-full items-center justify-between gap-3 rounded-lg border px-3 py-2 text-left transition-all ${
                           on
-                            ? 'border-primary/30 bg-primary/10 text-white'
+                            ? 'border-[#FF5E3A]/30 bg-[#FF5E3A]/[0.07] text-white'
                             : 'border-border bg-surface/30 text-white/45'
                         }`}
                       >
-                        {i}
+                        <span className="min-w-0">
+                          <span className="flex items-center gap-2 text-sm">
+                            {s.label}
+                            <span className="rounded-full border border-white/10 bg-white/[0.04] px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-white/45">
+                              {s.agent}
+                            </span>
+                          </span>
+                          {meta?.recommended ? (
+                            <span className="mt-0.5 flex items-center gap-1 text-[10px] text-[#FF5E3A]">
+                              <Sparkles size={9} /> Selected by {s.agent}
+                              {meta.reason && <span className="text-white/40">· {meta.reason}</span>}
+                            </span>
+                          ) : meta?.reason ? (
+                            <span className="mt-0.5 block text-[10px] text-white/35">{meta.reason}</span>
+                          ) : null}
+                        </span>
                         <span
-                          className={`grid h-4 w-4 place-items-center rounded ${
-                            on ? 'bg-glow text-background' : 'border border-border'
+                          className={`grid h-4 w-4 shrink-0 place-items-center rounded ${
+                            on ? 'bg-[#FF5E3A] text-white' : 'border border-border'
                           }`}
                         >
                           {on && <Check size={11} />}
@@ -748,9 +768,11 @@ export function ReactorModal({ open, onClose, onFire, form }: ReactorModalProps)
                 <SummaryRow
                   label="Intelligence"
                   value={
-                    form.activeInputs.length === form.intelligenceInputs.length
-                      ? 'All systems'
-                      : form.activeInputs.join(', ') || 'None'
+                    form.activeInputs.length === form.intelSources.length
+                      ? 'All sources'
+                      : form.activeInputs
+                          .map((id) => form.intelSources.find((s) => s.id === id)?.label ?? id)
+                          .join(', ') || 'None'
                   }
                 />
                 {form.showImagePicker && (

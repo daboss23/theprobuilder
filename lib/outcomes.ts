@@ -33,6 +33,22 @@ export interface OutcomeAttributes {
   copyStructure?: string
   platform?: string
   assetType?: string
+  // Full strategic configuration — what made this win, so ORACLE can reuse it.
+  proofAssets?: string[]
+  frameworks?: string[]
+}
+
+/** A past winning strategic configuration retrieved from ORACLE memory. */
+export interface WinningConfig {
+  angle: string
+  audience?: string
+  awareness?: string
+  offer?: string
+  creativeStructure?: string
+  copyStructure?: string
+  pattern?: string
+  score?: number
+  conceptText: string
 }
 
 export interface OutcomeInput {
@@ -102,6 +118,74 @@ export async function angleEvidence(angleOrPattern: string): Promise<AngleEviden
   } catch (err) {
     console.error('angleEvidence failed:', err)
     return null
+  }
+}
+
+/**
+ * ORACLE at fire time: retrieve past winning strategic configurations that match
+ * the current brief, ranked by configuration overlap. OPUS incorporates these
+ * into its reasoning so the Reactor reuses what worked instead of starting from
+ * scratch — the shared-memory moat. Degrades to [] without Supabase.
+ */
+export async function retrieveWinningConfigs(
+  input: { angle?: string; audience?: string; awareness?: string; offer?: string },
+  limit = 3,
+): Promise<WinningConfig[]> {
+  if (!dbConfigured()) return []
+  try {
+    const { data, error } = await getSupabaseAdmin()
+      .from('campaign_outcomes')
+      .select('angle, verdict, concept')
+      .order('created_at', { ascending: false })
+      .limit(500)
+    if (error) throw error
+
+    const rows = (data ?? []) as {
+      angle: string | null
+      verdict: string | null
+      concept: {
+        text?: string
+        score?: number
+        attributes?: OutcomeAttributes
+      } | null
+    }[]
+
+    const norm = (s?: string | null) => (s ?? '').trim().toLowerCase()
+    const overlaps = (a: string, b: string) => Boolean(a && b && (a.includes(b) || b.includes(a)))
+    const wantAngle = norm(input.angle)
+    const wantAud = norm(input.audience)
+    const wantAware = norm(input.awareness)
+    const wantOffer = norm(input.offer)
+
+    const scored = rows
+      .filter((r) => WIN_VERDICTS.includes((r.verdict ?? '') as Verdict))
+      .map((r) => {
+        const at = r.concept?.attributes ?? {}
+        let match = 0
+        if (overlaps(norm(r.angle), wantAngle) || overlaps(norm(at.pattern), wantAngle)) match += 3
+        if (overlaps(norm(at.audience), wantAud)) match += 1
+        if (overlaps(norm(at.awareness), wantAware)) match += 1
+        if (overlaps(norm(at.offer), wantOffer)) match += 1
+        const config: WinningConfig = {
+          angle: r.angle ?? at.campaignType ?? '—',
+          audience: at.audience,
+          awareness: at.awareness,
+          offer: at.offer,
+          creativeStructure: at.creativeStructure,
+          copyStructure: at.copyStructure,
+          pattern: at.pattern,
+          score: typeof r.concept?.score === 'number' ? r.concept.score : undefined,
+          conceptText: r.concept?.text ?? '',
+        }
+        return { config, match }
+      })
+      .filter((x) => x.match > 0)
+      .sort((a, b) => b.match - a.match || (b.config.score ?? 0) - (a.config.score ?? 0))
+
+    return scored.slice(0, limit).map((x) => x.config)
+  } catch (err) {
+    console.error('retrieveWinningConfigs failed:', err)
+    return []
   }
 }
 
