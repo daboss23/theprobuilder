@@ -28,6 +28,7 @@ import {
 import { Panel, PanelHeader, Pill } from '@/components/reactor/ui'
 import { vaultCategories } from '@/lib/reactor-data'
 import type { KnowledgeSystem, VaultStatGroup } from '@/lib/knowledge'
+import { WebsiteLinkInput, WebsiteIntelligencePanel } from './WebsiteIntelligence'
 
 interface VaultItem {
   id: string | null
@@ -54,6 +55,7 @@ const SYSTEM_LABELS: Record<string, string> = {
   research: 'Research Intelligence',
   pattern: 'Patterns',
   learning: 'Learnings',
+  website: 'Website Intelligence',
 }
 
 interface CategoryGroup {
@@ -132,7 +134,7 @@ function groupArtifacts(items: VaultItem[]): VaultArtifact[] {
         title: it.title,
         system: it.system,
         category: it.category,
-        kind: inferKind(it.title),
+        kind: it.system === 'website' ? 'link' : inferKind(it.title),
         preview: it.content,
         chunkCount: 1,
         ids: it.id ? [it.id] : [],
@@ -155,6 +157,7 @@ const SYSTEMS: { value: KnowledgeSystem; label: string }[] = [
   { value: 'research', label: 'Research' },
   { value: 'pattern', label: 'Pattern' },
   { value: 'learning', label: 'Learning' },
+  { value: 'website', label: 'Website Intelligence' },
 ]
 
 const inputCls =
@@ -183,22 +186,6 @@ type FetchStatus =
   | { kind: 'fetched'; chars: number }
   | { kind: 'error'; message: string }
 
-// Best-effort human title from a URL (last meaningful path segment or host).
-function titleFromUrl(raw: string): string {
-  try {
-    const u = new URL(raw)
-    const seg = u.pathname.split('/').filter(Boolean).pop()
-    const base = (seg ?? u.hostname)
-      .replace(/\.(html?|php|aspx?)$/i, '')
-      .replace(/[-_]+/g, ' ')
-      .trim()
-    if (!base) return u.hostname
-    return base.charAt(0).toUpperCase() + base.slice(1)
-  } catch {
-    return ''
-  }
-}
-
 export function VaultManager({ initialStats }: { initialStats: Stats }) {
   const [stats, setStats] = useState<Stats>(initialStats)
   const [items, setItems] = useState<VaultItem[]>([])
@@ -222,6 +209,9 @@ export function VaultManager({ initialStats }: { initialStats: Stats }) {
   const [fetchStatus, setFetchStatus] = useState<FetchStatus>({ kind: 'idle' })
   const [dragActive, setDragActive] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // Website Intelligence: bump to re-fetch the panel + library after a scan.
+  const [websiteKey, setWebsiteKey] = useState(0)
 
   const debounce = useRef<ReturnType<typeof setTimeout>>()
 
@@ -284,16 +274,6 @@ export function VaultManager({ initialStats }: { initialStats: Stats }) {
       })
       return false
     }
-  }
-
-  const fetchWebsite = async () => {
-    if (!sourceUrl.trim()) return
-    const ok = await fetchSource(
-      '/api/frameworks/scrape-url',
-      JSON.stringify({ url: sourceUrl.trim() }),
-      { 'Content-Type': 'application/json' }
-    )
-    if (ok && !title.trim()) setTitle(titleFromUrl(sourceUrl.trim()))
   }
 
   const fetchYoutube = async () => {
@@ -369,6 +349,13 @@ export function VaultManager({ initialStats }: { initialStats: Stats }) {
     }
   }
 
+  // After a website scan / refresh / disconnect: re-pull the panel and the
+  // library + categories so website intelligence shows up immediately.
+  const onWebsiteChanged = useCallback(() => {
+    setWebsiteKey((k) => k + 1)
+    load(query, systemFilter)
+  }, [load, query, systemFilter])
+
   // Group chunks into document artifacts, then page them so the vault never
   // becomes an endless wall regardless of how much knowledge is stored.
   const artifacts = useMemo(() => groupArtifacts(items), [items])
@@ -418,50 +405,7 @@ export function VaultManager({ initialStats }: { initialStats: Stats }) {
           </div>
 
           {/* Source-specific input */}
-          {sourceMode === 'website' && (
-            <div>
-              <label className="mb-1.5 block text-[11px] font-medium uppercase tracking-wider text-white/40">
-                Website URL
-              </label>
-              <div className="flex flex-col gap-2 sm:flex-row">
-                <div className="relative flex-1">
-                  <Link2
-                    size={15}
-                    className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-white/30"
-                  />
-                  <input
-                    type="url"
-                    value={sourceUrl}
-                    onChange={(e) => setSourceUrl(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault()
-                        fetchWebsite()
-                      }
-                    }}
-                    placeholder="https://example.com/winning-article"
-                    className={`${inputCls} pl-9`}
-                  />
-                </div>
-                <button
-                  type="button"
-                  onClick={fetchWebsite}
-                  disabled={fetching || !sourceUrl.trim()}
-                  className="inline-flex items-center justify-center gap-2 rounded-lg border border-border bg-surface/60 px-4 py-2 text-sm font-medium text-white/80 transition-all hover:border-white/20 hover:text-white disabled:cursor-not-allowed disabled:opacity-40 sm:w-40"
-                >
-                  {fetching ? (
-                    <>
-                      <Loader2 size={15} className="animate-spin" /> Fetching…
-                    </>
-                  ) : (
-                    <>
-                      <Download size={15} /> Fetch page
-                    </>
-                  )}
-                </button>
-              </div>
-            </div>
-          )}
+          {sourceMode === 'website' && <WebsiteLinkInput onChanged={onWebsiteChanged} />}
 
           {sourceMode === 'youtube' && (
             <div>
@@ -553,7 +497,7 @@ export function VaultManager({ initialStats }: { initialStats: Stats }) {
           )}
 
           {/* Source fetch status */}
-          {sourceMode !== 'text' && fetchStatus.kind !== 'idle' && (
+          {sourceMode !== 'text' && sourceMode !== 'website' && fetchStatus.kind !== 'idle' && (
             <div className="text-[11px]">
               {fetchStatus.kind === 'fetched' && (
                 <span className="flex items-center gap-1.5 text-success">
@@ -569,6 +513,8 @@ export function VaultManager({ initialStats }: { initialStats: Stats }) {
             </div>
           )}
 
+          {sourceMode !== 'website' && (
+          <>
           {/* Title / system / category */}
           <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
             <div className="md:col-span-1">
@@ -660,8 +606,13 @@ export function VaultManager({ initialStats }: { initialStats: Stats }) {
               )}
             </button>
           </div>
+          </>
+          )}
         </form>
       </Panel>
+
+      {/* ---------------------- Website Intelligence panel --------------------- */}
+      <WebsiteIntelligencePanel reloadKey={websiteKey} onChanged={onWebsiteChanged} />
 
       {/* ----------------------------- Library view ---------------------------- */}
       <Panel>

@@ -52,8 +52,8 @@ export const INTELLIGENCE: Record<IntelligenceId, AgentDef> = {
     codename: 'ATLAS',
     role: 'Knowledge Intelligence',
     mission:
-      'Turn uploaded assets — frameworks, SOPs, calls, webinars, VSLs — into retrievable intelligence.',
-    systems: ['vault'],
+      'Turn uploaded assets — frameworks, SOPs, calls, webinars, VSLs — and the connected company website into retrievable intelligence.',
+    systems: ['vault', 'website'],
     intelligenceLabel: 'Knowledge Intelligence',
     accent: '#38BDF8',
   },
@@ -63,7 +63,7 @@ export const INTELLIGENCE: Record<IntelligenceId, AgentDef> = {
     role: 'Market Intelligence',
     mission:
       'Understand the market — pains, desires, objections, beliefs, language — and determine awareness level.',
-    systems: ['research', 'transformation'],
+    systems: ['research', 'transformation', 'website'],
     intelligenceLabel: 'Market Intelligence',
     accent: '#A78BFA',
   },
@@ -73,7 +73,7 @@ export const INTELLIGENCE: Record<IntelligenceId, AgentDef> = {
     role: 'Creative Intelligence',
     mission:
       'Study winning creatives and extract repeatable Creative DNA — hooks, openings, structures, visual patterns.',
-    systems: ['creative'],
+    systems: ['creative', 'website'],
     intelligenceLabel: 'Creative Intelligence',
     accent: '#FBBF24',
   },
@@ -83,7 +83,7 @@ export const INTELLIGENCE: Record<IntelligenceId, AgentDef> = {
     role: 'Copy Intelligence',
     mission:
       'Study persuasive communication and extract Copy DNA — messaging patterns, emotions, offers, objection handling.',
-    systems: ['copy'],
+    systems: ['copy', 'website'],
     intelligenceLabel: 'Copy Intelligence',
     accent: '#34D399',
   },

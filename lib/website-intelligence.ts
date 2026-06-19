@@ -1,0 +1,1030 @@
+// ATLAS — Website Intelligence. Scans a company's public website, extracts and
+// classifies the most useful pages, derives five compact intelligence profiles
+// (Brand · Audience · Offer · Messaging · Proof), and stores everything in the
+// existing Knowledge Vault (`knowledge_chunks`) under the `website` system so the
+// whole agent network can retrieve it. Reuses the existing chunk → Voyage embed →
+// pgvector pipeline (`ingestKnowledge`) — no duplicate ingestion machinery.
+//
+// Everything degrades gracefully: with no Anthropic key the profiles fall back to
+// a heuristic read; with no Supabase/Voyage the scan still runs and returns a
+// summary, it just isn't persisted.
+
+import { createHash } from 'crypto'
+import Anthropic from '@anthropic-ai/sdk'
+import { ingestKnowledge } from '@/lib/knowledge'
+import { getSupabaseAdmin, supabaseUrl } from '@/lib/supabase'
+import { parseModelJson } from '@/lib/parse'
+
+// ATLAS synthesises profiles with the bulk model (single-shot, cost-aware).
+const MODEL = 'claude-sonnet-4-6'
+const UA = 'Mozilla/5.0 (compatible; TPB-ATLAS/1.0; +https://theprobuilder.com)'
+const FETCH_TIMEOUT = 12_000
+const MAX_REDIRECTS = 4
+const MAX_PAGES = 16
+const MAX_PAGE_BYTES = 1_500_000
+const FETCH_CONCURRENCY = 5
+const PROFILE_INPUT_CHARS = 24_000
+
+/* ------------------------------- Public types ----------------------------- */
+
+export type PageType =
+  | 'Homepage'
+  | 'About'
+  | 'Service'
+  | 'Product'
+  | 'Program'
+  | 'Offer'
+  | 'Landing Page'
+  | 'Testimonial'
+  | 'Case Study'
+  | 'Success Story'
+  | 'FAQ'
+  | 'Blog or Resource'
+  | 'Contact'
+  | 'Other'
+
+export interface WebsitePageInfo {
+  url: string
+  title: string
+  pageType: PageType
+}
+
+export interface BrandProfile {
+  companyName: string
+  industry: string
+  businessModel: string
+  positioning: string
+  valuePropositions: string[]
+  differentiators: string[]
+  brandVoice: string
+  tone: string
+  primaryPromises: string[]
+  authoritySignals: string[]
+  sourceUrls: string[]
+}
+
+export interface AudienceProfile {
+  primaryAudiences: string[]
+  secondaryAudiences: string[]
+  customerTypes: string[]
+  problems: string[]
+  desires: string[]
+  outcomes: string[]
+  audienceLanguage: string[]
+  sourceUrls: string[]
+}
+
+export interface OfferProfile {
+  products: string[]
+  services: string[]
+  programs: string[]
+  primaryOffer: string
+  secondaryOffers: string[]
+  leadMagnets: string[]
+  events: string[]
+  callsToAction: string[]
+  pricing: string[]
+  guarantees: string[]
+  sourceUrls: string[]
+}
+
+export interface MessagingProfile {
+  themes: string[]
+  headlines: string[]
+  commonPhrases: string[]
+  vocabulary: string[]
+  claims: string[]
+  emotionalLanguage: string[]
+  callsToAction: string[]
+  differentiators: string[]
+  identityLanguage: string[]
+  transformationLanguage: string[]
+  sourceUrls: string[]
+}
+
+export interface ProofProfile {
+  testimonials: string[]
+  caseStudies: string[]
+  successStories: string[]
+  results: string[]
+  statistics: string[]
+  awards: string[]
+  partnerships: string[]
+  certifications: string[]
+  authoritySignals: string[]
+  sourceUrls: string[]
+}
+
+export interface WebsiteProfiles {
+  brand: BrandProfile
+  audience: AudienceProfile
+  offer: OfferProfile
+  messaging: MessagingProfile
+  proof: ProofProfile
+}
+
+export interface WebsiteMetrics {
+  pagesScanned: number
+  pagesIndexed: number
+  intelligenceSignals: number
+  offersFound: number
+  audiencesDetected: number
+  proofAssets: number
+  profilesCreated: number
+}
+
+export interface WebsiteOverview {
+  companyName: string
+  industry: string
+  positioning: string
+  primaryAudience: string
+  primaryOffer: string
+  brandVoice: string
+}
+
+export interface WebsiteSummary {
+  connected: boolean
+  url: string
+  domain: string
+  lastScanned: string | null
+  stored: boolean
+  metrics: WebsiteMetrics
+  overview: WebsiteOverview
+  profiles: WebsiteProfiles
+  pages: WebsitePageInfo[]
+  failedPages: { url: string; reason: string }[]
+}
+
+/** Streamed analysis events surfaced to the Website Intelligence UI. */
+export type AnalyzeEvent =
+  | { type: 'progress'; message: string }
+  | { type: 'complete'; summary: WebsiteSummary }
+  | { type: 'error'; message: string }
+
+const UNKNOWN = 'Not confidently identified'
+
+/* ------------------------------- URL safety ------------------------------- */
+
+function isPrivateHost(host: string): boolean {
+  const h = host.toLowerCase()
+  if (h === 'localhost' || h.endsWith('.localhost') || h.endsWith('.local') || h.endsWith('.internal')) {
+    return true
+  }
+  // IPv6 loopback / unique-local / link-local (URL.hostname strips brackets).
+  if (h === '::1' || h === '0:0:0:0:0:0:0:1') return true
+  if (h.startsWith('fc') || h.startsWith('fd') || h.startsWith('fe8') || h.startsWith('fe9') || h.startsWith('fea') || h.startsWith('feb')) {
+    return true
+  }
+  // IPv4 literals in private / loopback / link-local / reserved ranges.
+  const m = h.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/)
+  if (m) {
+    const [a, b] = [Number(m[1]), Number(m[2])]
+    if (a === 10 || a === 127 || a === 0) return true
+    if (a === 192 && b === 168) return true
+    if (a === 169 && b === 254) return true
+    if (a === 172 && b >= 16 && b <= 31) return true
+    if (a === 100 && b >= 64 && b <= 127) return true
+    if (a >= 224) return true
+  }
+  return false
+}
+
+/** Validate a URL is a public http/https address. Throws a user-facing message. */
+export function assertSafeUrl(raw: string): URL {
+  let u: URL
+  try {
+    u = new URL(raw.trim())
+  } catch {
+    throw new Error('That doesn’t look like a valid website URL.')
+  }
+  if (u.protocol !== 'http:' && u.protocol !== 'https:') {
+    throw new Error('Only public http and https websites are supported.')
+  }
+  if (!u.hostname || !u.hostname.includes('.')) {
+    throw new Error('Enter a full public website URL, e.g. https://companywebsite.com')
+  }
+  if (isPrivateHost(u.hostname)) {
+    throw new Error('Local and private network addresses are not allowed.')
+  }
+  return u
+}
+
+function rootDomain(host: string): string {
+  return host.toLowerCase().replace(/^www\./, '')
+}
+
+/* --------------------------------- Fetch ---------------------------------- */
+
+interface HttpResult {
+  finalUrl: string
+  body: string
+  contentType: string
+}
+
+// Manual redirect following so every hop is re-validated against the SSRF guard.
+async function httpGet(url: string, allowTypes: string[]): Promise<HttpResult | null> {
+  let current = assertSafeUrl(url).toString()
+  for (let i = 0; i <= MAX_REDIRECTS; i++) {
+    let res: Response
+    try {
+      res = await fetch(current, {
+        headers: { 'User-Agent': UA, Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8' },
+        redirect: 'manual',
+        signal: AbortSignal.timeout(FETCH_TIMEOUT),
+      })
+    } catch {
+      return null
+    }
+    if (res.status >= 300 && res.status < 400) {
+      const loc = res.headers.get('location')
+      if (!loc) return null
+      let next: URL
+      try {
+        next = new URL(loc, current)
+      } catch {
+        return null
+      }
+      assertSafeUrl(next.toString())
+      current = next.toString()
+      continue
+    }
+    if (!res.ok) return null
+    const contentType = (res.headers.get('content-type') ?? '').toLowerCase()
+    if (allowTypes.length && !allowTypes.some((t) => contentType.includes(t))) return null
+    const body = await res.text()
+    return { finalUrl: current, body: body.slice(0, MAX_PAGE_BYTES), contentType }
+  }
+  return null
+}
+
+/* ------------------------------ HTML parsing ------------------------------ */
+
+function decodeEntities(s: string): string {
+  return s
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#0?39;/g, "'")
+    .replace(/&apos;/g, "'")
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&mdash;/g, '—')
+    .replace(/&ndash;/g, '–')
+    .replace(/&#(\d+);/g, (_, n) => {
+      try {
+        return String.fromCodePoint(Number(n))
+      } catch {
+        return ' '
+      }
+    })
+}
+
+function stripTags(s: string): string {
+  return decodeEntities(s.replace(/<[^>]+>/g, ' ')).replace(/\s+/g, ' ').trim()
+}
+
+function extractTitle(html: string): string {
+  const t = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1]
+  const fromTitle = t ? stripTags(t).replace(/\s*[|\-–—:]\s*.+$/, '').trim() : ''
+  if (fromTitle) return fromTitle.slice(0, 160)
+  const h1 = html.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i)?.[1]
+  return h1 ? stripTags(h1).slice(0, 160) : ''
+}
+
+function extractHeadings(html: string): string[] {
+  const out: string[] = []
+  const re = /<h[1-3][^>]*>([\s\S]*?)<\/h[1-3]>/gi
+  let m: RegExpExecArray | null
+  while ((m = re.exec(html)) && out.length < 40) {
+    const t = stripTags(m[1])
+    if (t && t.length < 200) out.push(t)
+  }
+  return out
+}
+
+// Readable body text with structural newlines, navigation/boilerplate removed.
+function extractContent(html: string): string {
+  const cleaned = html
+    .replace(/<!--[\s\S]*?-->/g, ' ')
+    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<noscript[\s\S]*?<\/noscript>/gi, ' ')
+    .replace(/<svg[\s\S]*?<\/svg>/gi, ' ')
+    .replace(/<nav[\s\S]*?<\/nav>/gi, ' ')
+    .replace(/<header[\s\S]*?<\/header>/gi, ' ')
+    .replace(/<footer[\s\S]*?<\/footer>/gi, ' ')
+    .replace(/<form[\s\S]*?<\/form>/gi, ' ')
+    .replace(/<\/(p|div|section|article|li|tr|h[1-6])>/gi, '\n\n')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<[^>]+>/g, ' ')
+  return decodeEntities(cleaned)
+    .split('\n')
+    .map((l) => l.replace(/[ \t]+/g, ' ').trim())
+    .filter(Boolean)
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+}
+
+function extractLinks(html: string, base: URL): string[] {
+  const out: string[] = []
+  const re = /<a\b[^>]*href=["']([^"']+)["']/gi
+  let m: RegExpExecArray | null
+  while ((m = re.exec(html))) {
+    const raw = m[1].split('#')[0]
+    if (!raw || raw.startsWith('mailto:') || raw.startsWith('tel:') || raw.startsWith('javascript:')) continue
+    try {
+      const u = new URL(raw, base)
+      if ((u.protocol === 'http:' || u.protocol === 'https:') && rootDomain(u.hostname) === rootDomain(base.hostname)) {
+        u.hash = ''
+        out.push(u.toString())
+      }
+    } catch {
+      /* skip malformed */
+    }
+  }
+  return Array.from(new Set(out))
+}
+
+/* --------------------------- Page discovery ------------------------------- */
+
+// Pages we never want, regardless of how they're linked.
+const EXCLUDE_RE =
+  /\/(login|signin|sign-in|signup|sign-up|register|account|my-account|dashboard|cart|checkout|basket|order|privacy|terms|tos|cookie|legal|disclaimer|refund|admin|wp-admin|wp-login|wp-json|feed|rss|tag|tags|category|categories|author|search)\b|\.(pdf|jpe?g|png|gif|svg|webp|avif|zip|mp4|mov|mp3|wav|css|js|xml|json|ico|woff2?|ttf|eot)(\?|$)/i
+
+// URL-pattern → page type + priority score. Higher = scanned first.
+const PRIORITY: [RegExp, PageType, number][] = [
+  [/\/(about|story|who-we-are|our-team|the-team|company|mission)/i, 'About', 9],
+  [/\/(pricing|plans|packages|offer|enroll|apply|get-started|book|consult)/i, 'Offer', 9],
+  [/\/(program|programme|course|coaching|mentorship|membership|academy|training)/i, 'Program', 8],
+  [/\/(service|services|what-we-do|solutions)/i, 'Service', 8],
+  [/\/(product|products|shop|store)/i, 'Product', 8],
+  [/\/(case-stud|casestud|case_stud)/i, 'Case Study', 8],
+  [/\/(success|results|wins|client-results|member-results|transformation)/i, 'Success Story', 8],
+  [/\/(testimonial|reviews?|praise)/i, 'Testimonial', 7],
+  [/\/(work|portfolio|projects|gallery|builds?|homes?)/i, 'Landing Page', 6],
+  [/\/(faq|faqs|questions|help)/i, 'FAQ', 5],
+  [/\/(contact|get-in-touch|enquir|inquir)/i, 'Contact', 4],
+  [/\/(blog|article|news|resource|guide|insights?|post)/i, 'Blog or Resource', 2],
+]
+
+function scoreUrl(url: string): { type: PageType; score: number } {
+  let path: string
+  try {
+    path = new URL(url).pathname
+  } catch {
+    return { type: 'Other', score: 0 }
+  }
+  for (const [re, type, score] of PRIORITY) {
+    if (re.test(path)) return { type, score }
+  }
+  // Shallow unknown pages still carry some value; deep ones much less.
+  const depth = path.split('/').filter(Boolean).length
+  return { type: 'Other', score: depth <= 1 ? 3 : depth === 2 ? 1 : 0 }
+}
+
+function normPath(url: string): string {
+  try {
+    const u = new URL(url)
+    return (rootDomain(u.hostname) + u.pathname.replace(/\/+$/, '')).toLowerCase() || rootDomain(u.hostname)
+  } catch {
+    return url.toLowerCase()
+  }
+}
+
+async function fetchSitemapUrls(seed: URL): Promise<string[]> {
+  const candidates = [`${seed.origin}/sitemap.xml`, `${seed.origin}/sitemap_index.xml`]
+  const found = new Set<string>()
+  for (const sm of candidates) {
+    const res = await httpGet(sm, ['xml', 'text']).catch(() => null)
+    if (!res) continue
+    const locs = Array.from(res.body.matchAll(/<loc>\s*([^<\s]+)\s*<\/loc>/gi)).map((m) => m[1])
+    // Sitemap index → fetch a few child sitemaps.
+    const childSitemaps = locs.filter((l) => /sitemap.*\.xml/i.test(l)).slice(0, 3)
+    for (const child of childSitemaps) {
+      const cres = await httpGet(child, ['xml', 'text']).catch(() => null)
+      if (cres) {
+        for (const m of Array.from(cres.body.matchAll(/<loc>\s*([^<\s]+)\s*<\/loc>/gi))) {
+          found.add(m[1])
+        }
+      }
+    }
+    for (const l of locs) {
+      if (!/sitemap.*\.xml/i.test(l)) found.add(l)
+    }
+    if (found.size) break
+  }
+  return Array.from(found).filter((u) => {
+    try {
+      return rootDomain(new URL(u).hostname) === rootDomain(seed.hostname)
+    } catch {
+      return false
+    }
+  })
+}
+
+async function discoverPages(seed: URL, homepageHtml: string): Promise<WebsitePageInfo[]> {
+  const homeLinks = extractLinks(homepageHtml, seed)
+  let sitemap: string[] = []
+  try {
+    sitemap = await fetchSitemapUrls(seed)
+  } catch {
+    /* sitemap optional */
+  }
+
+  const candidates = Array.from(new Set([...homeLinks, ...sitemap])).filter((u) => {
+    try {
+      return !EXCLUDE_RE.test(new URL(u).pathname)
+    } catch {
+      return false
+    }
+  })
+
+  const scored = candidates
+    .map((url) => ({ url, ...scoreUrl(url) }))
+    .filter((c) => c.score > 0)
+    .sort((a, b) => b.score - a.score)
+
+  const seen = new Set<string>([normPath(seed.toString())])
+  const picked: WebsitePageInfo[] = [{ url: seed.toString(), title: '', pageType: 'Homepage' }]
+  for (const c of scored) {
+    const key = normPath(c.url)
+    if (seen.has(key)) continue
+    seen.add(key)
+    picked.push({ url: c.url, title: '', pageType: c.type })
+    if (picked.length >= MAX_PAGES) break
+  }
+  return picked
+}
+
+/* ----------------------------- Page scanning ------------------------------ */
+
+interface ScannedPage {
+  url: string
+  title: string
+  pageType: PageType
+  headings: string[]
+  content: string
+  contentHash: string
+}
+
+// Refine the page type using the actual title/headings once fetched.
+function classify(url: string, fallback: PageType, title: string, headings: string[]): PageType {
+  if (fallback !== 'Other') return fallback
+  const hay = `${title} ${headings.join(' ')}`.toLowerCase()
+  if (/testimonial|review|what.*clients say/.test(hay)) return 'Testimonial'
+  if (/case study/.test(hay)) return 'Case Study'
+  if (/success|results|transformation/.test(hay)) return 'Success Story'
+  if (/about|our story|who we are/.test(hay)) return 'About'
+  if (/pricing|enrol|apply|get started/.test(hay)) return 'Offer'
+  if (/faq|frequently asked/.test(hay)) return 'FAQ'
+  return scoreUrl(url).type
+}
+
+async function scanPage(info: WebsitePageInfo): Promise<ScannedPage | null> {
+  const res = await httpGet(info.url, ['text/html', 'text/plain']).catch(() => null)
+  if (!res) return null
+  const content = extractContent(res.body)
+  if (!content || content.length < 60) return null
+  const title = info.pageType === 'Homepage' ? extractTitle(res.body) || info.url : extractTitle(res.body) || info.title || info.url
+  const headings = extractHeadings(res.body)
+  const pageType = classify(info.url, info.pageType, title, headings)
+  const trimmed = content.length > 9000 ? content.slice(0, 9000) : content
+  return {
+    url: res.finalUrl,
+    title,
+    pageType,
+    headings,
+    content: trimmed,
+    contentHash: createHash('sha256').update(trimmed).digest('hex').slice(0, 16),
+  }
+}
+
+async function mapPool<T, R>(items: T[], n: number, fn: (t: T) => Promise<R>): Promise<R[]> {
+  const out: R[] = new Array(items.length)
+  let i = 0
+  async function worker() {
+    while (i < items.length) {
+      const idx = i++
+      out[idx] = await fn(items[idx])
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(n, items.length) }, worker))
+  return out
+}
+
+/* ----------------------------- ATLAS profiles ----------------------------- */
+
+function emptyProfiles(companyName: string, domain: string): WebsiteProfiles {
+  return {
+    brand: {
+      companyName: companyName || domain,
+      industry: UNKNOWN,
+      businessModel: UNKNOWN,
+      positioning: UNKNOWN,
+      valuePropositions: [],
+      differentiators: [],
+      brandVoice: UNKNOWN,
+      tone: UNKNOWN,
+      primaryPromises: [],
+      authoritySignals: [],
+      sourceUrls: [],
+    },
+    audience: {
+      primaryAudiences: [],
+      secondaryAudiences: [],
+      customerTypes: [],
+      problems: [],
+      desires: [],
+      outcomes: [],
+      audienceLanguage: [],
+      sourceUrls: [],
+    },
+    offer: {
+      products: [],
+      services: [],
+      programs: [],
+      primaryOffer: UNKNOWN,
+      secondaryOffers: [],
+      leadMagnets: [],
+      events: [],
+      callsToAction: [],
+      pricing: [],
+      guarantees: [],
+      sourceUrls: [],
+    },
+    messaging: {
+      themes: [],
+      headlines: [],
+      commonPhrases: [],
+      vocabulary: [],
+      claims: [],
+      emotionalLanguage: [],
+      callsToAction: [],
+      differentiators: [],
+      identityLanguage: [],
+      transformationLanguage: [],
+      sourceUrls: [],
+    },
+    proof: {
+      testimonials: [],
+      caseStudies: [],
+      successStories: [],
+      results: [],
+      statistics: [],
+      awards: [],
+      partnerships: [],
+      certifications: [],
+      authoritySignals: [],
+      sourceUrls: [],
+    },
+  }
+}
+
+function asArray(v: unknown): string[] {
+  if (Array.isArray(v)) return v.map((x) => String(x).trim()).filter(Boolean).slice(0, 25)
+  if (typeof v === 'string' && v.trim()) return [v.trim()]
+  return []
+}
+
+function asScalar(v: unknown): string {
+  const s = typeof v === 'string' ? v.trim() : ''
+  return s || UNKNOWN
+}
+
+function mergeProfiles(base: WebsiteProfiles, raw: Record<string, unknown>, sourceUrls: string[]): WebsiteProfiles {
+  const b = (raw.brand ?? {}) as Record<string, unknown>
+  const a = (raw.audience ?? {}) as Record<string, unknown>
+  const o = (raw.offer ?? {}) as Record<string, unknown>
+  const m = (raw.messaging ?? {}) as Record<string, unknown>
+  const p = (raw.proof ?? {}) as Record<string, unknown>
+  return {
+    brand: {
+      companyName: asScalar(b.companyName) === UNKNOWN ? base.brand.companyName : asScalar(b.companyName),
+      industry: asScalar(b.industry),
+      businessModel: asScalar(b.businessModel),
+      positioning: asScalar(b.positioning),
+      valuePropositions: asArray(b.valuePropositions),
+      differentiators: asArray(b.differentiators),
+      brandVoice: asScalar(b.brandVoice),
+      tone: asScalar(b.tone),
+      primaryPromises: asArray(b.primaryPromises),
+      authoritySignals: asArray(b.authoritySignals),
+      sourceUrls,
+    },
+    audience: {
+      primaryAudiences: asArray(a.primaryAudiences),
+      secondaryAudiences: asArray(a.secondaryAudiences),
+      customerTypes: asArray(a.customerTypes),
+      problems: asArray(a.problems),
+      desires: asArray(a.desires),
+      outcomes: asArray(a.outcomes),
+      audienceLanguage: asArray(a.audienceLanguage),
+      sourceUrls,
+    },
+    offer: {
+      products: asArray(o.products),
+      services: asArray(o.services),
+      programs: asArray(o.programs),
+      primaryOffer: asScalar(o.primaryOffer),
+      secondaryOffers: asArray(o.secondaryOffers),
+      leadMagnets: asArray(o.leadMagnets),
+      events: asArray(o.events),
+      callsToAction: asArray(o.callsToAction),
+      pricing: asArray(o.pricing),
+      guarantees: asArray(o.guarantees),
+      sourceUrls,
+    },
+    messaging: {
+      themes: asArray(m.themes),
+      headlines: asArray(m.headlines),
+      commonPhrases: asArray(m.commonPhrases),
+      vocabulary: asArray(m.vocabulary),
+      claims: asArray(m.claims),
+      emotionalLanguage: asArray(m.emotionalLanguage),
+      callsToAction: asArray(m.callsToAction),
+      differentiators: asArray(m.differentiators),
+      identityLanguage: asArray(m.identityLanguage),
+      transformationLanguage: asArray(m.transformationLanguage),
+      sourceUrls,
+    },
+    proof: {
+      testimonials: asArray(p.testimonials),
+      caseStudies: asArray(p.caseStudies),
+      successStories: asArray(p.successStories),
+      results: asArray(p.results),
+      statistics: asArray(p.statistics),
+      awards: asArray(p.awards),
+      partnerships: asArray(p.partnerships),
+      certifications: asArray(p.certifications),
+      authoritySignals: asArray(p.authoritySignals),
+      sourceUrls,
+    },
+  }
+}
+
+async function deriveProfiles(
+  pages: ScannedPage[],
+  companyName: string,
+  domain: string,
+): Promise<WebsiteProfiles> {
+  const base = emptyProfiles(companyName, domain)
+  const sourceUrls = pages.map((p) => p.url)
+  if (!process.env.ANTHROPIC_API_KEY || pages.length === 0) return base
+
+  const corpus = pages
+    .map((p) => `## [${p.pageType}] ${p.title}\nURL: ${p.url}\n${p.content.slice(0, 1800)}`)
+    .join('\n\n')
+    .slice(0, PROFILE_INPUT_CHARS)
+
+  try {
+    const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+    const response = await anthropic.messages.create({
+      model: MODEL,
+      max_tokens: 3500,
+      system:
+        'You are ATLAS, the Website Intelligence layer for The Professional Builder. You analyse a company’s OWN public website and build five compact intelligence profiles. CRITICAL: do not invent details. Only include what the website actually states. Use [] for any list with no evidence and "Not confidently identified" for any unknown scalar. Treat audiences as company-stated (not verified research) and proof as company-provided claims. Reply with ONLY a JSON object, no prose, no markdown fences.',
+      messages: [
+        {
+          role: 'user',
+          content: `Company domain: ${domain}\n\nWebsite content:\n"""${corpus}"""\n\nReturn JSON with exactly this shape (arrays of short strings; omit nothing — use [] / "Not confidently identified" when absent):\n{"brand":{"companyName":"","industry":"","businessModel":"","positioning":"","valuePropositions":[],"differentiators":[],"brandVoice":"","tone":"","primaryPromises":[],"authoritySignals":[]},"audience":{"primaryAudiences":[],"secondaryAudiences":[],"customerTypes":[],"problems":[],"desires":[],"outcomes":[],"audienceLanguage":[]},"offer":{"products":[],"services":[],"programs":[],"primaryOffer":"","secondaryOffers":[],"leadMagnets":[],"events":[],"callsToAction":[],"pricing":[],"guarantees":[]},"messaging":{"themes":[],"headlines":[],"commonPhrases":[],"vocabulary":[],"claims":[],"emotionalLanguage":[],"callsToAction":[],"differentiators":[],"identityLanguage":[],"transformationLanguage":[]},"proof":{"testimonials":[],"caseStudies":[],"successStories":[],"results":[],"statistics":[],"awards":[],"partnerships":[],"certifications":[],"authoritySignals":[]}}`,
+        },
+      ],
+    })
+    const out = response.content.find((b): b is Anthropic.TextBlock => b.type === 'text')?.text ?? ''
+    const raw = parseModelJson<Record<string, unknown>>(out)
+    return mergeProfiles(base, raw, sourceUrls)
+  } catch (err) {
+    console.error('ATLAS profile derivation failed, using base profiles:', err)
+    return base
+  }
+}
+
+/* ------------------------------- Persistence ------------------------------ */
+
+const PROFILE_META: { key: keyof WebsiteProfiles; category: string; title: string }[] = [
+  { key: 'brand', category: 'Brand Profile', title: 'Brand Intelligence Profile' },
+  { key: 'audience', category: 'Audience Profile', title: 'Audience Profile' },
+  { key: 'offer', category: 'Offer Profile', title: 'Offer Profile' },
+  { key: 'messaging', category: 'Messaging Profile', title: 'Messaging Profile' },
+  { key: 'proof', category: 'Proof Profile', title: 'Proof Profile' },
+]
+
+function persistConfigured(): boolean {
+  return (
+    Boolean(supabaseUrl()) &&
+    Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SECRET_KEY)
+  )
+}
+
+function labelize(key: string): string {
+  return key.replace(/([A-Z])/g, ' $1').replace(/^./, (c) => c.toUpperCase())
+}
+
+// Human-readable serialization of a profile for embedding/retrieval.
+function profileToText(title: string, profile: Record<string, unknown>): string {
+  const lines = Object.entries(profile)
+    .filter(([k]) => k !== 'sourceUrls')
+    .map(([k, v]) => {
+      if (Array.isArray(v)) return v.length ? `${labelize(k)}: ${v.join('; ')}` : ''
+      return v && v !== UNKNOWN ? `${labelize(k)}: ${v}` : ''
+    })
+    .filter(Boolean)
+  return `${title}\n\n${lines.join('\n')}`
+}
+
+async function clearDomain(domain: string): Promise<void> {
+  if (!persistConfigured()) return
+  const { error } = await getSupabaseAdmin()
+    .from('knowledge_chunks')
+    .delete()
+    .eq('system', 'website')
+    .eq('metadata->>domain', domain)
+  if (error) throw error
+}
+
+/* -------------------------------- Analyze --------------------------------- */
+
+function emptyMetrics(): WebsiteMetrics {
+  return {
+    pagesScanned: 0,
+    pagesIndexed: 0,
+    intelligenceSignals: 0,
+    offersFound: 0,
+    audiencesDetected: 0,
+    proofAssets: 0,
+    profilesCreated: 0,
+  }
+}
+
+function countSignals(profiles: WebsiteProfiles): WebsiteMetrics {
+  const arr = (p: Record<string, unknown>) =>
+    Object.entries(p)
+      .filter(([k]) => k !== 'sourceUrls')
+      .reduce((s, [, v]) => s + (Array.isArray(v) ? v.length : v && v !== UNKNOWN ? 1 : 0), 0)
+  const offersFound =
+    profiles.offer.products.length +
+    profiles.offer.services.length +
+    profiles.offer.programs.length +
+    profiles.offer.secondaryOffers.length +
+    (profiles.offer.primaryOffer !== UNKNOWN ? 1 : 0)
+  const audiencesDetected =
+    profiles.audience.primaryAudiences.length +
+    profiles.audience.secondaryAudiences.length +
+    profiles.audience.customerTypes.length
+  const proofAssets =
+    profiles.proof.testimonials.length +
+    profiles.proof.caseStudies.length +
+    profiles.proof.successStories.length +
+    profiles.proof.results.length +
+    profiles.proof.statistics.length +
+    profiles.proof.awards.length
+  const intelligenceSignals =
+    arr(profiles.brand as unknown as Record<string, unknown>) +
+    arr(profiles.audience as unknown as Record<string, unknown>) +
+    arr(profiles.offer as unknown as Record<string, unknown>) +
+    arr(profiles.messaging as unknown as Record<string, unknown>) +
+    arr(profiles.proof as unknown as Record<string, unknown>)
+  return {
+    ...emptyMetrics(),
+    intelligenceSignals,
+    offersFound,
+    audiencesDetected,
+    proofAssets,
+    profilesCreated: 5,
+  }
+}
+
+function overviewFrom(profiles: WebsiteProfiles): WebsiteOverview {
+  return {
+    companyName: profiles.brand.companyName,
+    industry: profiles.brand.industry,
+    positioning: profiles.brand.positioning,
+    primaryAudience: profiles.audience.primaryAudiences[0] ?? UNKNOWN,
+    primaryOffer: profiles.offer.primaryOffer,
+    brandVoice: profiles.brand.brandVoice,
+  }
+}
+
+/**
+ * Run a full website analysis: discover → scan → derive profiles → ingest.
+ * Streams polished progress via `emit`. Returns the final summary. A refresh is
+ * the same call — existing chunks for the domain are cleared first so refreshing
+ * never creates duplicates. Partial page failures never fail the whole scan.
+ */
+export async function analyzeWebsite(
+  rawUrl: string,
+  emit: (e: AnalyzeEvent) => void,
+): Promise<WebsiteSummary> {
+  emit({ type: 'progress', message: 'ATLAS initialised' })
+  const seed = assertSafeUrl(rawUrl)
+  const domain = rootDomain(seed.hostname)
+
+  emit({ type: 'progress', message: 'Connecting to website…' })
+  const home = await httpGet(seed.toString(), ['text/html', 'text/plain'])
+  if (!home) {
+    throw new Error('Could not reach that website. Check the address and try again.')
+  }
+
+  emit({ type: 'progress', message: 'Discovering useful pages…' })
+  const discovered = await discoverPages(new URL(home.finalUrl), home.body)
+
+  emit({ type: 'progress', message: 'Extracting company intelligence…' })
+  const scanned = (await mapPool(discovered, FETCH_CONCURRENCY, scanPage)).filter(
+    (p): p is ScannedPage => p !== null,
+  )
+  const failedPages = discovered
+    .filter((d) => !scanned.some((s) => normPath(s.url) === normPath(d.url)))
+    .map((d) => ({ url: d.url, reason: 'Could not extract readable content' }))
+
+  if (scanned.length === 0) {
+    throw new Error('No readable pages could be analysed on this website.')
+  }
+
+  emit({ type: 'progress', message: 'Identifying offers…' })
+  emit({ type: 'progress', message: 'Analysing audience signals…' })
+  emit({ type: 'progress', message: 'Detecting testimonials and proof…' })
+
+  const companyName = extractTitle(home.body) || domain
+  const profiles = await deriveProfiles(scanned, companyName, domain)
+
+  for (const meta of PROFILE_META) {
+    emit({ type: 'progress', message: `Building ${meta.title}…` })
+  }
+
+  emit({ type: 'progress', message: 'Embedding website knowledge…' })
+
+  const now = new Date().toISOString()
+  let stored = false
+  let pagesIndexed = 0
+
+  if (persistConfigured()) {
+    // Refresh-safe: clear prior chunks for this domain, then re-ingest fresh.
+    await clearDomain(domain)
+
+    for (const page of scanned) {
+      const result = await ingestKnowledge({
+        system: 'website',
+        category: 'Website Page',
+        title: page.title,
+        content: page.content,
+        metadata: {
+          source_type: 'website',
+          intelligence_system: 'website_intelligence',
+          domain,
+          source_url: page.url,
+          page_type: page.pageType,
+          category: 'Website Page',
+          title: page.title,
+          content_hash: page.contentHash,
+          last_scanned_at: now,
+          derived: false,
+        },
+      })
+      if (result.stored) {
+        stored = true
+        pagesIndexed += 1
+      }
+    }
+
+    for (const meta of PROFILE_META) {
+      const profile = profiles[meta.key]
+      const result = await ingestKnowledge({
+        system: 'website',
+        category: meta.category,
+        title: meta.title,
+        content: profileToText(meta.title, profile as unknown as Record<string, unknown>),
+        metadata: {
+          source_type: 'website',
+          intelligence_system: 'website_intelligence',
+          domain,
+          source_url: seed.toString(),
+          page_type: 'Derived Profile',
+          category: meta.category,
+          title: meta.title,
+          content_hash: createHash('sha256')
+            .update(JSON.stringify(profile))
+            .digest('hex')
+            .slice(0, 16),
+          last_scanned_at: now,
+          derived: true,
+          profile,
+        },
+      })
+      if (result.stored) stored = true
+    }
+  }
+
+  const metrics = countSignals(profiles)
+  metrics.pagesScanned = scanned.length
+  metrics.pagesIndexed = stored ? pagesIndexed : scanned.length
+
+  const summary: WebsiteSummary = {
+    connected: true,
+    url: seed.toString(),
+    domain,
+    lastScanned: now,
+    stored,
+    metrics,
+    overview: overviewFrom(profiles),
+    profiles,
+    pages: scanned.map((p) => ({ url: p.url, title: p.title, pageType: p.pageType })),
+    failedPages,
+  }
+
+  emit({ type: 'progress', message: 'Website Intelligence ready.' })
+  emit({ type: 'complete', summary })
+  return summary
+}
+
+/* ------------------------- Connected-website read ------------------------- */
+
+interface WebsiteRow {
+  category: string | null
+  title: string
+  created_at: string | null
+  metadata: Record<string, unknown> | null
+}
+
+/** Reconstruct the connected-website summary from stored chunks (panel state). */
+export async function getConnectedWebsite(): Promise<WebsiteSummary | null> {
+  if (!persistConfigured()) return null
+  const { data, error } = await getSupabaseAdmin()
+    .from('knowledge_chunks')
+    .select('category, title, created_at, metadata')
+    .eq('system', 'website')
+    .order('created_at', { ascending: false })
+    .limit(2000)
+  if (error) {
+    console.error('getConnectedWebsite failed:', error)
+    return null
+  }
+  const rows = (data ?? []) as WebsiteRow[]
+  if (rows.length === 0) return null
+
+  // MVP supports one connected website — use the most recently scanned domain.
+  const domain = String(rows[0].metadata?.domain ?? '')
+  if (!domain) return null
+  const mine = rows.filter((r) => String(r.metadata?.domain ?? '') === domain)
+
+  const profiles = emptyProfiles(domain, domain)
+  for (const meta of PROFILE_META) {
+    const row = mine.find((r) => r.metadata?.derived === true && r.category === meta.category)
+    const stored = row?.metadata?.profile
+    if (stored && typeof stored === 'object') {
+      ;(profiles as unknown as Record<string, unknown>)[meta.key] = stored
+    }
+  }
+
+  // One entry per scanned page URL (non-derived chunks may repeat per chunk).
+  const pageMap = new Map<string, WebsitePageInfo>()
+  let homepageUrl = ''
+  let lastScanned: string | null = null
+  for (const r of mine) {
+    const url = String(r.metadata?.source_url ?? '')
+    const scannedAt = (r.metadata?.last_scanned_at as string) ?? r.created_at
+    if (scannedAt && (!lastScanned || scannedAt > lastScanned)) lastScanned = scannedAt
+    if (r.metadata?.derived === true) {
+      if (!homepageUrl) homepageUrl = url
+      continue
+    }
+    if (url && !pageMap.has(url)) {
+      pageMap.set(url, {
+        url,
+        title: String(r.metadata?.title ?? r.title),
+        pageType: (r.metadata?.page_type as PageType) ?? 'Other',
+      })
+    }
+  }
+  const pages = Array.from(pageMap.values())
+  if (!homepageUrl) homepageUrl = pages.find((p) => p.pageType === 'Homepage')?.url ?? `https://${domain}`
+
+  const metrics = countSignals(profiles)
+  metrics.pagesScanned = pages.length
+  metrics.pagesIndexed = pages.length
+
+  return {
+    connected: true,
+    url: homepageUrl,
+    domain,
+    lastScanned,
+    stored: true,
+    metrics,
+    overview: overviewFrom(profiles),
+    profiles,
+    pages,
+    failedPages: [],
+  }
+}
+
+/** Disconnect a website — remove all of its stored chunks from the Vault. */
+export async function disconnectWebsite(domain: string): Promise<void> {
+  if (!persistConfigured()) throw new Error('Vector store not configured')
+  const root = rootDomain(domain)
+  const { error } = await getSupabaseAdmin()
+    .from('knowledge_chunks')
+    .delete()
+    .eq('system', 'website')
+    .eq('metadata->>domain', root)
+  if (error) throw error
+}

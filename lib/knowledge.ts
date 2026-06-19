@@ -25,6 +25,7 @@ export type KnowledgeSystem =
   | 'copy'
   | 'pattern'
   | 'learning'
+  | 'website'
 
 export interface KnowledgeHit {
   system: string

@@ -12,6 +12,7 @@ const VALID_SYSTEMS: KnowledgeSystem[] = [
   'copy',
   'pattern',
   'learning',
+  'website',
 ]
 
 // Ingest a piece of Knowledge Vault content: chunk it, embed each chunk via

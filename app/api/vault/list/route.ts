@@ -12,6 +12,7 @@ const VALID_SYSTEMS: KnowledgeSystem[] = [
   'copy',
   'pattern',
   'learning',
+  'website',
 ]
 
 // Browse / search the stored knowledge chunks for the Vault library view.
