@@ -16,8 +16,10 @@ import {
   defaultBrandSettings,
   customDirective,
   NO_PREFERENCE,
+  type AngleEvidence,
   type DirectiveOption,
   type ReactorInputs,
+  type ReactorSuggestion,
   type StrategicIntelligence,
 } from '@/lib/reactor-inputs'
 import { recommendVideoModel } from '@/lib/video/recommend'
@@ -85,7 +87,15 @@ export function Workbench() {
   // recommendation once the brief has substance. The user can override, choose
   // No Preference, or enter a custom value.
   const [angle, setAngle] = useState<string>(NO_PREFERENCE)
-  const [outputs, setOutputs] = useState<string[]>(reactorOutputTypes)
+  // Deliverables start empty — OPUS recommends a subset from the brief, which is
+  // auto-selected until the user overrides.
+  const [outputs, setOutputs] = useState<string[]>([])
+  const [recommendedDeliverables, setRecommendedDeliverables] = useState<string[]>([])
+  const [deliverablesReason, setDeliverablesReason] = useState('')
+  // Strategic reasoning for the recommended angle (Dynamic Strategy Engine).
+  const [angleReason, setAngleReason] = useState('')
+  const [angleConfidence, setAngleConfidence] = useState<number | undefined>(undefined)
+  const [angleEvidence, setAngleEvidence] = useState<AngleEvidence | null>(null)
   // Strategic fields (the guided step-by-step inputs)
   const [brief, setBrief] = useState('')
   const [awareness, setAwareness] = useState(awarenessOptions[0])
@@ -186,7 +196,10 @@ export function Workbench() {
   const toggle = (arr: string[], set: (v: string[]) => void, val: string) =>
     set(arr.includes(val) ? arr.filter((v) => v !== val) : [...arr, val])
   const toggleInput = (val: string) => toggle(activeInputs, setActiveInputs, val)
-  const toggleOutput = (val: string) => toggle(outputs, setOutputs, val)
+  const toggleOutput = (val: string) => {
+    touchedRef.current.add('outputs')
+    toggle(outputs, setOutputs, val)
+  }
 
   /* ----------------------- Agent pre-selection (suggest) ------------------- */
   // The reactor strategist pre-picks a concrete angle / awareness / audience /
@@ -225,16 +238,17 @@ export function Workbench() {
     const t = setTimeout(async () => {
       setSuggesting(true)
       try {
-        const { suggestion } = await fetch('/api/campaign-reactor/suggest', {
+        const { suggestion } = (await fetch('/api/campaign-reactor/suggest', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ brief, angle }),
-        }).then((r) => r.json())
+        }).then((r) => r.json())) as { suggestion?: ReactorSuggestion }
         if (!suggestion) return
         // Record what the platform recommends — drives the visible badge even if
-        // the user later overrides.
+        // the user later overrides. The angle is free-form (Dynamic Strategy
+        // Engine): a sharper angle than the base categories is adopted as-is.
         setRec({
-          angle: ANGLE_NAMES.includes(suggestion.angle) ? suggestion.angle : undefined,
+          angle: suggestion.angle || undefined,
           awareness: awarenessOptions.some((x) => x.label === suggestion.awareness)
             ? suggestion.awareness
             : undefined,
@@ -245,9 +259,15 @@ export function Workbench() {
             ? suggestion.offer
             : undefined,
         })
+        setAngleReason(suggestion.angleReason || '')
+        setAngleConfidence(suggestion.angleConfidence)
+        setAngleEvidence(suggestion.evidence ?? null)
+        setRecommendedDeliverables(suggestion.deliverables ?? [])
+        setDeliverablesReason(suggestion.deliverablesReason || '')
+
         const touched = touchedRef.current
         // Auto-select the recommendation only where the user hasn't acted.
-        if (!touched.has('angle') && ANGLE_NAMES.includes(suggestion.angle)) {
+        if (!touched.has('angle') && suggestion.angle) {
           setAngle(suggestion.angle)
         }
         if (!touched.has('awareness')) {
@@ -261,6 +281,9 @@ export function Workbench() {
         if (!touched.has('offer')) {
           const o = offerOptions.find((x) => x.label === suggestion.offer)
           if (o) setOffer(o)
+        }
+        if (!touched.has('outputs') && suggestion.deliverables?.length) {
+          setOutputs(suggestion.deliverables)
         }
       } catch {
         /* suggestion is best-effort — leave fields as they are */
@@ -376,6 +399,9 @@ export function Workbench() {
     options: ANGLE_NAMES,
     value: angleCustom || angle === NO_PREFERENCE ? '' : angle,
     recommended: rec.angle ?? null,
+    recommendation: rec.angle
+      ? { reason: angleReason, confidence: angleConfidence, evidence: angleEvidence }
+      : undefined,
     noPreference: angle === NO_PREFERENCE && !angleCustom,
     thinking: suggesting,
     custom: {
@@ -495,6 +521,8 @@ export function Workbench() {
     outputTypeList: reactorOutputTypes,
     outputs,
     toggleOutput,
+    recommendedDeliverables,
+    deliverablesReason,
     awarenessField,
     audienceField,
     offerField,

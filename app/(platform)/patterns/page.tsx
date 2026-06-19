@@ -10,8 +10,8 @@ export default function PatternsPage() {
     <>
       <PageHeader
         system="05"
-        title="Pattern Intelligence"
-        subtitle="Store repeatable winning patterns. Each pattern is a reusable blueprint — hook, headline, creative style, transformation, offer, and CTA that wins on repeat."
+        title="Strategic Memory"
+        subtitle="ORACLE's memory of everything that has worked. Each entry is a reusable strategic configuration — angle, audience, offer, awareness, creative + copy structure — that wins on repeat and feeds future recommendations."
       />
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">

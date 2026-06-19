@@ -92,6 +92,35 @@ export const CUSTOM_AUDIENCE = 'Custom Audience…'
 export const CUSTOM_OFFER = 'Custom Offer…'
 
 /**
+ * ORACLE strategic-memory evidence for a recommended angle — how many stored
+ * campaigns share this strategic configuration, how many won, and their average
+ * win score. Null/zeroed when the angle is new (no memory yet).
+ */
+export interface AngleEvidence {
+  similar: number
+  winners: number
+  avgWinScore: number | null
+}
+
+/**
+ * The Dynamic Strategy Engine's read of a brief. The angle is NOT constrained to
+ * the base categories — NOVA/ORACLE/OPUS can surface a sharper angle (e.g.
+ * "Profit Leak") that the dropdown then adopts. Strategy defines the dropdown,
+ * not the other way around.
+ */
+export interface ReactorSuggestion {
+  angle: string
+  angleConfidence: number
+  angleReason: string
+  awareness: string
+  audience: string
+  offer: string
+  deliverables: string[]
+  deliverablesReason: string
+  evidence: AngleEvidence | null
+}
+
+/**
  * Directive injected when the user supplies a custom value. OPUS must treat it
  * as a hard strategic constraint that flows through research, creative, copy,
  * and pattern analysis — without breaking the recommendation system.

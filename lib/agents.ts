@@ -90,11 +90,11 @@ export const INTELLIGENCE: Record<IntelligenceId, AgentDef> = {
   oracle: {
     id: 'oracle',
     codename: 'ORACLE',
-    role: 'Pattern Intelligence',
+    role: 'Strategic Memory',
     mission:
-      'Identify repeatable success across outcomes — what won, what lost, and what is most likely to work next.',
+      'The memory of everything that has ever worked — store winning strategic configurations (angle, audience, offer, awareness, creative + copy structure) and surface them as recommendations for new briefs.',
     systems: ['pattern', 'learning'],
-    intelligenceLabel: 'Pattern Intelligence',
+    intelligenceLabel: 'Strategic Memory',
     accent: '#F472B6',
   },
 }

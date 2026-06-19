@@ -5,6 +5,7 @@
 
 import { getSupabaseAdmin } from '@/lib/supabase'
 import { ingestKnowledge } from '@/lib/knowledge'
+import type { AngleEvidence } from '@/lib/reactor-inputs'
 
 export type Verdict = 'pending' | 'winner' | 'loser' | 'high_performer' | 'average' | 'unknown'
 
@@ -54,6 +55,54 @@ export interface OutcomeResult {
 
 function dbConfigured(): boolean {
   return Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL)
+}
+
+/**
+ * ORACLE strategic memory: how many stored campaigns share an angle/pattern,
+ * how many won, and the average win score. Powers the angle reasoning panel so a
+ * recommendation cites real history. Degrades to null when Supabase is absent or
+ * the angle has no memory yet (a genuinely new strategic configuration).
+ */
+export async function angleEvidence(angleOrPattern: string): Promise<AngleEvidence | null> {
+  const needle = angleOrPattern.trim().toLowerCase()
+  if (!needle || !dbConfigured()) return null
+  try {
+    const { data, error } = await getSupabaseAdmin()
+      .from('campaign_outcomes')
+      .select('angle, verdict, concept')
+      .order('created_at', { ascending: false })
+      .limit(500)
+    if (error) throw error
+
+    const rows = (data ?? []) as {
+      angle: string | null
+      verdict: string | null
+      concept: { score?: number; attributes?: { pattern?: string } } | null
+    }[]
+
+    const overlaps = (a: string, b: string) => Boolean(a && b && (a.includes(b) || b.includes(a)))
+    const matches = rows.filter((r) => {
+      const a = (r.angle ?? '').toLowerCase()
+      const p = (r.concept?.attributes?.pattern ?? '').toLowerCase()
+      return overlaps(a, needle) || overlaps(p, needle)
+    })
+    if (matches.length === 0) return null
+
+    const winners = matches.filter((m) => WIN_VERDICTS.includes((m.verdict ?? '') as Verdict))
+    const scores = winners
+      .map((w) => Number(w.concept?.score))
+      .filter((n) => Number.isFinite(n)) as number[]
+    const avg = scores.length ? scores.reduce((s, n) => s + n, 0) / scores.length : null
+
+    return {
+      similar: matches.length,
+      winners: winners.length,
+      avgWinScore: avg === null ? null : Math.round(avg * 10) / 10,
+    }
+  } catch (err) {
+    console.error('angleEvidence failed:', err)
+    return null
+  }
 }
 
 export async function recordOutcome(input: OutcomeInput): Promise<OutcomeResult> {

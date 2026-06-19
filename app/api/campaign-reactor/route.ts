@@ -280,7 +280,7 @@ Your intelligence network:
 - NOVA — Market Intelligence: pains, desires, objections, beliefs, and member transformations.
 - SPARK — Creative Intelligence: winning creative structures, openings, and Creative DNA.
 - ECHO — Copy Intelligence: high-performing hooks, headlines, offers, and Copy DNA.
-- ORACLE — Pattern Intelligence: which patterns win, which lose, and what is most likely to work next.
+- ORACLE — Strategic Memory: the memory of every winning strategic configuration (angle, audience, offer, awareness, creative + copy structure) — which patterns win, which lose, and what is most likely to work next.
 
 Process:
 1. Consult your network with consult_intelligence. Always consult NOVA and ORACLE, plus at least one of SPARK/ECHO. Use their findings as evidence — don't guess.${metaAdsLine}

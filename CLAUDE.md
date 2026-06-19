@@ -12,7 +12,7 @@ performance data into the next winning campaign, answering one question:
 "What should TPB create next, based on everything that has already worked?"
 
 It is built around nine intelligence systems (Reactor Dashboard, Knowledge
-Vault, Research, Creative, Copy, Pattern Intelligence, Campaign Reactor,
+Vault, Research, Creative, Copy, Strategic Memory (ORACLE), Campaign Reactor,
 Creative Learnings, Recommendations). The Campaign Reactor runs an **agentic
 orchestrator** (a Claude tool-use loop) over a RAG knowledge layer. See
 `SYSTEM_DESIGN.md` for the full architecture.

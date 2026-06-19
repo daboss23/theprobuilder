@@ -16,7 +16,7 @@ import {
   X,
 } from 'lucide-react'
 import { FaceLibrary } from '@/components/reactor/FaceLibrary'
-import type { DirectiveOption, StrategicIntelligence } from '@/lib/reactor-inputs'
+import type { AngleEvidence, DirectiveOption, StrategicIntelligence } from '@/lib/reactor-inputs'
 import type { ModelAvailability } from '@/lib/video/types'
 import type { ImageModelAvailability } from '@/lib/image/types'
 
@@ -44,6 +44,12 @@ export interface StrategicField {
   /** The currently selected native option, or '' when custom / no-preference. */
   value: string
   recommended: string | null
+  /** Strategic reasoning behind the recommendation (angle field). */
+  recommendation?: {
+    reason?: string
+    confidence?: number
+    evidence?: AngleEvidence | null
+  }
   noPreference: boolean
   thinking: boolean
   custom: {
@@ -67,9 +73,13 @@ export interface ReactorForm {
   brief: string
   setBrief: (v: string) => void
   angleField: StrategicField
+  // Creative Deliverables — OPUS recommends a subset from the brief; the user
+  // approves or overrides.
   outputTypeList: string[]
   outputs: string[]
   toggleOutput: (v: string) => void
+  recommendedDeliverables: string[]
+  deliverablesReason: string
   // Slide 2 — awareness, audience, offer
   awarenessField: StrategicField
   audienceField: StrategicField
@@ -167,9 +177,11 @@ function StrategicSelect({ field }: { field: StrategicField }) {
   const { value, recommended, noPreference, custom } = field
   const isRecommendedSelected = !custom.active && !noPreference && !!value && value === recommended
 
-  // Ordered menu: recommended first (if any), then the rest, deduped.
+  // Ordered menu: recommended first (if any), then the rest, deduped. The
+  // recommendation is surfaced even when it isn't a base category — the strategy
+  // defines the dropdown, not the other way around.
   const ordered = useMemo(() => {
-    if (!recommended || !field.options.includes(recommended)) return field.options
+    if (!recommended) return field.options
     return [recommended, ...field.options.filter((o) => o !== recommended)]
   }, [field.options, recommended])
 
@@ -300,6 +312,44 @@ function StrategicSelect({ field }: { field: StrategicField }) {
             <p className="mt-1.5 text-[11px] text-white/35">
               e.g. {custom.examples.join(' · ')}
             </p>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// Strategic reasoning behind the recommended angle — confidence, the why, and
+// ORACLE memory evidence. Makes the dropdown feel like a strategist, not a form.
+function AngleRecommendation({ field }: { field: StrategicField }) {
+  const rec = field.recommendation
+  if (!rec?.reason || field.custom.active || field.noPreference) return null
+  const ev = rec.evidence
+  return (
+    <div className="mt-2 rounded-lg border border-[#FF5E3A]/20 bg-[#FF5E3A]/[0.05] px-3 py-2.5 text-[11px]">
+      <div className="mb-1 flex items-center gap-2">
+        <span className="font-semibold text-white/80">{field.value || field.recommended}</span>
+        {typeof rec.confidence === 'number' && (
+          <span className="inline-flex items-center gap-1 rounded-full bg-[#FF5E3A]/15 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-[#FF5E3A]">
+            <Gauge size={9} /> {rec.confidence}% confidence
+          </span>
+        )}
+      </div>
+      <p className="leading-relaxed text-white/55">{rec.reason}</p>
+      {ev && ev.similar > 0 && (
+        <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 border-t border-white/10 pt-2 text-[10px] text-white/45">
+          <span>
+            <span className="text-white/65">{ev.similar}</span> similar stored campaign
+            {ev.similar === 1 ? '' : 's'}
+          </span>
+          <span>
+            <span className="text-success">{ev.winners}</span> historical winner
+            {ev.winners === 1 ? '' : 's'}
+          </span>
+          {ev.avgWinScore !== null && (
+            <span>
+              avg win score <span className="text-white/65">{ev.avgWinScore}</span>
+            </span>
           )}
         </div>
       )}
@@ -445,29 +495,47 @@ export function ReactorModal({ open, onClose, onFire, form }: ReactorModalProps)
               <div>
                 <AgentFieldLabel thinking={form.suggesting}>Campaign Angle</AgentFieldLabel>
                 <StrategicSelect field={form.angleField} />
+                <AngleRecommendation field={form.angleField} />
               </div>
 
               <div>
-                <FieldLabel>Output Types (leave none for agent to decide)</FieldLabel>
+                <FieldLabel>Creative Deliverables</FieldLabel>
+                <p className="mb-2 text-xs text-white/40">
+                  The platform recommends what to create from your brief. Approve or override —
+                  leave none for OPUS to decide at fire time.
+                </p>
                 <div className="flex flex-wrap gap-1.5">
                   {form.outputTypeList.map((o) => {
                     const on = form.outputs.includes(o)
+                    const rec = form.recommendedDeliverables.includes(o)
                     return (
                       <button
                         key={o}
                         type="button"
                         onClick={() => form.toggleOutput(o)}
-                        className={`rounded-full border px-2.5 py-1 text-[11px] transition-colors ${
+                        className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] transition-colors ${
                           on
                             ? 'border-[#FF5E3A] bg-[#FF5E3A]/10 text-[#FF5E3A]'
-                            : 'border-border text-white/40 hover:text-white/60'
+                            : rec
+                              ? 'border-[#FF5E3A]/30 text-white/55 hover:text-white/75'
+                              : 'border-border text-white/40 hover:text-white/60'
                         }`}
                       >
+                        {(on || rec) && rec && <Sparkles size={9} className="text-[#FF5E3A]" />}
                         {o}
                       </button>
                     )
                   })}
                 </div>
+                {form.deliverablesReason && form.recommendedDeliverables.length > 0 && (
+                  <p className="mt-2 flex items-start gap-1.5 text-[11px] text-white/45">
+                    <Sparkles size={11} className="mt-0.5 shrink-0 text-[#FF5E3A]" />
+                    <span>
+                      <span className="text-white/60">Recommended:</span>{' '}
+                      {form.recommendedDeliverables.join(', ')} — {form.deliverablesReason}
+                    </span>
+                  </p>
+                )}
               </div>
             </div>
           )}
