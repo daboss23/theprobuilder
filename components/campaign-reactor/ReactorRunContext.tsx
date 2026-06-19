@@ -1,8 +1,15 @@
 'use client'
 
 import { createContext, useCallback, useContext, useRef, useState, type ReactNode } from 'react'
-import { briefToPrompt, type ProductionBrief } from '@/lib/reactor-inputs'
+import { briefToPrompt, type ProductionBrief, type ReactorInputs } from '@/lib/reactor-inputs'
 import type { Verdict, OutcomeAttributes } from '@/lib/outcomes'
+import {
+  idleWorkflow,
+  reduceWorkflow,
+  startWorkflow,
+  type WorkflowSeed,
+  type WorkflowState,
+} from '@/lib/campaign-reactor/workflow'
 
 /* -------------------------------------------------------------------------- */
 /*  Shared run types                                                          */
@@ -80,6 +87,8 @@ interface ReactorRunValue {
   phase: RunPhase
   concepts: Concept[]
   telemetry: TelemetryLine[]
+  /** Structured live-workflow state derived from the real SSE event stream. */
+  workflow: WorkflowState
   error: string | null
   logged: Set<string>
   streamReactor: (payload: Record<string, unknown>) => Promise<void>
@@ -105,6 +114,7 @@ export function ReactorRunProvider({ children }: { children: ReactNode }) {
   const [phase, setPhase] = useState<RunPhase>('idle')
   const [concepts, setConcepts] = useState<Concept[]>([])
   const [telemetry, setTelemetry] = useState<TelemetryLine[]>([])
+  const [workflow, setWorkflow] = useState<WorkflowState>(idleWorkflow)
   const [error, setError] = useState<string | null>(null)
   const [logged, setLogged] = useState<Set<string>>(new Set())
   const [creatives, setCreatives] = useState<Record<string, CreativeState>>({})
@@ -170,6 +180,19 @@ export function ReactorRunProvider({ children }: { children: ReactNode }) {
       setCreatives({})
       setLogged(new Set())
 
+      // Seed the live workflow from the fired configuration — the angle,
+      // audience, awareness, offer, and requested deliverables the strategist
+      // locked in. These are real run inputs, not fabricated findings.
+      const ri = payload.reactorInputs as ReactorInputs | undefined
+      const seed: WorkflowSeed = {
+        angle: typeof payload.angle === 'string' ? payload.angle : undefined,
+        audience: ri?.audienceType,
+        awareness: ri?.awarenessStage,
+        offer: ri?.offerType,
+        outputs: Array.isArray(payload.outputs) ? (payload.outputs as string[]) : undefined,
+      }
+      setWorkflow(startWorkflow(seed))
+
       try {
         const res = await fetch('/api/campaign-reactor', {
           method: 'POST',
@@ -198,6 +221,9 @@ export function ReactorRunProvider({ children }: { children: ReactNode }) {
             } catch {
               continue
             }
+            // Drive the live agent workflow off the same real event — single
+            // source of truth, no parallel parsing of the raw telemetry.
+            setWorkflow((w) => reduceWorkflow(w, ev))
             if (ev.type === 'step') pushTelemetry({ text: ev.text as string, kind: 'step' })
             else if (ev.type === 'retrieval')
               pushTelemetry({ text: `${ev.system} · ${ev.title}`, kind: 'retrieval' })
@@ -255,9 +281,16 @@ export function ReactorRunProvider({ children }: { children: ReactNode }) {
           }
         }
         setPhase('done')
+        // Stream ended cleanly without a terminal event (rare) — finalize the
+        // workflow as interrupted so completed findings are preserved on screen.
+        setWorkflow((w) =>
+          w.finished ? w : reduceWorkflow(w, { type: 'error', message: 'Reactor stream ended before completing.' }),
+        )
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Reactor failed')
+        const message = err instanceof Error ? err.message : 'Reactor failed'
+        setError(message)
         setPhase('done')
+        setWorkflow((w) => reduceWorkflow(w, { type: 'error', message }))
       }
     },
     [pushTelemetry, pollVideo],
@@ -489,6 +522,7 @@ export function ReactorRunProvider({ children }: { children: ReactNode }) {
     phase,
     concepts,
     telemetry,
+    workflow,
     error,
     logged,
     streamReactor,

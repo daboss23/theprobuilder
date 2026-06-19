@@ -424,8 +424,10 @@ async function runIntelligence(
   sse(controller, {
     type: 'delegate',
     agent: agent.codename,
+    id: agent.id,
     label: agent.intelligenceLabel,
     status: 'start',
+    question,
   })
 
   // Gather scoped evidence across this layer's knowledge systems.
@@ -465,6 +467,7 @@ async function runIntelligence(
   sse(controller, {
     type: 'delegate',
     agent: agent.codename,
+    id: agent.id,
     label: agent.intelligenceLabel,
     status: 'done',
     summary,
@@ -508,7 +511,7 @@ async function runDemo(controller: ReadableStreamDefaultController, body: Reacto
 
   for (const id of ['nova', 'spark', 'echo', 'oracle'] as IntelligenceId[]) {
     const agent = INTELLIGENCE[id]
-    sse(controller, { type: 'delegate', agent: agent.codename, label: agent.intelligenceLabel, status: 'start' })
+    sse(controller, { type: 'delegate', agent: agent.codename, id: agent.id, label: agent.intelligenceLabel, status: 'start' })
     const hits = (
       await Promise.all(agent.systems.map((s) => searchKnowledge(body.angle, { system: s, k: 2 })))
     ).flat()
@@ -516,6 +519,7 @@ async function runDemo(controller: ReadableStreamDefaultController, body: Reacto
     sse(controller, {
       type: 'delegate',
       agent: agent.codename,
+      id: agent.id,
       label: agent.intelligenceLabel,
       status: 'done',
       summary: demoSummaries[id],
@@ -596,6 +600,7 @@ export async function POST(request: NextRequest) {
           sse(controller, {
             type: 'delegate',
             agent: 'ORACLE',
+            id: 'oracle',
             label: 'Strategic Memory',
             status: 'done',
             confidence: 'High',

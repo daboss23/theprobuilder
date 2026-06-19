@@ -1,13 +1,17 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Atom, Check, Loader2, Copy as CopyIcon, Radar, Trophy, ImageIcon, Film, Users, Hexagon } from 'lucide-react'
-import { Panel, PanelHeader, Pill } from '@/components/reactor/ui'
+import { Atom, Loader2 } from 'lucide-react'
+import { Panel, PanelHeader } from '@/components/reactor/ui'
 import {
   ReactorModal,
   type ReactorForm,
   type StrategicField,
 } from '@/components/campaign-reactor/ReactorModal'
+import {
+  LiveAgentWorkflow,
+  type WorkflowControls,
+} from '@/components/campaign-reactor/workflow/LiveAgentWorkflow'
 import { reactorOutputTypes, winningAngles } from '@/lib/reactor-data'
 import { INTEL_SOURCES, intelSourceLabel } from '@/lib/intelligence-sources'
 import {
@@ -43,43 +47,16 @@ const VERDICT_OPTIONS: { value: Verdict; label: string }[] = [
   { value: 'loser', label: 'Loser' },
 ]
 
-// Non-destructive provider/model chip overlaid on a generated still or clip.
-// It lives in the card UI only — the asset pixels are never touched, so the
-// downloadable creative stays clean. Renders nothing when no provider is known.
-function ProviderChip({ model, provider }: { model?: string; provider?: string }) {
-  if (!model && !provider) return null
-  return (
-    <span className="absolute right-2 top-2 z-10 inline-flex items-center gap-1 rounded-full border border-white/15 bg-black/60 px-2 py-0.5 text-[10px] font-medium text-white/85 backdrop-blur-sm">
-      <Hexagon size={9} className="text-glow" />
-      {provider && <span className="uppercase tracking-wide text-white/60">{provider}</span>}
-      {model && (
-        <>
-          {provider && <span className="text-white/25">·</span>}
-          <span>{model}</span>
-        </>
-      )}
-    </span>
-  )
-}
-
 export function Workbench() {
   // Run + media state lives in the persistent platform-layout provider, so an
   // in-flight reactor run survives navigating to another dashboard and back.
   const {
     phase,
-    concepts,
-    telemetry,
-    error,
-    logged,
     streamReactor,
     generateCreative,
     animate,
     generateUGC,
     markOutcome,
-    imageFor,
-    imageMetaFor,
-    videoFor,
-    creativeStateFor,
   } = useReactorRun()
   const [modalOpen, setModalOpen] = useState(false)
   // Manual controls (original left-panel inputs, now collected inside the modal)
@@ -142,7 +119,6 @@ export function Workbench() {
     setFaceUrls(images.slice(0, 9))
     setRefVideos(videos.slice(0, 3))
   }, [])
-  const feedRef = useRef<HTMLDivElement>(null)
 
   // Load the model menus once so the user can pick (and we can recommend).
   useEffect(() => {
@@ -315,11 +291,6 @@ export function Workbench() {
     // angle is read as a hint only; excluded from deps to avoid a re-suggest loop.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [brief, modalOpen])
-
-  // Keep the telemetry feed pinned to the newest line as the run streams in.
-  useEffect(() => {
-    requestAnimationFrame(() => feedRef.current?.scrollTo({ top: 1e9, behavior: 'smooth' }))
-  }, [telemetry.length])
 
   // Load the Strategic Intelligence read for the review step. Runs once when the
   // modal reaches Step 5 (not per keystroke), grounded in the current inputs.
@@ -577,6 +548,26 @@ export function Workbench() {
     setOnBrand,
   }
 
+  // Everything the live agent workflow needs to keep the production actions
+  // (Generate Image/Video, Animate, UGC, Log outcome, Copy) working — the run
+  // logic still lives in the persistent provider; these just thread the current
+  // model picks, reference library, and angle into each call.
+  const workflowControls: WorkflowControls = {
+    angle,
+    isVideoConcept,
+    hasRefs,
+    faceCount: faceUrls.length,
+    refVideoCount: refVideos.length,
+    copied,
+    verdictOptions: VERDICT_OPTIONS,
+    onCopy: copy,
+    onGenerateCreative: runCreative,
+    onAnimate: runAnimate,
+    onGenerateUGC: runUGC,
+    onMarkOutcome: (c, v) => markOutcome(c, v, angle, outcomeAttributes(c)),
+    onRetry: fire,
+  }
+
   return (
     <div className="space-y-6">
       {/* Trigger — the modal is the single input induction for the reactor */}
@@ -606,17 +597,17 @@ export function Workbench() {
         </button>
       </div>
 
-      {/* Output */}
-      <Panel className="min-h-[480px]">
-        <PanelHeader
-          icon={<Atom size={16} className={phase === 'firing' ? 'animate-spin' : 'animate-pulse-glow'} />}
-          accent="cyan"
-          title="Generated Concepts"
-          subtitle="Synthesized from your active intelligence layer"
-          accessory={concepts.length > 0 ? <Pill tone="success">{concepts.length} concepts</Pill> : undefined}
-        />
-
-        {phase === 'idle' && (
+      {/* Output — before firing, the empty state; once fired, the live agent
+          workflow becomes the primary experience (raw telemetry moves into a
+          collapsible drawer inside it). */}
+      {phase === 'idle' ? (
+        <Panel className="min-h-[480px]">
+          <PanelHeader
+            icon={<Atom size={16} className="animate-pulse-glow" />}
+            accent="cyan"
+            title="Generated Concepts"
+            subtitle="Synthesized from your active intelligence layer"
+          />
           <div className="grid place-items-center px-6 py-24 text-center">
             <Atom size={40} className="mb-4 text-white/15" />
             <p className="max-w-sm text-sm text-white/40">
@@ -624,256 +615,10 @@ export function Workbench() {
               your frameworks, retrieves what has already worked, and drafts grounded concepts.
             </p>
           </div>
-        )}
-
-        {phase !== 'idle' && (
-          <div className="space-y-4 p-5">
-            {/* Live telemetry feed */}
-            {(telemetry.length > 0 || phase === 'firing') && (
-              <div className="telemetry-console p-3">
-                <div className="mb-2 flex items-center gap-2 text-[10px] font-medium uppercase tracking-widest text-white/35">
-                  <Radar size={12} className={phase === 'firing' ? 'animate-spin text-glow' : ''} />
-                  Reactor Telemetry
-                </div>
-                <div ref={feedRef} className="max-h-48 space-y-1 overflow-y-auto font-mono text-[11px]">
-                  {telemetry.map((t, i) => {
-                    if (t.kind === 'intelligence') {
-                      return (
-                        <div
-                          key={i}
-                          className="my-1 rounded-md border border-glow/20 bg-glow/[0.04] px-2.5 py-1.5"
-                        >
-                          <div className="flex items-center justify-between gap-2">
-                            <span className="text-[10px] font-semibold uppercase tracking-wider text-glow/90">
-                              {t.label}
-                            </span>
-                            {t.confidence && (
-                              <span
-                                className={`rounded-full px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide ${
-                                  t.confidence === 'High'
-                                    ? 'bg-success/15 text-success'
-                                    : t.confidence === 'Medium'
-                                      ? 'bg-warning/15 text-warning'
-                                      : 'bg-white/10 text-white/50'
-                                }`}
-                              >
-                                Confidence: {t.confidence}
-                              </span>
-                            )}
-                          </div>
-                          <p className="mt-0.5 text-white/70">{t.text}</p>
-                        </div>
-                      )
-                    }
-                    return (
-                      <div
-                        key={i}
-                        className={`flex gap-2 ${t.kind === 'retrieval' ? 'text-cyan/80' : 'text-white/55'}`}
-                      >
-                        <span className="text-white/25">{t.kind === 'retrieval' ? '└▸' : '›'}</span>
-                        <span>{t.text}</span>
-                      </div>
-                    )
-                  })}
-                  {phase === 'firing' && (
-                    <div className="flex items-center gap-2 text-glow">
-                      <Loader2 size={11} className="animate-spin" /> intelligence operating…
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {error && (
-              <div className="rounded-lg border border-danger/30 bg-danger/[0.06] p-3 text-sm text-danger">
-                {error}
-              </div>
-            )}
-
-            {concepts.map((c, i) => {
-              const image = imageFor(c)
-              const imageMeta = imageMetaFor(c)
-              const video = videoFor(c)
-              const wantsVideo = isVideoConcept(c)
-              const creativeState = creativeStateFor(c)
-              const creativeBusy =
-                creativeState?.status === 'working' || video?.status === 'rendering'
-              return (
-                <div
-                  key={i}
-                  className={`glass-hover animate-fade-up stagger-${(i % 8) + 1} rounded-xl border border-border bg-surface/40 p-4`}
-                >
-                  <div className="mb-1.5 flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-2">
-                      <Pill tone="primary">{c.type}</Pill>
-                      {typeof c.score === 'number' && (
-                        <Pill tone={c.score >= 8 ? 'success' : 'warning'}>{c.score}/10</Pill>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-3">
-                      {c.type.includes('Concept') && (
-                        <button
-                          type="button"
-                          onClick={() => runCreative(c)}
-                          disabled={creativeBusy}
-                          className="flex items-center gap-1 text-[11px] text-white/40 hover:text-cyan disabled:opacity-60"
-                        >
-                          {creativeBusy ? (
-                            <Loader2 size={12} className="animate-spin" />
-                          ) : wantsVideo ? (
-                            <Film size={12} />
-                          ) : (
-                            <ImageIcon size={12} />
-                          )}
-                          {wantsVideo ? 'Generate Video Creative' : 'Generate Image Creative'}
-                        </button>
-                      )}
-                      {wantsVideo && hasRefs && (
-                        <button
-                          type="button"
-                          onClick={() => runUGC(c)}
-                          disabled={creativeBusy}
-                          className="flex items-center gap-1 text-[11px] text-white/40 hover:text-cyan disabled:opacity-60"
-                          title={`Generate with ${faceUrls.length} reference image${faceUrls.length === 1 ? '' : 's'}${refVideos.length ? ` + ${refVideos.length} video${refVideos.length === 1 ? '' : 's'}` : ''} (Seedance 2.0 reference-to-video)`}
-                        >
-                          <Users size={12} />
-                          Generate UGC
-                        </button>
-                      )}
-                      {image && !video && (
-                        <button
-                          type="button"
-                          onClick={() => runAnimate(c, image)}
-                          className="flex items-center gap-1 text-[11px] text-white/40 hover:text-cyan"
-                        >
-                          <Film size={12} />
-                          Animate
-                        </button>
-                      )}
-                      {logged.has(c.text) ? (
-                        <span className="flex items-center gap-1 text-[11px] text-success">
-                          <Trophy size={12} /> Logged
-                        </span>
-                      ) : (
-                        <select
-                          defaultValue=""
-                          title="Log performance outcome"
-                          onChange={(e) => {
-                            const v = e.target.value as Verdict
-                            if (v) markOutcome(c, v, angle, outcomeAttributes(c))
-                          }}
-                          className="rounded-md border border-border bg-surface/60 px-1.5 py-1 text-[11px] text-white/50 outline-none hover:text-white focus:border-success/50"
-                        >
-                          <option value="" className="bg-card">
-                            Log outcome…
-                          </option>
-                          {VERDICT_OPTIONS.map((o) => (
-                            <option key={o.value} value={o.value} className="bg-card">
-                              {o.label}
-                            </option>
-                          ))}
-                        </select>
-                      )}
-                      <button
-                        type="button"
-                        onClick={() => copy(c.text)}
-                        className="flex items-center gap-1 text-[11px] text-white/40 hover:text-glow"
-                      >
-                        {copied === c.text ? <Check size={12} /> : <CopyIcon size={12} />}
-                        {copied === c.text ? 'Copied' : 'Copy'}
-                      </button>
-                    </div>
-                  </div>
-                  <p className="text-sm text-white/80">{c.text}</p>
-
-                  {c.productionBrief && c.productionBrief.frames?.length > 0 && (
-                    <div className="mt-2.5 rounded-lg border border-primary/15 bg-primary/[0.04] p-2.5">
-                      <div className="mb-1.5 flex flex-wrap items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-glow/80">
-                        <Film size={11} /> Production Brief
-                        {c.productionBrief.pattern && (
-                          <span className="font-normal text-white/30">· {c.productionBrief.pattern}</span>
-                        )}
-                      </div>
-                      <ol className="space-y-1">
-                        {c.productionBrief.frames.map((f, fi) => (
-                          <li key={fi} className="flex gap-2 text-[11px] text-white/60">
-                            <span className="shrink-0 font-mono text-glow/60">{f.label}</span>
-                            <span>{f.description}</span>
-                          </li>
-                        ))}
-                      </ol>
-                    </div>
-                  )}
-
-                  {(c.basis || c.learningCheck) && (
-                    <div className="mt-2 space-y-1 border-t border-border pt-2 text-[11px] text-white/40">
-                      {c.basis && (
-                        <p>
-                          <span className="text-glow/70">Grounded in:</span> {c.basis}
-                        </p>
-                      )}
-                      {c.learningCheck && (
-                        <p>
-                          <span className="text-success/70">Rubric:</span> {c.learningCheck}
-                        </p>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Generated still creative (agent or manual) — provider chip
-                      overlaid on the card only; the image file stays untouched. */}
-                  {image && (
-                    <div className="relative mt-3">
-                      <ProviderChip model={imageMeta?.model} provider={imageMeta?.provider} />
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={image} alt={c.type} className="w-full rounded-lg border border-border" />
-                    </div>
-                  )}
-
-                  {/* Generated video — provider chip overlaid on the player only. */}
-                  {video?.status === 'done' && video.url && (
-                    <div className="relative mt-3">
-                      <ProviderChip model={video.model} provider={video.provider} />
-                      <video
-                        src={video.url}
-                        controls
-                        playsInline
-                        className="w-full rounded-lg border border-border"
-                      />
-                    </div>
-                  )}
-                  {video?.status === 'rendering' && (
-                    <div className="mt-3 grid aspect-video w-full place-items-center rounded-lg border border-border bg-background/40">
-                      <span className="flex items-center gap-2 text-xs text-cyan">
-                        <Loader2 size={14} className="animate-spin" /> Rendering video…
-                      </span>
-                    </div>
-                  )}
-                  {video?.status === 'error' && (
-                    <p className="mt-3 rounded-lg border border-warning/30 bg-warning/[0.06] p-2 text-[11px] text-warning">
-                      {video.message || 'Video render failed — check FAL_KEY / HF_CREDENTIALS or try again.'}
-                    </p>
-                  )}
-
-                  {/* Creative render status (in-flight / error) */}
-                  {creativeState?.status === 'working' && (
-                    <div className="mt-3 grid aspect-square w-full place-items-center rounded-lg border border-border bg-background/40">
-                      <span className="flex items-center gap-2 text-xs text-cyan">
-                        <Loader2 size={14} className="animate-spin" /> Rendering creative…
-                      </span>
-                    </div>
-                  )}
-                  {creativeState?.status === 'error' && (
-                    <p className="mt-3 rounded-lg border border-warning/30 bg-warning/[0.06] p-2 text-[11px] text-warning">
-                      {creativeState.message}
-                    </p>
-                  )}
-                </div>
-              )
-            })}
-          </div>
-        )}
-      </Panel>
+        </Panel>
+      ) : (
+        <LiveAgentWorkflow {...workflowControls} />
+      )}
 
       <ReactorModal open={modalOpen} onClose={() => setModalOpen(false)} onFire={fire} form={form} />
     </div>

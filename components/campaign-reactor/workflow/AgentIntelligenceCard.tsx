@@ -1,0 +1,153 @@
+'use client'
+
+import { motion } from 'motion/react'
+import { cn } from '@/lib/utils'
+import { accentClass } from '@/components/reactor/ui'
+import { INTELLIGENCE, type IntelligenceId } from '@/lib/agents'
+import {
+  ACTIVE_STATUSES,
+  AGENT_STATUS_LABEL,
+  type AgentRuntime,
+} from '@/lib/campaign-reactor/workflow'
+import { AGENT_VISUAL } from './visuals'
+
+/** Human-readable "current action" for an active layer — no fabricated detail. */
+function actionLine(agent: AgentRuntime): string {
+  switch (agent.status) {
+    case 'retrieving':
+      return agent.question ? `Retrieving: ${agent.question}` : 'Retrieving intelligence…'
+    case 'analysing':
+      return agent.question ? `Analysing: ${agent.question}` : 'Analysing retrieved evidence…'
+    case 'reporting':
+      return 'Reporting findings to OPUS…'
+    case 'complete':
+      return agent.summary || 'Findings delivered.'
+    case 'error':
+      return 'Intelligence unavailable — continuing with available evidence.'
+    case 'notRequired':
+      return 'Not consulted for this campaign.'
+    case 'queued':
+      return 'Queued for consultation…'
+    default:
+      return 'Awaiting delegation.'
+  }
+}
+
+function StatusBadge({ status }: { status: AgentRuntime['status'] }) {
+  const active = ACTIVE_STATUSES.includes(status)
+  const tone =
+    status === 'complete'
+      ? 'border-success/40 bg-success/10 text-success'
+      : status === 'error'
+        ? 'border-danger/40 bg-danger/10 text-danger'
+        : active
+          ? 'intel-badge--active'
+          : 'border-white/10 bg-white/5 text-white/40'
+  return (
+    <span
+      className={cn(
+        'inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wider',
+        tone,
+      )}
+    >
+      <span
+        className={cn(
+          'h-1.5 w-1.5 rounded-full',
+          status === 'complete'
+            ? 'bg-success'
+            : status === 'error'
+              ? 'bg-danger'
+              : active
+                ? 'bg-[rgb(var(--acc))] intel-dot-live'
+                : 'bg-white/30',
+        )}
+      />
+      {AGENT_STATUS_LABEL[status]}
+    </span>
+  )
+}
+
+export function AgentIntelligenceCard({
+  id,
+  agent,
+  reduced,
+  cardRef,
+}: {
+  id: IntelligenceId
+  agent: AgentRuntime
+  reduced: boolean
+  cardRef?: (el: HTMLDivElement | null) => void
+}) {
+  const def = INTELLIGENCE[id]
+  const visual = AGENT_VISUAL[id]
+  const Icon = visual.icon
+  const active = ACTIVE_STATUSES.includes(agent.status)
+  const complete = agent.status === 'complete'
+  const dim = agent.status === 'dormant' || agent.status === 'notRequired' || agent.status === 'queued'
+  const findingCount = agent.findings.length
+  const preview = agent.findings[0]?.title || (complete ? agent.summary : undefined)
+
+  return (
+    <div
+      ref={cardRef}
+      data-state={active ? 'active' : complete ? 'complete' : agent.status === 'error' ? 'error' : 'idle'}
+      className={cn('intel-card', accentClass[visual.accent], dim && 'intel-card--dim')}
+    >
+      {active && !reduced && <span aria-hidden className="intel-scan" />}
+      <div className="relative flex items-start gap-3">
+        <span className="intel-icon">
+          <Icon size={16} />
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center justify-between gap-2">
+            <div className="min-w-0">
+              <p className="truncate font-display text-sm font-bold tracking-tight text-white">
+                {def.codename}
+              </p>
+              <p className="truncate text-[10px] font-medium uppercase tracking-wider text-white/40">
+                {def.role}
+              </p>
+            </div>
+            <StatusBadge status={agent.status} />
+          </div>
+        </div>
+      </div>
+
+      <p
+        className={cn(
+          'relative mt-2.5 line-clamp-2 text-[11px] leading-snug',
+          active ? 'text-[rgb(var(--acc-hi))]' : complete ? 'text-white/70' : 'text-white/40',
+        )}
+      >
+        {actionLine(agent)}
+      </p>
+
+      {(preview || findingCount > 0 || agent.confidence) && (
+        <motion.div
+          initial={reduced ? false : { opacity: 0, y: 4 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.35 }}
+          className="relative mt-2.5 border-t border-white/5 pt-2"
+        >
+          {preview && !active && (
+            <p className="mb-1.5 line-clamp-1 text-[11px] text-white/55">
+              <span className="text-[rgb(var(--acc-hi))]">›</span> {preview}
+            </p>
+          )}
+          <div className="flex items-center gap-2 text-[10px] text-white/40">
+            {findingCount > 0 && (
+              <span className="font-mono text-[rgb(var(--acc-hi))]">
+                {findingCount} source{findingCount === 1 ? '' : 's'}
+              </span>
+            )}
+            {agent.confidence && (
+              <span className="rounded-full bg-white/5 px-1.5 py-0.5 uppercase tracking-wide">
+                {agent.confidence}
+              </span>
+            )}
+          </div>
+        </motion.div>
+      )}
+    </div>
+  )
+}
