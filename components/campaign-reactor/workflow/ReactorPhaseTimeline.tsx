@@ -6,10 +6,20 @@ import type { PhaseEntry, PhaseStatus } from '@/lib/campaign-reactor/workflow'
 
 const NODE: Record<PhaseStatus, string> = {
   complete: 'border-success/50 bg-success/15 text-success',
-  active: 'border-glow/60 bg-glow/15 text-glow phase-node--active',
+  active: 'border-glow/70 bg-glow/20 text-glow phase-node--active',
   error: 'border-danger/50 bg-danger/15 text-danger',
-  skipped: 'border-white/10 bg-white/[0.02] text-white/25',
-  pending: 'border-white/10 bg-white/[0.02] text-white/30',
+  skipped: 'border-white/10 bg-white/[0.02] text-white/20',
+  pending: 'border-white/10 bg-white/[0.02] text-white/25',
+}
+
+/** Class for the connector leading from `prev` into `cur`. */
+function linkClass(prev: PhaseEntry | undefined, cur: PhaseEntry, reduced: boolean): string {
+  if (!prev) return 'opacity-0'
+  if (prev.status === 'complete' && cur.status === 'active') {
+    return cn('phase-link phase-link--done', !reduced && 'phase-link--flow')
+  }
+  if (prev.status === 'complete') return 'phase-link phase-link--done'
+  return 'phase-link'
 }
 
 export function ReactorPhaseTimeline({
@@ -28,10 +38,10 @@ export function ReactorPhaseTimeline({
         {phases.map((phase, i) => (
           <li key={phase.id} className="flex min-w-[64px] flex-1 flex-col items-center">
             <div className="flex w-full items-center">
-              <span className={cn('h-px flex-1', i === 0 ? 'opacity-0' : 'bg-white/10')} />
+              <span className={cn('h-0.5 flex-1 rounded-full', linkClass(phases[i - 1], phase, reduced))} />
               <span
                 className={cn(
-                  'grid h-6 w-6 shrink-0 place-items-center rounded-full border text-[10px] font-bold',
+                  'grid h-6 w-6 shrink-0 place-items-center rounded-full border text-[10px] font-bold transition-colors',
                   NODE[phase.status],
                   phase.status === 'active' && !reduced && 'animate-pulse-glow',
                 )}
@@ -48,8 +58,9 @@ export function ReactorPhaseTimeline({
               </span>
               <span
                 className={cn(
-                  'h-px flex-1',
-                  i === phases.length - 1 ? 'opacity-0' : 'bg-white/10',
+                  'h-0.5 flex-1 rounded-full',
+                  linkClass(phase, phases[i + 1], reduced),
+                  i === phases.length - 1 && 'opacity-0',
                 )}
               />
             </div>
@@ -62,7 +73,7 @@ export function ReactorPhaseTimeline({
                     ? 'text-white/55'
                     : phase.status === 'error'
                       ? 'text-danger'
-                      : 'text-white/30',
+                      : 'text-white/25',
               )}
             >
               {phase.label}

@@ -49,7 +49,7 @@ export function EmergingStrategyPanel({
   const reads = reportedAgents(workflow)
 
   const heading = error
-    ? 'Run Interrupted'
+    ? 'Reactor Fault'
     : ready
       ? 'Campaign Intelligence Ready'
       : opusPhase === 'idle' || opusPhase === 'initialising'
@@ -60,12 +60,15 @@ export function EmergingStrategyPanel({
 
   return (
     <div className="reactor-panel glass p-4">
-      <div className="mb-3 flex items-center gap-2">
-        <Target size={14} className={cn('text-glow', !finished && opusPhase !== 'idle' && 'animate-pulse-glow')} />
-        <h3 className="font-display text-xs font-bold uppercase tracking-[0.18em] text-white">{heading}</h3>
+      <div className="mb-3 flex items-center gap-2 border-b border-white/5 pb-3">
+        <Target size={15} className={cn('text-glow', !finished && opusPhase !== 'idle' && 'animate-pulse-glow')} />
+        <h3 className="font-display text-[13px] font-bold uppercase tracking-[0.18em] text-white">{heading}</h3>
       </div>
 
-      {/* Locked-in configuration (real run inputs) */}
+      {/* Campaign direction — locked-in configuration (real run inputs) */}
+      <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.2em] text-white/35">
+        Campaign Direction
+      </p>
       <div className="divide-y divide-white/5 rounded-lg border border-white/5 bg-white/[0.015] px-3">
         <ConfigRow icon={<Target size={12} />} label="Angle" value={config.angle} />
         <ConfigRow icon={<Layers size={12} />} label="Audience" value={config.audience} />
@@ -89,7 +92,7 @@ export function EmergingStrategyPanel({
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0 }}
                 transition={{ duration: 0.35 }}
-                className={cn('rounded-lg border border-white/5 bg-white/[0.02] p-2.5', accentClass[visual.accent])}
+                className={cn('intel-read', accentClass[visual.accent])}
               >
                 <div className="mb-0.5 flex items-center gap-1.5">
                   <span className="h-1.5 w-1.5 rounded-full bg-[rgb(var(--acc))]" />
@@ -137,7 +140,7 @@ export function EmergingStrategyPanel({
         </div>
       )}
 
-      {/* Completion summary — every metric is measured, none fabricated */}
+      {/* Run summary — every metric is measured, none fabricated */}
       {(ready || error) && (
         <motion.div
           initial={{ opacity: 0, y: 6 }}

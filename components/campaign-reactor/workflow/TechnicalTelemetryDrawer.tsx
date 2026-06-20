@@ -6,35 +6,49 @@ import { cn } from '@/lib/utils'
 import type { TelemetryLine } from '@/components/campaign-reactor/ReactorRunContext'
 
 /**
- * The raw reactor telemetry — every SSE step, retrieval, and intelligence
- * report — preserved verbatim but demoted into a collapsible drawer so the live
- * workflow is the primary experience. Default collapsed; nothing is removed.
+ * Run Diagnostics — the raw reactor telemetry (every SSE step, retrieval, and
+ * intelligence report) preserved verbatim but demoted into a collapsible drawer
+ * so the live workflow stays the primary experience. Collapsed by default;
+ * nothing is removed. Auto-expands when a run faults so the failure detail is
+ * immediately reachable.
  */
 export function TechnicalTelemetryDrawer({
   telemetry,
   firing,
+  failed = false,
 }: {
   telemetry: TelemetryLine[]
   firing: boolean
+  failed?: boolean
 }) {
   const [open, setOpen] = useState(false)
   const feedRef = useRef<HTMLDivElement>(null)
+
+  // A fault reveals diagnostics automatically — the user shouldn't hunt for it.
+  useEffect(() => {
+    if (failed) setOpen(true)
+  }, [failed])
 
   useEffect(() => {
     if (open) requestAnimationFrame(() => feedRef.current?.scrollTo({ top: 1e9, behavior: 'smooth' }))
   }, [telemetry.length, open])
 
   return (
-    <div className="telemetry-console overflow-hidden">
+    <div className={cn('telemetry-console overflow-hidden', failed && 'telemetry-console--fault')}>
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
         className="flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left"
         aria-expanded={open}
       >
-        <span className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-white/45">
+        <span
+          className={cn(
+            'flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.2em]',
+            failed ? 'text-danger/80' : 'text-white/45',
+          )}
+        >
           <Radar size={12} className={firing ? 'animate-spin text-glow' : ''} />
-          View Technical Telemetry
+          Run Diagnostics
           {telemetry.length > 0 && <span className="text-white/25">· {telemetry.length}</span>}
         </span>
         <ChevronDown

@@ -85,7 +85,9 @@ export function AgentIntelligenceCard({
   const complete = agent.status === 'complete'
   const dim = agent.status === 'dormant' || agent.status === 'notRequired' || agent.status === 'queued'
   const findingCount = agent.findings.length
-  const preview = agent.findings[0]?.title || (complete ? agent.summary : undefined)
+  const topFinding = agent.findings[0]
+  const previewTitle = topFinding?.title || (complete ? agent.summary : undefined)
+  const previewLabel = topFinding?.system
 
   return (
     <div
@@ -94,6 +96,8 @@ export function AgentIntelligenceCard({
       className={cn('intel-card', accentClass[visual.accent], dim && 'intel-card--dim')}
     >
       {active && !reduced && <span aria-hidden className="intel-scan" />}
+      {active && !reduced && <span aria-hidden className="intel-emitter" />}
+
       <div className="relative flex items-start gap-3">
         <span className="intel-icon">
           <Icon size={16} />
@@ -122,26 +126,33 @@ export function AgentIntelligenceCard({
         {actionLine(agent)}
       </p>
 
-      {(preview || findingCount > 0 || agent.confidence) && (
+      {(previewTitle || findingCount > 0 || agent.confidence) && (
         <motion.div
           initial={reduced ? false : { opacity: 0, y: 4 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.35 }}
           className="relative mt-2.5 border-t border-white/5 pt-2"
         >
-          {preview && !active && (
-            <p className="mb-1.5 line-clamp-2 text-[12px] text-white/55">
-              <span className="text-[rgb(var(--acc-hi))]">›</span> {preview}
-            </p>
+          {previewTitle && !active && (
+            <div className="mb-2">
+              {previewLabel && (
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-[rgb(var(--acc-hi))]/80">
+                  {previewLabel}
+                </p>
+              )}
+              <p className="line-clamp-2 text-[12.5px] leading-snug text-white/75">{previewTitle}</p>
+            </div>
           )}
-          <div className="flex items-center gap-2 text-[11px] text-white/40">
-            {findingCount > 0 && (
+          <div className="flex items-center justify-between gap-2 text-[11px] text-white/40">
+            {findingCount > 0 ? (
               <span className="font-mono text-[rgb(var(--acc-hi))]">
-                {findingCount} source{findingCount === 1 ? '' : 's'}
+                {findingCount} source{findingCount === 1 ? '' : 's'} analysed
               </span>
+            ) : (
+              <span />
             )}
             {agent.confidence && (
-              <span className="rounded-full bg-white/5 px-1.5 py-0.5 uppercase tracking-wide">
+              <span className="rounded-full border border-white/10 bg-white/5 px-1.5 py-0.5 text-[10px] uppercase tracking-wide">
                 {agent.confidence}
               </span>
             )}

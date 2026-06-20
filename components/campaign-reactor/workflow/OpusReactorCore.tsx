@@ -2,7 +2,14 @@
 
 import { AnimatePresence, motion } from 'motion/react'
 import { cn } from '@/lib/utils'
+import { accentClass, type Accent } from '@/components/reactor/ui'
 import { OPUS_PHASE_LABEL, type OpusPhase } from '@/lib/campaign-reactor/workflow'
+
+/** One ring segment per intelligence layer — lights when that layer reports. */
+export interface OpusSegment {
+  accent: Accent
+  lit: boolean
+}
 
 /** A deliberate, honest sub-line for the core's current operation. */
 function actionFor(phase: OpusPhase, activeCodename?: string): string {
@@ -28,6 +35,26 @@ function actionFor(phase: OpusPhase, activeCodename?: string): string {
   }
 }
 
+/* ---- Static ring geometry (viewBox 0 0 200 200, centred on 100,100) ------- */
+
+const SEG_R = 86
+const SEG_C = 2 * Math.PI * SEG_R
+const SEG_ARC = ((360 / 5 - 16) / 360) * SEG_C // five slots, 16° gap each
+const FIELD_R = 96
+const FIELD_C = 2 * Math.PI * FIELD_R
+
+// Etched radial marks on the structural ring.
+const TICKS = Array.from({ length: 48 }, (_, i) => {
+  const a = (i / 48) * Math.PI * 2
+  return {
+    key: i,
+    x1: 100 + Math.cos(a) * 72,
+    y1: 100 + Math.sin(a) * 72,
+    x2: 100 + Math.cos(a) * (i % 4 === 0 ? 65.5 : 67.5),
+    y2: 100 + Math.sin(a) * (i % 4 === 0 ? 65.5 : 67.5),
+  }
+})
+
 export function OpusReactorCore({
   phase,
   activeCodename,
@@ -35,6 +62,7 @@ export function OpusReactorCore({
   receiveSignal,
   reduced,
   coreRef,
+  segments = [],
 }: {
   phase: OpusPhase
   activeCodename?: string
@@ -42,10 +70,13 @@ export function OpusReactorCore({
   receiveSignal: number
   reduced: boolean
   coreRef?: (el: HTMLDivElement | null) => void
+  segments?: OpusSegment[]
 }) {
   const synthesising = phase === 'synthesising' || phase === 'evaluating' || phase === 'generating'
   const ready = phase === 'ready'
   const error = phase === 'error'
+  const delegating = phase === 'delegating'
+  const receiving = phase === 'receiving'
 
   return (
     <div className="flex flex-col items-center text-center">
@@ -55,19 +86,74 @@ export function OpusReactorCore({
         className={cn(
           'opus-core',
           synthesising && 'opus-core--synth',
+          receiving && 'opus-core--recv',
           ready && 'opus-core--ready',
           error && 'opus-core--error',
           reduced && 'opus-core--static',
         )}
       >
-        {/* Electric-blue outer rings */}
-        <span aria-hidden className="opus-ring opus-ring--outer" />
-        <span aria-hidden className="opus-ring opus-ring--mid" />
-        {/* Blood-orange / red energy heart */}
+        {/* ---- Concentric ring system (SVG) ---- */}
+        <svg className="opus-rings" viewBox="0 0 200 200" aria-hidden="true">
+          {/* Outer intelligence field + slow rotating highlight */}
+          <circle cx="100" cy="100" r={FIELD_R} className="opus-field" fill="none" />
+          {!reduced && (
+            <g className="opus-field-rot">
+              <circle
+                cx="100"
+                cy="100"
+                r={FIELD_R}
+                className="opus-field-arc"
+                fill="none"
+                strokeLinecap="round"
+                strokeDasharray={`${FIELD_C * 0.14} ${FIELD_C}`}
+              />
+            </g>
+          )}
+
+          {/* Structural ring + etched radial marks */}
+          <circle cx="100" cy="100" r="69.5" className="opus-struct" fill="none" />
+          <g className="opus-ticks">
+            {TICKS.map((t) => (
+              <line key={t.key} x1={t.x1} y1={t.y1} x2={t.x2} y2={t.y2} />
+            ))}
+          </g>
+
+          {/* One segment per intelligence layer — lights as each reports */}
+          <g className="opus-segs">
+            {segments.map((s, i) => (
+              <g
+                key={i}
+                className={cn('opus-seg', accentClass[s.accent], s.lit && 'opus-seg--lit')}
+                transform={`rotate(${-90 + i * 72} 100 100)`}
+              >
+                <circle
+                  cx="100"
+                  cy="100"
+                  r={SEG_R}
+                  fill="none"
+                  strokeLinecap="round"
+                  strokeDasharray={`${SEG_ARC} ${SEG_C - SEG_ARC}`}
+                />
+              </g>
+            ))}
+          </g>
+        </svg>
+
+        {/* ---- Energy chamber + central core (CSS layers) ---- */}
+        <span aria-hidden className="opus-chamber" />
         <span aria-hidden className="opus-heart" />
         <span aria-hidden className="opus-heart-core" />
+        <span aria-hidden className="opus-hotspot" />
 
-        {/* Light flare each time a finding lands at the core */}
+        {/* Delegating — thin outward pulses toward the agents */}
+        {delegating && !reduced && (
+          <>
+            <span aria-hidden className="opus-emit" />
+            <span aria-hidden className="opus-emit opus-emit--2" />
+          </>
+        )}
+
+        {/* Receiving — a soft flare each time a finding lands at the core */}
         <AnimatePresence>
           {!reduced && receiveSignal > 0 && (
             <motion.span
@@ -75,9 +161,23 @@ export function OpusReactorCore({
               aria-hidden
               className="opus-flare"
               initial={{ opacity: 0.85, scale: 0.55 }}
-              animate={{ opacity: 0, scale: 1.55 }}
+              animate={{ opacity: 0, scale: 1.5 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.8, ease: 'easeOut' }}
+            />
+          )}
+        </AnimatePresence>
+
+        {/* Campaign Ready — one short controlled ignition pulse */}
+        <AnimatePresence>
+          {ready && !reduced && (
+            <motion.span
+              key="ignition"
+              aria-hidden
+              className="opus-ignition"
+              initial={{ opacity: 0.7, scale: 0.4 }}
+              animate={{ opacity: 0, scale: 1.7 }}
+              transition={{ duration: 0.85, ease: 'easeOut' }}
             />
           )}
         </AnimatePresence>

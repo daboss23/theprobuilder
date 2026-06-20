@@ -714,11 +714,15 @@ body {
   position: relative;
   overflow: hidden;
   border-radius: 0.9rem;
-  border: 1px solid rgba(120, 165, 220, 0.12);
-  background: linear-gradient(165deg, rgba(12, 20, 35, 0.7), rgba(6, 10, 19, 0.82));
+  border: 1px solid rgb(var(--acc) / 0.14);
+  background:
+    radial-gradient(140px 90px at 0% 0%, rgb(var(--acc) / 0.1), transparent 70%),
+    linear-gradient(180deg, rgba(14, 23, 40, 0.92), rgba(6, 10, 20, 0.96));
   padding: 0.8rem 0.9rem;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
-  transition: border-color 0.4s ease, box-shadow 0.4s ease, opacity 0.4s ease;
+  box-shadow:
+    inset 0 1px 0 rgba(170, 210, 255, 0.06),
+    0 12px 26px -20px rgba(0, 0, 0, 0.95);
+  transition: border-color 0.4s ease, box-shadow 0.4s ease, opacity 0.4s ease, transform 0.3s ease;
 }
 .intel-card--dim { opacity: 0.5; }
 .intel-card[data-state='active'] {
@@ -766,13 +770,32 @@ body {
   height: 42%;
   pointer-events: none;
   border-radius: inherit;
-  background: linear-gradient(180deg, transparent, rgb(var(--acc) / 0.14), transparent);
-  animation: intel-scan 2.6s ease-in-out infinite;
+  background: linear-gradient(180deg, transparent, rgb(var(--acc) / 0.1), transparent);
+  animation: intel-scan 3.4s ease-in-out infinite;
 }
 @keyframes intel-scan {
   0% { transform: translateY(-120%); opacity: 0; }
   30%, 70% { opacity: 1; }
   100% { transform: translateY(320%); opacity: 0; }
+}
+/* Data particle collecting at the card's output (OPUS-facing) edge */
+.intel-emitter {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  z-index: 2;
+  height: 4px;
+  width: 4px;
+  border-radius: 9999px;
+  background: rgb(var(--acc-hi));
+  box-shadow: 0 0 8px 1px rgb(var(--acc) / 0.8);
+  pointer-events: none;
+  animation: intel-emit 1.5s ease-in-out infinite;
+}
+@keyframes intel-emit {
+  0% { opacity: 0; transform: translate(-7px, -50%) scale(0.6); }
+  40% { opacity: 1; }
+  100% { opacity: 0; transform: translate(9px, -50%) scale(0.9); }
 }
 
 /* OPUS reactor core ----------------------------------------------------------*/
@@ -808,29 +831,52 @@ body {
   0%, 100% { transform: scale(0.97); opacity: 0.72; }
   50% { transform: scale(1.02); opacity: 1; }
 }
-.opus-heart {
+.opus-chamber {
   position: absolute;
-  inset: 2.8rem;
+  inset: 2.4rem;
   z-index: 1;
   border-radius: 9999px;
   background: radial-gradient(
-    circle at 50% 45%,
-    rgba(255, 182, 122, 0.95),
-    rgba(255, 94, 58, 0.85) 38%,
-    rgba(200, 30, 20, 0.7) 66%,
-    rgba(120, 12, 12, 0.4) 100%
+    circle at 50% 44%,
+    rgba(255, 150, 90, 0.55),
+    rgba(190, 40, 24, 0.45) 52%,
+    rgba(70, 10, 12, 0.66) 86%,
+    rgba(18, 6, 10, 0.82) 100%
   );
-  box-shadow: 0 0 50px -6px rgba(255, 90, 50, 0.8), inset 0 0 30px -6px rgba(120, 8, 8, 0.6);
+  box-shadow: inset 0 0 42px -6px rgba(0, 0, 0, 0.78), 0 0 64px -18px rgba(255, 90, 50, 0.55);
+}
+.opus-heart {
+  position: absolute;
+  inset: 3.4rem;
+  z-index: 2;
+  border-radius: 9999px;
+  background: radial-gradient(
+    circle at 50% 45%,
+    rgba(255, 196, 140, 0.98),
+    rgba(255, 104, 64, 0.9) 42%,
+    rgba(200, 36, 22, 0.62) 72%,
+    rgba(120, 14, 14, 0.34) 100%
+  );
+  box-shadow: 0 0 50px -6px rgba(255, 100, 56, 0.82), inset 0 0 26px -6px rgba(120, 8, 8, 0.55);
   animation: opus-breathe 3.6s ease-in-out infinite;
 }
 .opus-heart-core {
   position: absolute;
-  inset: 3.9rem;
-  z-index: 2;
+  inset: 4.4rem;
+  z-index: 3;
   border-radius: 9999px;
-  background: radial-gradient(circle at 50% 42%, rgba(255, 244, 224, 0.95), rgba(255, 170, 60, 0.6) 55%, transparent 80%);
+  background: radial-gradient(circle at 50% 42%, rgba(255, 248, 232, 0.98), rgba(255, 176, 70, 0.62) 56%, transparent 82%);
   filter: blur(1px);
+  transition: transform 0.4s ease;
   animation: opus-breathe-core 3.6s ease-in-out infinite;
+}
+.opus-hotspot {
+  position: absolute;
+  inset: 5.6rem;
+  z-index: 3;
+  border-radius: 9999px;
+  background: radial-gradient(circle, rgba(255, 255, 250, 0.95), rgba(255, 230, 190, 0.5) 60%, transparent 78%);
+  animation: opus-breathe-core 3.2s ease-in-out infinite;
 }
 @keyframes opus-breathe {
   0%, 100% { opacity: 0.85; transform: scale(0.96); }
@@ -840,11 +886,11 @@ body {
   0%, 100% { opacity: 0.8; transform: scale(0.9); }
   50% { opacity: 1; transform: scale(1.08); }
 }
-.opus-label { position: relative; z-index: 3; }
+.opus-label { position: relative; z-index: 6; }
 .opus-flare {
   position: absolute;
   inset: 1.2rem;
-  z-index: 2;
+  z-index: 4;
   border-radius: 9999px;
   pointer-events: none;
   border: 2px solid rgba(255, 200, 150, 0.85);
@@ -881,19 +927,106 @@ body {
 }
 .opus-core--static .opus-heart,
 .opus-core--static .opus-heart-core,
-.opus-core--static .opus-ring { animation: none; }
+.opus-core--static .opus-hotspot,
+.opus-core--static .opus-field-rot,
+.opus-core--static .opus-emit,
+.opus-core--static .opus-segs { animation: none; }
 
-/* Energy connections ---------------------------------------------------------*/
-.conn-flow { animation: conn-flow 1.1s linear infinite; opacity: 0.9; }
-@keyframes conn-flow { to { stroke-dashoffset: -36; } }
-.conn-pulse {
-  animation: conn-pulse 1.5s linear infinite;
-  filter: drop-shadow(0 0 4px rgba(255, 255, 255, 0.85));
+/* OPUS ring system (SVG concentric layers) -----------------------------------*/
+.opus-rings {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  height: 100%;
+  width: 100%;
+  overflow: visible;
+  pointer-events: none;
 }
-@keyframes conn-pulse {
-  from { stroke-dashoffset: 0; }
-  to { stroke-dashoffset: -900; }
+.opus-field { stroke: rgba(94, 168, 255, 0.16); stroke-width: 1; }
+.opus-field-arc {
+  stroke: rgba(150, 200, 255, 0.75);
+  stroke-width: 1.6;
+  filter: drop-shadow(0 0 6px rgba(94, 168, 255, 0.75));
 }
+.opus-field-rot {
+  transform-box: view-box;
+  transform-origin: 100px 100px;
+  animation: opus-rotate 16s linear infinite;
+}
+@keyframes opus-rotate { to { transform: rotate(360deg); } }
+.opus-struct { stroke: rgba(120, 150, 195, 0.16); stroke-width: 6; }
+.opus-ticks line { stroke: rgba(150, 180, 220, 0.18); stroke-width: 1; }
+.opus-segs { transform-box: view-box; transform-origin: 100px 100px; }
+.opus-seg circle {
+  stroke: rgb(var(--acc));
+  stroke-width: 3;
+  opacity: 0.16;
+  transition: opacity 0.6s ease, stroke-width 0.6s ease;
+}
+.opus-seg--lit { filter: drop-shadow(0 0 5px rgb(var(--acc) / 0.85)); }
+.opus-seg--lit circle { opacity: 1; stroke-width: 4; }
+
+/* OPUS delegation pulses + campaign-ready ignition ---------------------------*/
+.opus-emit {
+  position: absolute;
+  inset: 2.6rem;
+  z-index: 2;
+  border-radius: 9999px;
+  border: 1px solid rgba(150, 200, 255, 0.5);
+  pointer-events: none;
+  opacity: 0;
+  animation: opus-emit 1.4s ease-out infinite;
+}
+.opus-emit--2 { animation-delay: 0.7s; }
+@keyframes opus-emit {
+  0% { transform: scale(0.7); opacity: 0.55; }
+  100% { transform: scale(1.34); opacity: 0; }
+}
+.opus-ignition {
+  position: absolute;
+  inset: 1rem;
+  z-index: 4;
+  border-radius: 9999px;
+  pointer-events: none;
+  border: 2px solid rgba(255, 210, 160, 0.9);
+  box-shadow: 0 0 40px 8px rgba(255, 150, 90, 0.6);
+}
+
+/* OPUS state responses -------------------------------------------------------*/
+.opus-core--synth .opus-field-arc { stroke: rgba(140, 200, 255, 0.95); }
+.opus-core--synth .opus-segs { animation: opus-rotate 28s linear infinite; }
+.opus-core--recv .opus-field-arc { stroke: rgba(185, 222, 255, 0.95); }
+.opus-core--recv .opus-heart-core { transform: scale(1.08); }
+.opus-core--ready .opus-field { stroke: rgba(120, 220, 170, 0.4); }
+.opus-core--ready .opus-field-arc {
+  stroke: rgba(120, 220, 170, 0.8);
+  filter: drop-shadow(0 0 6px rgba(52, 211, 153, 0.6));
+}
+.opus-core--error .opus-field-arc { stroke: rgba(251, 113, 133, 0.6); filter: none; }
+.opus-core--error .opus-chamber { filter: saturate(0.6) brightness(0.7); }
+
+/* Energy connections (layered channels) --------------------------------------*/
+.nrg-atmos { filter: blur(7px); }
+.nrg-body { filter: blur(1.6px); }
+.nrg-flow { animation: nrg-flow 1s linear infinite; opacity: 0.85; }
+.nrg-flow-rev { animation: nrg-flow-rev 1s linear infinite; opacity: 0.85; }
+@keyframes nrg-flow { to { stroke-dashoffset: -18; } }
+@keyframes nrg-flow-rev { to { stroke-dashoffset: 18; } }
+.nrg-stream {
+  animation: nrg-stream 1.05s linear infinite;
+  filter: drop-shadow(0 0 4px rgba(255, 240, 225, 0.9));
+}
+.nrg-stream-rev {
+  animation: nrg-stream-rev 1.05s linear infinite;
+  filter: drop-shadow(0 0 4px rgba(255, 240, 225, 0.9));
+}
+@keyframes nrg-stream { to { stroke-dashoffset: -42.6; } }
+@keyframes nrg-stream-rev { to { stroke-dashoffset: 42.6; } }
+
+/* Convergence bloom where channels meet the core */
+.conv-bloom { opacity: 0.18; transition: opacity 0.5s ease; }
+.conv-bloom--on { opacity: 0.85; animation: conv-bloom 2.4s ease-in-out infinite; }
+@keyframes conv-bloom { 0%, 100% { opacity: 0.6; } 50% { opacity: 0.95; } }
 
 /* Travelling intelligence packet --------------------------------------------*/
 .packet-chip {
@@ -903,23 +1036,116 @@ body {
   z-index: 5;
   display: inline-flex;
   align-items: center;
+  gap: 0.35rem;
   white-space: nowrap;
   border-radius: 9999px;
   border: 1px solid rgb(var(--acc) / 0.6);
   background: rgba(6, 12, 22, 0.92);
-  padding: 0.18rem 0.6rem;
-  font-size: 10px;
+  padding: 0.2rem 0.62rem;
+  font-size: 11px;
   font-weight: 600;
   color: rgb(var(--acc-hi));
   box-shadow: 0 0 18px -4px rgb(var(--acc) / 0.7), inset 0 1px 0 rgba(255, 255, 255, 0.08);
   will-change: transform, opacity;
+}
+.packet-dot {
+  height: 5px;
+  width: 5px;
+  flex-shrink: 0;
+  border-radius: 9999px;
+  background: rgb(var(--acc-hi));
+  box-shadow: 0 0 8px 1px rgb(var(--acc) / 0.85);
 }
 .packet-chip--opus {
   border-color: rgba(255, 140, 90, 0.65);
   color: #ffd0b0;
   box-shadow: 0 0 18px -4px rgba(255, 120, 70, 0.7), inset 0 1px 0 rgba(255, 255, 255, 0.1);
 }
+.packet-chip--opus .packet-dot {
+  background: #ffd9bf;
+  box-shadow: 0 0 8px 1px rgba(255, 140, 90, 0.85);
+}
 .phase-node--active { box-shadow: 0 0 14px -4px rgba(94, 168, 255, 0.7); }
+
+/* Execution-phase connectors -------------------------------------------------*/
+.phase-link { background: rgba(255, 255, 255, 0.08); }
+.phase-link--done {
+  background: linear-gradient(90deg, rgba(52, 211, 153, 0.5), rgba(94, 168, 255, 0.5));
+}
+.phase-link--flow {
+  background: linear-gradient(90deg, transparent, rgba(147, 197, 253, 0.95), transparent);
+  background-size: 220% 100%;
+  animation: phase-flow 1.3s linear infinite;
+}
+@keyframes phase-flow {
+  from { background-position: 200% 0; }
+  to { background-position: -200% 0; }
+}
+
+/* Emerging-strategy intelligence read (colour-coded accent) ------------------*/
+.intel-read {
+  position: relative;
+  border-radius: 0.6rem;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-left: 2px solid rgb(var(--acc) / 0.6);
+  background: linear-gradient(90deg, rgb(var(--acc) / 0.06), rgba(255, 255, 255, 0.02) 38%);
+  padding: 0.6rem 0.7rem;
+  animation: intel-read-in 1.1s ease-out;
+}
+@keyframes intel-read-in {
+  0% { box-shadow: inset 2px 0 0 rgb(var(--acc) / 0); }
+  30% { box-shadow: inset 3px 0 14px -6px rgb(var(--acc) / 0.9); }
+  100% { box-shadow: inset 2px 0 0 rgb(var(--acc) / 0); }
+}
+
+/* Reactor stage background depth ---------------------------------------------*/
+.reactor-stage { isolation: isolate; }
+.reactor-bg {
+  position: absolute;
+  inset: -1.5rem;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(closest-side at 50% 50%, rgba(40, 120, 230, 0.08), transparent 70%),
+    radial-gradient(125% 95% at 50% 50%, transparent 52%, rgba(0, 0, 0, 0.38));
+}
+.reactor-bg::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  opacity: 0.5;
+  background-image:
+    linear-gradient(rgba(120, 160, 220, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(120, 160, 220, 0.05) 1px, transparent 1px);
+  background-size: 34px 34px;
+  -webkit-mask-image: radial-gradient(closest-side at 50% 50%, #000, transparent 82%);
+  mask-image: radial-gradient(closest-side at 50% 50%, #000, transparent 82%);
+}
+
+/* Reactor fault state --------------------------------------------------------*/
+.reactor-fault {
+  position: relative;
+  overflow: hidden;
+  border-radius: 1rem;
+  border: 1px solid rgba(251, 113, 133, 0.32);
+  background:
+    radial-gradient(180px 120px at 0% 0%, rgba(251, 113, 133, 0.12), transparent 70%),
+    linear-gradient(180deg, rgba(30, 12, 18, 0.85), rgba(14, 8, 12, 0.92));
+  padding: 1rem 1.1rem;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 18px 40px -28px rgba(251, 113, 133, 0.5);
+}
+.reactor-fault__icon {
+  display: grid;
+  place-items: center;
+  height: 2.1rem;
+  width: 2.1rem;
+  flex-shrink: 0;
+  border-radius: 0.6rem;
+  border: 1px solid rgba(251, 113, 133, 0.4);
+  background: radial-gradient(circle, rgba(251, 113, 133, 0.22), rgba(20, 8, 12, 0.85));
+  color: rgb(251, 113, 133);
+}
+.telemetry-console--fault { border-color: rgba(251, 113, 133, 0.3); }
 
 @media (prefers-reduced-motion: reduce) {
   .engine-glow,
@@ -931,12 +1157,43 @@ body {
   .fire-btn { transition: none; }
   /* Live workflow: keep meaning via colour/opacity, drop continuous motion */
   .intel-scan,
+  .intel-emitter,
   .intel-dot-live,
-  .conn-flow,
-  .conn-pulse,
+  .intel-read,
+  .nrg-flow,
+  .nrg-flow-rev,
+  .nrg-stream,
+  .nrg-stream-rev,
+  .conv-bloom--on,
+  .phase-link--flow,
   .opus-heart,
   .opus-heart-core,
-  .opus-ring,
-  .opus-flare { animation: none; }
+  .opus-hotspot,
+  .opus-chamber,
+  .opus-field-rot,
+  .opus-field-arc,
+  .opus-emit,
+  .opus-segs,
+  .opus-flare,
+  .opus-ignition { animation: none; }
   .intel-card { transition: none; }
+}
+
+/* Pause ambient motion while the tab is hidden (performance) -----------------*/
+.reactor-paused .intel-scan,
+.reactor-paused .intel-emitter,
+.reactor-paused .intel-dot-live,
+.reactor-paused .nrg-flow,
+.reactor-paused .nrg-flow-rev,
+.reactor-paused .nrg-stream,
+.reactor-paused .nrg-stream-rev,
+.reactor-paused .conv-bloom--on,
+.reactor-paused .phase-link--flow,
+.reactor-paused .opus-heart,
+.reactor-paused .opus-heart-core,
+.reactor-paused .opus-hotspot,
+.reactor-paused .opus-field-rot,
+.reactor-paused .opus-emit,
+.reactor-paused .opus-segs {
+  animation-play-state: paused !important;
 }

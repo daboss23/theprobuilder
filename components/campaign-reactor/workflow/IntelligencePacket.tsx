@@ -39,6 +39,7 @@ export function IntelligencePacket({
       transition={{ duration: 1.15, ease: [0.4, 0, 0.2, 1], times: [0, 0.18, 0.78, 1] }}
       onAnimationComplete={onDone}
     >
+      <span aria-hidden className="packet-dot" />
       {label}
     </motion.div>
   )

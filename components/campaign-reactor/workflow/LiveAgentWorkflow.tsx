@@ -2,17 +2,22 @@
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, useReducedMotion } from 'motion/react'
-import { AlertTriangle, FlaskConical, RotateCcw } from 'lucide-react'
+import { AlertTriangle, FlaskConical, RotateCcw, ArrowRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { accentClass } from '@/components/reactor/ui'
 import { INTELLIGENCE, INTELLIGENCE_IDS, type IntelligenceId } from '@/lib/agents'
 import { useReactorRun, type Concept } from '@/components/campaign-reactor/ReactorRunContext'
 import type { Verdict } from '@/lib/outcomes'
-import { ACTIVE_STATUSES, derivePhases } from '@/lib/campaign-reactor/workflow'
+import {
+  ACTIVE_STATUSES,
+  derivePhases,
+  reportedAgents,
+  type AgentStatus,
+} from '@/lib/campaign-reactor/workflow'
 import { AGENT_VISUAL, OPUS_CORE, OPUS_OUTPUT_STROKE } from './visuals'
 import { AgentIntelligenceCard } from './AgentIntelligenceCard'
-import { OpusReactorCore } from './OpusReactorCore'
-import { AgentConnectionPath, type Point } from './AgentConnectionPath'
+import { OpusReactorCore, type OpusSegment } from './OpusReactorCore'
+import { AgentConnectionPath, type ConnDirection, type Point } from './AgentConnectionPath'
 import { IntelligencePacket } from './IntelligencePacket'
 import { EmergingStrategyPanel } from './EmergingStrategyPanel'
 import { ReactorPhaseTimeline } from './ReactorPhaseTimeline'
@@ -53,6 +58,29 @@ interface Flying {
   opus?: boolean
 }
 
+/** Map an agent's live status to its energy-channel presentation + direction. */
+function connStateFor(status: AgentStatus): {
+  active: boolean
+  complete: boolean
+  dim: boolean
+  direction: ConnDirection
+} {
+  switch (status) {
+    case 'retrieving':
+      // OPUS just delegated — energy flows out to the agent (activation).
+      return { active: true, complete: false, dim: false, direction: 'reverse' }
+    case 'analysing':
+    case 'reporting':
+      // The agent is working/returning — energy flows back into OPUS.
+      return { active: true, complete: false, dim: false, direction: 'forward' }
+    case 'complete':
+      return { active: false, complete: true, dim: false, direction: 'forward' }
+    default:
+      // dormant · queued · notRequired · error → quiet, faded channel.
+      return { active: false, complete: false, dim: true, direction: 'forward' }
+  }
+}
+
 export function LiveAgentWorkflow(controls: WorkflowControls) {
   const {
     workflow,
@@ -78,6 +106,15 @@ export function LiveAgentWorkflow(controls: WorkflowControls) {
     update()
     mq.addEventListener('change', update)
     return () => mq.removeEventListener('change', update)
+  }, [])
+
+  /* ----- Pause ambient motion while the tab is hidden (performance) -------- */
+  const [docHidden, setDocHidden] = useState(false)
+  useEffect(() => {
+    const onVis = () => setDocHidden(document.hidden)
+    document.addEventListener('visibilitychange', onVis)
+    onVis()
+    return () => document.removeEventListener('visibilitychange', onVis)
   }, [])
 
   /* ------------------------------ Measurement ------------------------------ */
@@ -194,14 +231,34 @@ export function LiveAgentWorkflow(controls: WorkflowControls) {
   /* -------------------------------- Derived -------------------------------- */
   const phases = useMemo(() => derivePhases(workflow), [workflow])
   const activeCodename = workflow.activeAgent ? INTELLIGENCE[workflow.activeAgent].codename : undefined
+  const segments = useMemo<OpusSegment[]>(
+    () =>
+      INTELLIGENCE_IDS.map((id) => ({
+        accent: AGENT_VISUAL[id].accent,
+        lit: workflow.agents[id].status === 'complete',
+      })),
+    [workflow.agents],
+  )
   const opusProps = {
     phase: workflow.opusPhase,
     activeCodename,
     inputs: workflow.receiveCount,
     receiveSignal: workflow.receiveCount,
     reduced,
+    segments,
   }
   const runError = workflow.error || error
+  const convergenceActive =
+    INTELLIGENCE_IDS.some((id) => ACTIVE_STATUSES.includes(workflow.agents[id].status)) ||
+    workflow.opusPhase === 'receiving' ||
+    workflow.opusPhase === 'synthesising'
+
+  /* ------------------------------- Fault state ----------------------------- */
+  const [faultAck, setFaultAck] = useState(false)
+  useEffect(() => {
+    if (phase === 'firing') setFaultAck(false)
+  }, [phase])
+  const canContinue = concepts.length > 0 || reportedAgents(workflow).length > 0
 
   /* ------------------------------- Renderers ------------------------------- */
   const renderAgents = (withRefs: boolean) =>
@@ -255,7 +312,7 @@ export function LiveAgentWorkflow(controls: WorkflowControls) {
     ) : null
 
   return (
-    <div className="space-y-5">
+    <div className={cn('space-y-5', docHidden && 'reactor-paused')}>
       {/* Status header */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2.5">
@@ -276,32 +333,57 @@ export function LiveAgentWorkflow(controls: WorkflowControls) {
         )}
       </div>
 
-      {runError && (
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-danger/30 bg-danger/[0.06] p-3">
-          <div className="flex items-start gap-2 text-sm text-danger">
-            <AlertTriangle size={16} className="mt-0.5 shrink-0" />
-            <div>
-              <p className="font-medium">{runError}</p>
-              <p className="text-[11px] text-danger/70">
-                Completed intelligence is preserved above. Technical details are in the telemetry
-                drawer.
-              </p>
+      {/* Reactor fault — clean, human-readable, premium */}
+      {runError && !faultAck && (
+        <div className="reactor-fault">
+          <div className="relative flex flex-wrap items-start justify-between gap-4">
+            <div className="flex items-start gap-3">
+              <span className="reactor-fault__icon">
+                <AlertTriangle size={18} />
+              </span>
+              <div className="max-w-xl">
+                <p className="font-display text-sm font-bold uppercase tracking-[0.16em] text-danger">
+                  Reactor Fault
+                </p>
+                <p className="mt-1 text-sm text-white/80">{runError}</p>
+                <p className="mt-1 text-[11px] text-white/40">
+                  Completed intelligence is preserved below. Full step detail is in Run Diagnostics.
+                </p>
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={controls.onRetry}
+                className="inline-flex items-center gap-1.5 rounded-full border border-danger/40 bg-danger/10 px-3 py-1.5 text-[11px] font-semibold text-danger transition-colors hover:bg-danger/20"
+              >
+                <RotateCcw size={12} /> Retry Reactor
+              </button>
+              {canContinue && (
+                <button
+                  type="button"
+                  onClick={() => setFaultAck(true)}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-white/[0.04] px-3 py-1.5 text-[11px] font-semibold text-white/70 transition-colors hover:bg-white/[0.08]"
+                >
+                  Continue with Available Intelligence <ArrowRight size={12} />
+                </button>
+              )}
             </div>
           </div>
-          <button
-            type="button"
-            onClick={controls.onRetry}
-            className="inline-flex items-center gap-1.5 rounded-full border border-danger/40 bg-danger/10 px-3 py-1.5 text-[11px] font-semibold text-danger hover:bg-danger/20"
-          >
-            <RotateCcw size={12} /> Retry Reactor
-          </button>
+        </div>
+      )}
+      {runError && faultAck && (
+        <div className="flex items-center gap-2 rounded-xl border border-danger/20 bg-danger/[0.04] px-3 py-2 text-[11px] text-danger/70">
+          <AlertTriangle size={12} className="shrink-0" />
+          Reactor fault — continued with available intelligence. See Run Diagnostics for detail.
         </div>
       )}
 
       {/* ------------------------------- Desktop ------------------------------ */}
       {isDesktop ? (
         <div className="reactor-panel glass p-6 xl:p-8">
-          <div ref={stageRef} className="relative">
+          <div ref={stageRef} className="reactor-stage relative">
+            <div className="reactor-bg" aria-hidden="true" />
             {geo && (
               <svg
                 className="pointer-events-none absolute inset-0 h-full w-full"
@@ -309,10 +391,18 @@ export function LiveAgentWorkflow(controls: WorkflowControls) {
                 preserveAspectRatio="none"
                 aria-hidden="true"
               >
+                <defs>
+                  <radialGradient id="conv-bloom">
+                    <stop offset="0%" stopColor="#FFE3C8" stopOpacity="0.95" />
+                    <stop offset="45%" stopColor="#FF8A4D" stopOpacity="0.45" />
+                    <stop offset="100%" stopColor="#FF6A3D" stopOpacity="0" />
+                  </radialGradient>
+                </defs>
+
                 {INTELLIGENCE_IDS.map((id) => {
                   const from = geo.agents[id]
                   if (!from) return null
-                  const status = workflow.agents[id].status
+                  const cs = connStateFor(workflow.agents[id].status)
                   return (
                     <AgentConnectionPath
                       key={id}
@@ -321,9 +411,10 @@ export function LiveAgentWorkflow(controls: WorkflowControls) {
                       to={geo.opusIn}
                       color={AGENT_VISUAL[id].stroke}
                       toColor={OPUS_CORE}
-                      active={ACTIVE_STATUSES.includes(status)}
-                      complete={status === 'complete'}
-                      dim={status === 'dormant' || status === 'notRequired' || status === 'queued'}
+                      active={cs.active}
+                      complete={cs.complete}
+                      dim={cs.dim}
+                      direction={cs.direction}
                       reduced={reduced}
                     />
                   )
@@ -334,10 +425,20 @@ export function LiveAgentWorkflow(controls: WorkflowControls) {
                   to={geo.out}
                   color={OPUS_CORE}
                   toColor={OPUS_OUTPUT_STROKE}
+                  tipColor="#E9F2FF"
                   active={workflow.opusPhase === 'generating'}
                   complete={workflow.opusPhase === 'ready'}
                   dim={!workflow.generationStarted && workflow.opusPhase !== 'ready'}
                   reduced={reduced}
+                />
+
+                {/* Convergence bloom where every channel meets the core */}
+                <circle
+                  cx={geo.opusIn.x}
+                  cy={geo.opusIn.y}
+                  r={26}
+                  fill="url(#conv-bloom)"
+                  className={cn('conv-bloom', convergenceActive && !reduced && 'conv-bloom--on')}
                 />
               </svg>
             )}
@@ -391,9 +492,9 @@ export function LiveAgentWorkflow(controls: WorkflowControls) {
       {/* Generated concepts (full width, below the network) */}
       {conceptsBlock}
 
-      {/* Execution phases + raw telemetry */}
+      {/* Execution phases + Run Diagnostics */}
       <ReactorPhaseTimeline phases={phases} reduced={reduced} />
-      <TechnicalTelemetryDrawer telemetry={telemetry} firing={phase === 'firing'} />
+      <TechnicalTelemetryDrawer telemetry={telemetry} firing={phase === 'firing'} failed={!!runError} />
     </div>
   )
 }
