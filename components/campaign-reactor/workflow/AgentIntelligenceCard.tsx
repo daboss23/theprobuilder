@@ -46,7 +46,7 @@ function StatusBadge({ status }: { status: AgentRuntime['status'] }) {
   return (
     <span
       className={cn(
-        'inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wider',
+        'inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider',
         tone,
       )}
     >
@@ -101,10 +101,10 @@ export function AgentIntelligenceCard({
         <div className="min-w-0 flex-1">
           <div className="flex items-center justify-between gap-2">
             <div className="min-w-0">
-              <p className="truncate font-display text-sm font-bold tracking-tight text-white">
+              <p className="truncate font-display text-[15px] font-bold tracking-tight text-white">
                 {def.codename}
               </p>
-              <p className="truncate text-[10px] font-medium uppercase tracking-wider text-white/40">
+              <p className="truncate text-[11px] font-medium uppercase tracking-wider text-white/45">
                 {def.role}
               </p>
             </div>
@@ -115,7 +115,7 @@ export function AgentIntelligenceCard({
 
       <p
         className={cn(
-          'relative mt-2.5 line-clamp-2 text-[11px] leading-snug',
+          'relative mt-2.5 line-clamp-3 text-[12.5px] leading-snug',
           active ? 'text-[rgb(var(--acc-hi))]' : complete ? 'text-white/70' : 'text-white/40',
         )}
       >
@@ -130,11 +130,11 @@ export function AgentIntelligenceCard({
           className="relative mt-2.5 border-t border-white/5 pt-2"
         >
           {preview && !active && (
-            <p className="mb-1.5 line-clamp-1 text-[11px] text-white/55">
+            <p className="mb-1.5 line-clamp-2 text-[12px] text-white/55">
               <span className="text-[rgb(var(--acc-hi))]">›</span> {preview}
             </p>
           )}
-          <div className="flex items-center gap-2 text-[10px] text-white/40">
+          <div className="flex items-center gap-2 text-[11px] text-white/40">
             {findingCount > 0 && (
               <span className="font-mono text-[rgb(var(--acc-hi))]">
                 {findingCount} source{findingCount === 1 ? '' : 's'}

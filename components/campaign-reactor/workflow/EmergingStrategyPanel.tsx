@@ -93,11 +93,11 @@ export function EmergingStrategyPanel({
               >
                 <div className="mb-0.5 flex items-center gap-1.5">
                   <span className="h-1.5 w-1.5 rounded-full bg-[rgb(var(--acc))]" />
-                  <span className="text-[10px] font-semibold uppercase tracking-wider text-[rgb(var(--acc-hi))]">
+                  <span className="text-[11px] font-semibold uppercase tracking-wider text-[rgb(var(--acc-hi))]">
                     {def.intelligenceLabel}
                   </span>
                 </div>
-                <p className="text-[11px] leading-snug text-white/65">
+                <p className="text-[12px] leading-snug text-white/70">
                   {working ? 'Analysing…' : agent.summary || 'Findings delivered.'}
                 </p>
               </motion.div>
