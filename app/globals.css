@@ -1012,21 +1012,16 @@ body {
 .nrg-flow-rev { animation: nrg-flow-rev 1s linear infinite; opacity: 0.85; }
 @keyframes nrg-flow { to { stroke-dashoffset: -18; } }
 @keyframes nrg-flow-rev { to { stroke-dashoffset: 18; } }
-.nrg-stream {
-  animation: nrg-stream 1.05s linear infinite;
-  filter: drop-shadow(0 0 4px rgba(255, 240, 225, 0.9));
-}
-.nrg-stream-rev {
-  animation: nrg-stream-rev 1.05s linear infinite;
-  filter: drop-shadow(0 0 4px rgba(255, 240, 225, 0.9));
-}
-@keyframes nrg-stream { to { stroke-dashoffset: -42.6; } }
-@keyframes nrg-stream-rev { to { stroke-dashoffset: 42.6; } }
+/* Discrete energy particles riding each active channel (SVG animateMotion) */
+.nrg-particle { filter: drop-shadow(0 0 3px rgba(255, 244, 232, 0.95)); }
 
-/* Convergence bloom where channels meet the core */
+/* Convergence flare where channels meet the core */
 .conv-bloom { opacity: 0.18; transition: opacity 0.5s ease; }
 .conv-bloom--on { opacity: 0.85; animation: conv-bloom 2.4s ease-in-out infinite; }
 @keyframes conv-bloom { 0%, 100% { opacity: 0.6; } 50% { opacity: 0.95; } }
+.conv-core { opacity: 0.12; transition: opacity 0.5s ease; }
+.conv-core--on { opacity: 0.9; animation: conv-core 2s ease-in-out infinite; }
+@keyframes conv-core { 0%, 100% { opacity: 0.7; } 50% { opacity: 1; } }
 
 /* Travelling intelligence packet --------------------------------------------*/
 .packet-chip {
@@ -1162,9 +1157,8 @@ body {
   .intel-read,
   .nrg-flow,
   .nrg-flow-rev,
-  .nrg-stream,
-  .nrg-stream-rev,
   .conv-bloom--on,
+  .conv-core--on,
   .phase-link--flow,
   .opus-heart,
   .opus-heart-core,
@@ -1185,9 +1179,8 @@ body {
 .reactor-paused .intel-dot-live,
 .reactor-paused .nrg-flow,
 .reactor-paused .nrg-flow-rev,
-.reactor-paused .nrg-stream,
-.reactor-paused .nrg-stream-rev,
 .reactor-paused .conv-bloom--on,
+.reactor-paused .conv-core--on,
 .reactor-paused .phase-link--flow,
 .reactor-paused .opus-heart,
 .reactor-paused .opus-heart-core,

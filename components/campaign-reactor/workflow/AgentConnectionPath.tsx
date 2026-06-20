@@ -17,6 +17,21 @@ export function connectionPath(from: Point, to: Point): string {
 export type ConnDirection = 'forward' | 'reverse'
 
 /**
+ * Discrete energy particles riding each active channel. Varied radius, speed and
+ * phase keep the stream organic instead of mechanical; the negative `begin`
+ * values start each particle mid-flight so the branch is populated immediately
+ * rather than filling from one end.
+ */
+const ENERGY_PARTICLES = [
+  { r: 2.2, dur: 1.9, begin: 0 },
+  { r: 1.3, dur: 2.5, begin: -0.6 },
+  { r: 1.8, dur: 1.6, begin: -1.0 },
+  { r: 1.1, dur: 2.9, begin: -1.5 },
+  { r: 2.0, dur: 2.1, begin: -0.35 },
+  { r: 1.5, dur: 1.75, begin: -1.25 },
+] as const
+
+/**
  * A single directional energy channel rendered inside the workflow SVG overlay.
  * Four stacked layers create depth instead of a flat coloured wire:
  *
@@ -120,6 +135,7 @@ export function AgentConnectionPath({
       {/* Layer 4 — travelling energy (only on the live exchange) */}
       {active && !reduced && (
         <>
+          {/* Soft current shimmer carried inside the channel */}
           <path
             d={d}
             fill="none"
@@ -129,15 +145,20 @@ export function AgentConnectionPath({
             strokeDasharray="6 12"
             className={cn(reverse ? 'nrg-flow-rev' : 'nrg-flow')}
           />
-          <path
-            d={d}
-            fill="none"
-            stroke={tipColor}
-            strokeWidth={3}
-            strokeLinecap="round"
-            strokeDasharray="2.6 40"
-            className={cn(reverse ? 'nrg-stream-rev' : 'nrg-stream')}
-          />
+          {/* Discrete energy particles riding the branch toward the convergence */}
+          {ENERGY_PARTICLES.map((p, i) => (
+            <circle key={i} r={p.r} fill={tipColor} className="nrg-particle">
+              <animateMotion
+                path={d}
+                dur={`${p.dur}s`}
+                begin={`${p.begin}s`}
+                repeatCount="indefinite"
+                calcMode="linear"
+                keyPoints={reverse ? '1;0' : '0;1'}
+                keyTimes="0;1"
+              />
+            </circle>
+          ))}
         </>
       )}
     </g>

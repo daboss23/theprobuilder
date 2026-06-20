@@ -397,6 +397,11 @@ export function LiveAgentWorkflow(controls: WorkflowControls) {
                     <stop offset="45%" stopColor="#FF8A4D" stopOpacity="0.45" />
                     <stop offset="100%" stopColor="#FF6A3D" stopOpacity="0" />
                   </radialGradient>
+                  <radialGradient id="conv-core">
+                    <stop offset="0%" stopColor="#FFF3E8" stopOpacity="1" />
+                    <stop offset="55%" stopColor="#FFB07A" stopOpacity="0.5" />
+                    <stop offset="100%" stopColor="#FF8A4D" stopOpacity="0" />
+                  </radialGradient>
                 </defs>
 
                 {INTELLIGENCE_IDS.map((id) => {
@@ -432,14 +437,50 @@ export function LiveAgentWorkflow(controls: WorkflowControls) {
                   reduced={reduced}
                 />
 
-                {/* Convergence bloom where every channel meets the core */}
-                <circle
-                  cx={geo.opusIn.x}
-                  cy={geo.opusIn.y}
-                  r={26}
-                  fill="url(#conv-bloom)"
-                  className={cn('conv-bloom', convergenceActive && !reduced && 'conv-bloom--on')}
-                />
+                {/* Convergence flare where every channel meets the core */}
+                <g>
+                  {/* Soft outer bloom */}
+                  <circle
+                    cx={geo.opusIn.x}
+                    cy={geo.opusIn.y}
+                    r={26}
+                    fill="url(#conv-bloom)"
+                    className={cn('conv-bloom', convergenceActive && !reduced && 'conv-bloom--on')}
+                  />
+                  {/* Bright hot core — the impact point */}
+                  <circle
+                    cx={geo.opusIn.x}
+                    cy={geo.opusIn.y}
+                    r={12}
+                    fill="url(#conv-core)"
+                    className={cn('conv-core', convergenceActive && !reduced && 'conv-core--on')}
+                  />
+                  {/* Expanding arrival pulse — energy collecting into the core */}
+                  {convergenceActive && !reduced && (
+                    <circle
+                      cx={geo.opusIn.x}
+                      cy={geo.opusIn.y}
+                      r={10}
+                      fill="none"
+                      stroke="#FFC89E"
+                      strokeWidth={1.3}
+                      opacity={0}
+                    >
+                      <animate
+                        attributeName="r"
+                        values="9;30"
+                        dur="2.4s"
+                        repeatCount="indefinite"
+                      />
+                      <animate
+                        attributeName="opacity"
+                        values="0.5;0"
+                        dur="2.4s"
+                        repeatCount="indefinite"
+                      />
+                    </circle>
+                  )}
+                </g>
               </svg>
             )}
 
