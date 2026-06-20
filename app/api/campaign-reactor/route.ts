@@ -563,6 +563,40 @@ async function runDemo(controller: ReadableStreamDefaultController, body: Reacto
   sse(controller, { type: 'done' })
 }
 
+/* ----------------------------- Prompt caching ----------------------------- */
+
+type BetaMsg = Anthropic.Beta.Messages.BetaMessageParam
+
+const EPHEMERAL = { type: 'ephemeral' as const }
+
+/**
+ * Mark an ephemeral cache breakpoint on the final block of the latest message,
+ * so the growing conversation prefix is cached turn-to-turn across the OPUS
+ * tool-use loop. Returns a NEW array — the canonical `messages` log is never
+ * mutated, keeping the per-call breakpoint count at two (system + latest
+ * message) and well under Anthropic's limit of four. Behaviourally identical to
+ * the uncached request; only the input-token billing changes.
+ */
+function withConversationCache(messages: BetaMsg[]): BetaMsg[] {
+  if (messages.length === 0) return messages
+  const out = messages.slice()
+  const last = out[out.length - 1]
+  if (typeof last.content === 'string') {
+    out[out.length - 1] = {
+      ...last,
+      content: [{ type: 'text', text: last.content, cache_control: EPHEMERAL }],
+    } as BetaMsg
+  } else {
+    const blocks = [...last.content]
+    const i = blocks.length - 1
+    if (i >= 0) {
+      blocks[i] = { ...blocks[i], cache_control: EPHEMERAL } as (typeof blocks)[number]
+    }
+    out[out.length - 1] = { ...last, content: blocks } as BetaMsg
+  }
+  return out
+}
+
 /* -------------------------------- Handler --------------------------------- */
 
 export async function POST(request: NextRequest) {
@@ -625,22 +659,27 @@ export async function POST(request: NextRequest) {
           },
         ]
 
+        // Built once: identical across every turn, so the cached prefix (tools +
+        // this system prompt) is reused for the life of the run instead of being
+        // re-billed at full input price on each of the up-to-12 turns.
+        const systemPrompt =
+          coordinatorPrompt(outputs, {
+            metaAds: Boolean(mcpServer),
+            image: useImage,
+            video: useVideo,
+            videoModels: availableVideoModels,
+            imageModels: availableImageModels,
+            preferredVideoModel: body.videoModel ?? null,
+            preferredImageModel: body.imageModel ?? null,
+          }) + inputBlocks + oracleMemory
+
         for (let turn = 0; turn < MAX_TURNS; turn++) {
           const params: Anthropic.Beta.Messages.MessageCreateParamsNonStreaming = {
             model: OPUS_MODEL,
             max_tokens: 4000,
-            system:
-              coordinatorPrompt(outputs, {
-                metaAds: Boolean(mcpServer),
-                image: useImage,
-                video: useVideo,
-                videoModels: availableVideoModels,
-                imageModels: availableImageModels,
-                preferredVideoModel: body.videoModel ?? null,
-                preferredImageModel: body.imageModel ?? null,
-              }) + inputBlocks + oracleMemory,
+            system: [{ type: 'text', text: systemPrompt, cache_control: EPHEMERAL }],
             tools,
-            messages,
+            messages: withConversationCache(messages),
           }
           if (mcpServer) {
             params.mcp_servers = [mcpServer]
