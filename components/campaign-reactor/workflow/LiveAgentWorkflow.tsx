@@ -383,7 +383,7 @@ export function LiveAgentWorkflow(controls: WorkflowControls) {
       {isDesktop ? (
         <div className="reactor-panel glass p-6 xl:p-8">
           <div ref={stageRef} className="reactor-stage relative">
-            <div className="reactor-bg" aria-hidden="true" />
+            <div className="reactor-stage-bg" aria-hidden="true" />
             {geo && (
               <svg
                 className="pointer-events-none absolute inset-0 h-full w-full"

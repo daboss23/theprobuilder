@@ -9,6 +9,7 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { CountUp } from '@/components/reactor/CountUp'
 
 /* ----------------------------------------------------------------------------
    Accent channels — neon colour identities shared across the command center.
@@ -190,6 +191,8 @@ function Sparkline({ seed, series }: { seed: number; series?: number[] }) {
         strokeLinecap="round"
         strokeLinejoin="round"
         strokeWidth="1.6"
+        pathLength={1}
+        className="draw-line"
       />
     </svg>
   )
@@ -231,9 +234,10 @@ export function KpiCard({
           {delta.replace('+', '')}
         </span>
       </div>
-      <span className="relative mt-3 block font-display text-[2.1rem] font-bold leading-none tabular text-white drop-shadow-[0_1px_10px_rgba(0,0,0,0.5)]">
-        {value.toLocaleString()}
-      </span>
+      <CountUp
+        value={value}
+        className="count-up relative mt-3 block font-display text-[2.1rem] font-bold leading-none tabular text-white drop-shadow-[0_1px_10px_rgba(0,0,0,0.5)]"
+      />
       <Sparkline seed={label.length + value} series={spark} />
     </div>
   )

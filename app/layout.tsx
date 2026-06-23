@@ -23,7 +23,8 @@ export default function RootLayout({
         />
       </head>
       <body className="font-sans antialiased text-[#e6edf6]">
-        <div className="reactor-bg" />
+        <div className="reactor-bg" aria-hidden="true" />
+        <div className="reactor-nodes" aria-hidden="true" />
         {children}
       </body>
     </html>

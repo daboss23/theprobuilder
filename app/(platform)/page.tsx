@@ -2,7 +2,6 @@ import {
   Activity,
   Anchor,
   ArrowUpRight,
-  Atom,
   Banknote,
   Box,
   CircleDollarSign,
@@ -27,7 +26,6 @@ import {
   Panel,
   PanelHeader,
   PanelFooterLink,
-  PageHeader,
   ProgressBar,
   Pill,
   RadialGauge,
@@ -39,6 +37,7 @@ import { GrowthAreaChart } from '@/components/reactor/charts/GrowthAreaChart'
 import { WinRateDonut } from '@/components/reactor/charts/WinRateDonut'
 import { recommendations } from '@/lib/reactor-data'
 import { getDashboardData, winningAngles } from '@/lib/dashboard-data'
+import { AGENT_NETWORK, type AgentId } from '@/lib/agents'
 import { cn } from '@/lib/utils'
 
 export const dynamic = 'force-dynamic'
@@ -69,6 +68,25 @@ const activityIcons: Record<string, LucideIcon> = {
   render: Clapperboard,
   outcome: Trophy,
 }
+
+// Agent network identity — each codename maps to one neon channel + a glyph.
+// Icons are restricted to the set already proven in this bundle.
+const agentIdentity: Record<AgentId, { accent: Accent; icon: LucideIcon }> = {
+  opus: { accent: 'amber', icon: Cpu },
+  atlas: { accent: 'blue', icon: FolderOpen },
+  nova: { accent: 'violet', icon: Crosshair },
+  spark: { accent: 'cyan', icon: Sparkles },
+  echo: { accent: 'emerald', icon: FileText },
+  oracle: { accent: 'pink', icon: Hexagon },
+}
+
+// Header metadata chips — the live capabilities feeding the command center.
+const metaChips: { label: string; accent: Accent }[] = [
+  { label: 'Live Vault', accent: 'blue' },
+  { label: 'Campaign Memory', accent: 'violet' },
+  { label: 'Pattern Engine', accent: 'amber' },
+  { label: 'Agent Network', accent: 'cyan' },
+]
 
 const kpiStagger = [
   'stagger-1',
@@ -102,27 +120,58 @@ function timeAgo(iso: string): string {
 export default async function ReactorDashboard() {
   const data = await getDashboardData()
 
+  // Fuel per agent = the live signal volume in the knowledge systems it reads.
+  // OPUS synthesises the whole network, so it carries the total.
+  const systemCount: Record<string, number> = {}
+  for (const s of data.systemLoad) systemCount[s.system] = s.count
+  const totalFuel = data.systemLoad.reduce((sum, s) => sum + s.count, 0)
+  const agentFuel = (id: AgentId): number => {
+    const agent = AGENT_NETWORK.find((a) => a.id === id)
+    if (!agent || id === 'opus') return totalFuel
+    return agent.systems.reduce((sum, sys) => sum + (systemCount[sys] ?? 0), 0)
+  }
+  const onlineCount = AGENT_NETWORK.filter((a) => a.id === 'opus' || agentFuel(a.id) > 0).length
+
   return (
     <>
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <PageHeader
-          title="Reactor Dashboard"
-          subtitle="Mission control for The Professional Builder's creative intelligence. What should TPB create next, based on everything that has already worked?"
-          tagline="Engineered For Performance."
-        />
-        <div className="flex items-center gap-2">
-          <Pill tone={data.live ? 'success' : 'primary'}>
-            <span className="dot-live h-1.5 w-1.5 rounded-full animate-pulse-glow" />
-            <span className="font-semibold uppercase tracking-[0.18em]">
-              {data.live ? 'Live' : 'Demo'}
-            </span>
-          </Pill>
+      {/* Command hero — intelligence command-center header */}
+      <div className="command-hero flex flex-wrap items-end justify-between gap-5">
+        <div className="animate-fade-up">
+          <span className="command-eyebrow">
+            <span className="command-eyebrow-dot" />
+            Creative Intelligence Command Center
+          </span>
+          <h1 className="mt-2.5 font-display text-3xl font-bold tracking-tight text-white md:text-[2.6rem] md:leading-[1.05]">
+            Reactor Dashboard
+          </h1>
+          <p className="mt-2.5 max-w-2xl text-sm leading-relaxed text-white/55">
+            Mission control for The Professional Builder&apos;s creative intelligence. What should
+            TPB create next, based on everything that has already worked?
+          </p>
+          <div className="hero-scanline" />
+          <div className="mt-4 flex flex-wrap items-center gap-2">
+            {metaChips.map((c) => (
+              <span key={c.label} className={cn('meta-chip', accentClass[c.accent])}>
+                <span className="meta-chip-dot" />
+                {c.label}
+              </span>
+            ))}
+          </div>
+        </div>
+        <div className="flex flex-col items-end gap-2.5">
+          <span className={cn('live-pill', !data.live && 'live-pill--demo')}>
+            <span className="live-pill__dot" />
+            {data.live ? 'Live Intelligence' : 'Demo Intelligence'}
+          </span>
           <Pill tone="primary">
             <Activity size={12} />
             <span className="font-semibold uppercase tracking-[0.14em] tabular">
               {data.total.toLocaleString()} assets {data.live ? 'stored' : 'mapped'}
             </span>
           </Pill>
+          <span className="font-mono text-[10px] uppercase tracking-[0.3em] text-white/30">
+            Engineered For Performance.
+          </span>
         </div>
       </div>
 
@@ -189,7 +238,7 @@ export default async function ReactorDashboard() {
           </Panel>
         </div>
 
-        {/* Intelligence panels: angles · agent fuel · activity */}
+        {/* Intelligence panels: angles · agent network · activity */}
         <div className="grid grid-cols-1 gap-3 xl:grid-cols-3">
           {/* Top winning angles */}
           <Panel>
@@ -222,31 +271,48 @@ export default async function ReactorDashboard() {
             <PanelFooterLink href="/patterns">View All Angles</PanelFooterLink>
           </Panel>
 
-          {/* Agent fuel — which intelligence systems are loaded into the agent */}
+          {/* Agent network — OPUS orchestrating the five intelligence layers */}
           <Panel>
             <PanelHeader
               icon={<Cpu size={16} className="animate-pulse-glow" />}
               accent="violet"
-              title="Agent Fuel"
-              subtitle="Intelligence systems feeding the reactor"
+              title="Agent Network"
+              subtitle="OPUS orchestrating the intelligence layers"
+              accessory={<Pill tone="success">{onlineCount}/6 online</Pill>}
             />
-            <div className="space-y-3 p-5">
-              {data.systemLoad.slice(0, 6).map((s) => (
-                <div key={s.system} className="telemetry-row flex items-center gap-3">
-                  <span className={cn('angle-tile', accentClass[s.accent])}>
-                    <Atom size={14} />
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <div className="mb-1 flex items-center justify-between">
-                      <span className="truncate text-sm font-medium text-white">{s.label}</span>
-                      <span className="font-display text-xs font-bold tabular text-white/70">
-                        {s.count.toLocaleString()}
-                      </span>
+            <div className="agent-spine space-y-2 p-5">
+              {AGENT_NETWORK.map((agent) => {
+                const id = agentIdentity[agent.id]
+                const Icon = id.icon
+                const isLead = agent.id === 'opus'
+                const fuel = agentFuel(agent.id)
+                const active = isLead || fuel > 0
+                return (
+                  <div
+                    key={agent.id}
+                    className={cn('agent-node', isLead && 'agent-node--lead', accentClass[id.accent])}
+                  >
+                    <span className="agent-icon">
+                      <Icon size={16} />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-baseline gap-2">
+                        <span className="font-display text-sm font-bold tracking-tight text-white">
+                          {agent.codename}
+                        </span>
+                        <span className="truncate text-[11px] text-white/40">{agent.role}</span>
+                      </div>
+                      <p className="truncate text-[11px] tabular text-white/35">
+                        {fuel.toLocaleString()} signals {isLead ? 'synthesised' : 'fueling'}
+                      </p>
                     </div>
-                    <ProgressBar value={s.pct} />
+                    <span className={cn('agent-status', !active && 'agent-status--idle')}>
+                      <span className="agent-status__dot" />
+                      {isLead ? 'Online' : active ? 'Active' : 'Standby'}
+                    </span>
                   </div>
-                </div>
-              ))}
+                )
+              })}
             </div>
             <PanelFooterLink href="/network">View Agent Network</PanelFooterLink>
           </Panel>
@@ -336,7 +402,7 @@ export default async function ReactorDashboard() {
           </div>
         </Panel>
 
-        {/* Strategic recommendations */}
+        {/* Strategic recommendations — intelligence briefing cards */}
         <Panel>
           <PanelHeader
             icon={<Target size={16} />}
@@ -349,12 +415,18 @@ export default async function ReactorDashboard() {
             {recommendations.map((r) => (
               <div
                 key={r.campaign}
-                className="recommendation-card glass-hover rounded-xl border border-border bg-surface/40 p-4"
+                data-priority={r.priority}
+                className="recommendation-card glass-hover flex flex-col rounded-xl border border-border bg-surface/40 p-4"
               >
                 <div className="mb-2 flex items-center justify-between">
                   <Pill tone={r.priority === 'Critical' ? 'danger' : 'warning'}>{r.priority}</Pill>
-                  <span className="font-display text-sm font-bold tabular text-glow">
-                    {r.confidence}%
+                  <span className="flex items-center gap-1.5">
+                    <span className="text-[10px] uppercase tracking-wider text-white/35">
+                      Confidence
+                    </span>
+                    <span className="font-display text-sm font-bold tabular text-glow">
+                      {r.confidence}%
+                    </span>
                   </span>
                 </div>
                 <h3 className="font-display text-base font-semibold text-white">{r.campaign}</h3>
@@ -363,13 +435,19 @@ export default async function ReactorDashboard() {
                   <p className="text-[10px] font-medium uppercase tracking-wider text-white/35">
                     Suggested Hook
                   </p>
-                  <p className="mt-1 text-sm italic text-white/80">“{r.suggestedHook}”</p>
+                  <p className="mt-1 text-sm italic text-white/80">&ldquo;{r.suggestedHook}&rdquo;</p>
                 </div>
-                <div className="mt-3 flex flex-wrap gap-1.5">
+                <div className="mb-4 mt-3 flex flex-wrap gap-1.5">
                   {r.assetsNeeded.map((a) => (
-                    <Pill key={a}>{a}</Pill>
+                    <span key={a} className="source-tag">
+                      {a}
+                    </span>
                   ))}
                 </div>
+                <a href="/recommendations" className="brief-cta mt-auto">
+                  Open Brief
+                  <ArrowUpRight size={14} />
+                </a>
               </div>
             ))}
           </div>

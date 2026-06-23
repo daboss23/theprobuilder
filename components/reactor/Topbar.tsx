@@ -51,9 +51,26 @@ export function Topbar() {
           <h1 className="font-display text-base font-semibold tracking-tight text-white">
             {heading}
           </h1>
+          <span className="live-pill ml-1">
+            <span className="live-pill__dot" />
+            Live Intelligence
+          </span>
         </div>
 
-        <div className="ml-auto flex items-center gap-2">
+        <div className="ml-auto flex items-center gap-2.5">
+          <label className="topbar-search hidden w-64 xl:flex" aria-label="Search intelligence">
+            <Search size={15} className="shrink-0 text-glow/70" />
+            <input type="text" placeholder="Search intelligence…" spellCheck={false} />
+            <kbd className="topbar-kbd ml-auto shrink-0">⌘K</kbd>
+          </label>
+          <button
+            type="button"
+            className="topbar-control relative grid h-9 w-9 place-items-center rounded-xl border border-border text-white/60 hover:text-white"
+            aria-label="Alerts"
+          >
+            <Bell size={16} />
+            <span className="absolute right-2 top-2 h-1.5 w-1.5 rounded-full bg-cyan shadow-[0_0_8px_2px_rgba(34,211,238,0.7)] animate-pulse-glow" />
+          </button>
           <button
             type="button"
             onClick={newCampaign}
@@ -62,21 +79,6 @@ export function Topbar() {
             <Atom size={15} />
             <span className="hidden sm:inline">New Creative Campaign</span>
             <span className="sm:hidden">New</span>
-          </button>
-          <div className="topbar-control hidden w-64 items-center gap-2 rounded-xl border border-border bg-surface/50 px-3 py-2 text-sm text-white/40 md:flex">
-            <Search size={15} />
-            <span className="text-xs">Search intelligence…</span>
-            <kbd className="ml-auto rounded bg-white/5 px-1.5 py-0.5 font-mono text-[10px] text-white/40">
-              ⌘K
-            </kbd>
-          </div>
-          <button
-            type="button"
-            className="topbar-control relative grid h-9 w-9 place-items-center rounded-xl border border-border text-white/60 hover:text-white"
-            aria-label="Alerts"
-          >
-            <Bell size={16} />
-            <span className="absolute right-2 top-2 h-1.5 w-1.5 rounded-full bg-cyan shadow-[0_0_8px_2px_rgba(34,211,238,0.7)]" />
           </button>
           <div className="topbar-avatar grid h-9 w-9 place-items-center rounded-xl bg-gradient-to-br from-primary to-cyan text-xs font-bold text-white">
             TPB
