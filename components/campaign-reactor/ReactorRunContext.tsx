@@ -1,7 +1,7 @@
 'use client'
 
 import { createContext, useCallback, useContext, useRef, useState, type ReactNode } from 'react'
-import { briefToPrompt, type ProductionBrief, type ReactorInputs } from '@/lib/reactor-inputs'
+import { briefToPrompt, type ProductionBrief, type ReactorInputs, type NeuroScore } from '@/lib/reactor-inputs'
 import type { Verdict, OutcomeAttributes } from '@/lib/outcomes'
 import {
   idleWorkflow,
@@ -23,6 +23,7 @@ export interface Concept {
   score?: number
   imageUrl?: string
   productionBrief?: ProductionBrief
+  neuro?: NeuroScore
 }
 
 export interface TelemetryLine {

@@ -1,7 +1,8 @@
 'use client'
 
-import { Check, Copy as CopyIcon, Film, Hexagon, ImageIcon, Loader2, Trophy, Users } from 'lucide-react'
+import { Activity, Check, Copy as CopyIcon, Film, Hexagon, ImageIcon, Loader2, Trophy, Users } from 'lucide-react'
 import { Pill } from '@/components/reactor/ui'
+import { NEURO_AXES, NEURO_PASS_MARK, type NeuroScore } from '@/lib/reactor-inputs'
 import type {
   Concept,
   CreativeState,
@@ -25,6 +26,56 @@ function ProviderChip({ model, provider }: { model?: string; provider?: string }
         </>
       )}
     </span>
+  )
+}
+
+// One axis of the NEURO predicted-response pre-test, drawn as a 10-segment bar
+// (pure Tailwind — no inline widths). Colour bands the score: emerald = strong,
+// glow = solid, warning = below the pass mark.
+function NeuroBar({ label, value }: { label: string; value: number }) {
+  const tone = value >= 8 ? 'bg-success' : value >= NEURO_PASS_MARK ? 'bg-glow' : 'bg-warning'
+  return (
+    <div className="flex items-center gap-2">
+      <span className="w-[4.5rem] shrink-0 text-[10px] uppercase tracking-wide text-white/45">{label}</span>
+      <div className="flex flex-1 gap-0.5" aria-hidden>
+        {Array.from({ length: 10 }).map((_, i) => (
+          <span key={i} className={`h-1.5 flex-1 rounded-sm ${i < value ? tone : 'bg-white/10'}`} />
+        ))}
+      </div>
+      <span className="w-7 shrink-0 text-right text-[10px] font-medium text-white/70">{value}</span>
+    </div>
+  )
+}
+
+// The NEURO predicted-response pre-test block. A TRIBE-inspired estimate of how
+// the brain is likely to react to the concept — clearly labelled as a prediction,
+// never measured brain data.
+function NeuroPanel({ neuro }: { neuro: NeuroScore }) {
+  return (
+    <div className="mt-2.5 rounded-lg border border-glow/15 bg-glow/[0.04] p-2.5">
+      <div className="mb-1.5 flex items-center justify-between gap-2">
+        <span className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-glow/80">
+          <Activity size={11} /> Predicted Response
+        </span>
+        <Pill tone={neuro.overall >= 8 ? 'success' : neuro.overall >= NEURO_PASS_MARK ? 'primary' : 'warning'}>
+          {neuro.overall}/10
+        </Pill>
+      </div>
+      <div className="space-y-1">
+        {NEURO_AXES.map(({ key, label }) => (
+          <NeuroBar key={key} label={label} value={neuro[key]} />
+        ))}
+      </div>
+      {neuro.reason && (
+        <p className="mt-2 text-[11px] text-white/55">
+          {neuro.reason}
+          {neuro.principle && <span className="text-white/30"> · {neuro.principle}</span>}
+        </p>
+      )}
+      <p className="mt-1 text-[10px] italic text-white/30">
+        Estimate from neuromarketing principles — a prediction, not measured brain data.
+      </p>
+    </div>
   )
 }
 
@@ -195,6 +246,8 @@ export function ConceptResultCard({
           )}
         </div>
       )}
+
+      {c.neuro && <NeuroPanel neuro={c.neuro} />}
 
       {/* Generated still creative (agent or manual) — provider chip overlaid on
           the card only; the image file stays untouched. */}

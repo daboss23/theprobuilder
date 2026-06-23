@@ -50,6 +50,47 @@ export interface ProductionBrief {
   frames: ProductionFrame[]
 }
 
+/**
+ * NEURO predicted-response score — a TRIBE-inspired neural pre-test on a
+ * concept. It estimates how the human brain is likely to react to the creative
+ * BEFORE any spend, grounded in established neuromarketing principles (visual
+ * salience, cognitive load, emotional valence, memory encoding, first-3-seconds
+ * hook strength). It is a PREDICTION/ESTIMATE, never measured brain data — the
+ * UI must label it as such. Kept here (framework-agnostic) so both the server
+ * scorer and the client card can share the shape.
+ */
+export interface NeuroScore {
+  /** Scroll-stopping power of the opening — does it break the pattern? (1-10) */
+  attention: number
+  /** Emotional pull / arousal — does it make the viewer feel something? (1-10) */
+  emotion: number
+  /** Memory encoding — will it be remembered an hour later? (1-10) */
+  memorability: number
+  /** First-3-seconds hook strength — do the openers earn the next beat? (1-10) */
+  hook: number
+  /** Convenience average of the four axes (1-10), computed server-side. */
+  overall: number
+  /** One-line rationale for the estimate. */
+  reason: string
+  /** The neuromarketing principle the estimate leaned on, when identifiable. */
+  principle?: string
+}
+
+/**
+ * The predicted-response pass mark (1-10). A concept whose attention or hook
+ * falls below this is "below the bar" — flagged for revision server-side and
+ * shown in warning colour on the card. Shared so the gate and the UI agree.
+ */
+export const NEURO_PASS_MARK = 6
+
+/** The four scored axes, in display order, with builder-facing labels. */
+export const NEURO_AXES: { key: keyof Pick<NeuroScore, 'attention' | 'emotion' | 'memorability' | 'hook'>; label: string }[] = [
+  { key: 'attention', label: 'Attention' },
+  { key: 'emotion', label: 'Emotion' },
+  { key: 'memorability', label: 'Memorability' },
+  { key: 'hook', label: 'Hook' },
+]
+
 /** Turn a production brief into a single rich generation prompt. */
 export function briefToPrompt(brief: ProductionBrief | undefined, fallback: string): string {
   if (!brief?.frames?.length) return fallback

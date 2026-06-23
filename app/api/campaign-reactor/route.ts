@@ -12,7 +12,14 @@ import {
 } from '@/lib/video'
 import { logGeneration } from '@/lib/video/persistence'
 import { retrieveWinningConfigs, type WinningConfig } from '@/lib/outcomes'
-import { outputTypeOptions, type ReactorInputs, type ProductionBrief } from '@/lib/reactor-inputs'
+import { outputTypeOptions, type ReactorInputs, type ProductionBrief, type NeuroScore } from '@/lib/reactor-inputs'
+import {
+  retrieveNeuroPrinciples,
+  scoreConceptsNeuro,
+  weakConceptIndices,
+  neuroFeedback,
+  demoNeuroScore,
+} from '@/lib/neuro'
 
 // ORACLE strategic memory injected into OPUS at fire time — past winning
 // configurations matching the brief, so generation reuses what worked.
@@ -43,6 +50,12 @@ export const maxDuration = 300
 // model the intelligence layers (ATLAS/NOVA/SPARK/ECHO/ORACLE) run on.
 const OPUS_MODEL = 'claude-opus-4-8'
 const INTELLIGENCE_MODEL = 'claude-sonnet-4-6'
+// NEURO (Predicted Response pre-test) runs on the cheap intelligence model — it
+// is a structured grading pass, not strategy, so it never touches OPUS's budget.
+const NEURO_MODEL = INTELLIGENCE_MODEL
+// How many times OPUS may be sent back to revise concepts that fail the neural
+// pre-test before we ship the best it has. Bounded so cost/turns stay capped.
+const MAX_NEURO_REVISIONS = 1
 const MAX_TURNS = 12
 
 // MCP connector (Messages API) beta — lets the coordinator call remote MCP
@@ -68,6 +81,7 @@ interface Concept {
   score?: number
   imageUrl?: string
   productionBrief?: ProductionBrief
+  neuro?: NeuroScore
 }
 
 /* ------------------------------ Meta Ads MCP ------------------------------ */
@@ -308,7 +322,9 @@ Your intelligence network:
 Process:
 1. Consult your network with consult_intelligence. Always consult NOVA and ORACLE, plus at least one of SPARK/ECHO. Use their findings as evidence — don't guess.${metaAdsLine}
 2. Call get_learnings and self-score every concept against that rubric. Revise or drop anything below 7.${imageLine}${videoLine}
-3. Call submit_concepts exactly once, with concepts ONLY for these requested output types: ${outputs.join(', ')}. Each concept cites which intelligence layer its evidence came from.
+3. Call submit_concepts with concepts ONLY for these requested output types: ${outputs.join(', ')}. Each concept cites which intelligence layer its evidence came from.
+
+On submit, every concept is run through NEURO — a neural pre-test that scores its PREDICTED RESPONSE (attention, emotion, memorability, first-3-seconds hook) against neuromarketing principles. Concepts with a weak scroll-stop or hook are returned to you to revise or drop. So lead with a concrete, specific pattern-interrupt in the opening beat of every concept — don't open on the offer or a generic claim.
 
 Voice: confident, specific, builder-native. Engineered for performance.`
 }
@@ -555,9 +571,14 @@ async function runDemo(controller: ReadableStreamDefaultController, body: Reacto
       c.productionBrief = demoBrief(c.type, a)
     }
   }
+  sse(controller, {
+    type: 'step',
+    text: 'NEURO — pre-testing concepts against neuromarketing principles (predicted response)…',
+  })
   const norm = (s: string) => s.toLowerCase().replace(/s$/, '').trim()
   const wanted = outputs.map(norm)
   for (const c of pool.filter((c) => wanted.includes(norm(c.type)) && (c.score ?? 0) >= 7)) {
+    c.neuro = demoNeuroScore(c.score, c.type)
     sse(controller, { type: 'concept', concept: c })
   }
   sse(controller, { type: 'done' })
@@ -673,6 +694,12 @@ export async function POST(request: NextRequest) {
             preferredImageModel: body.imageModel ?? null,
           }) + inputBlocks + oracleMemory
 
+        // NEURO (Predicted Response pre-test) run state: the grounding rubric is
+        // retrieved once and reused across any revision, and a bounded counter
+        // caps how many times OPUS is sent back to fix weak-scoring concepts.
+        let neuroPrinciples: string | null = null
+        let neuroRevisions = 0
+
         for (let turn = 0; turn < MAX_TURNS; turn++) {
           const params: Anthropic.Beta.Messages.MessageCreateParamsNonStreaming = {
             model: OPUS_MODEL,
@@ -710,15 +737,6 @@ export async function POST(request: NextRequest) {
             (b): b is Anthropic.Beta.Messages.BetaToolUseBlock => b.type === 'tool_use',
           )
           if (toolUses.length === 0) break
-
-          const submit = toolUses.find((t) => t.name === 'submit_concepts')
-          if (submit) {
-            const concepts = (submit.input as { concepts?: Concept[] }).concepts ?? []
-            for (const c of concepts) sse(controller, { type: 'concept', concept: c })
-            sse(controller, { type: 'done' })
-            controller.close()
-            return
-          }
 
           const results: Anthropic.Beta.Messages.BetaToolResultBlockParam[] = []
           for (const tu of toolUses) {
@@ -832,6 +850,56 @@ export async function POST(request: NextRequest) {
                   tool_use_id: tu.id,
                   content: JSON.stringify({ requestId: null, note: 'video generation unavailable' }),
                 })
+              }
+            } else if (tu.name === 'submit_concepts') {
+              const concepts = (tu.input as { concepts?: Concept[] }).concepts ?? []
+
+              // NEURO — neural pre-test: estimate the predicted response of each
+              // concept before it ships. Grounded in neuromarketing principles
+              // (retrieved once, reused across any revision).
+              sse(controller, {
+                type: 'step',
+                text: 'NEURO — pre-testing concepts against neuromarketing principles (predicted response)…',
+              })
+              if (neuroPrinciples === null) {
+                neuroPrinciples = await retrieveNeuroPrinciples(body.angle ?? '', body.builderId ?? null)
+              }
+              const scores = await scoreConceptsNeuro(anthropic, NEURO_MODEL, concepts, neuroPrinciples)
+              const weak = weakConceptIndices(scores)
+              const avg = (k: 'attention' | 'hook') =>
+                scores.length
+                  ? Math.round((scores.reduce((s, x) => s + x[k], 0) / scores.length) * 10) / 10
+                  : 0
+              sse(controller, {
+                type: 'step',
+                text: `NEURO pre-test complete · avg attention ${avg('attention')}/10 · avg hook ${avg('hook')}/10${
+                  weak.length ? ` · ${weak.length} below bar` : ' · all passed'
+                }`,
+              })
+
+              if (weak.length > 0 && neuroRevisions < MAX_NEURO_REVISIONS) {
+                // Step 5 — hand the weak scores back to OPUS so it revises the
+                // openings (or drops the concept), same as the rubric self-critique.
+                neuroRevisions += 1
+                sse(controller, {
+                  type: 'step',
+                  text: `NEURO flagged ${weak.length} concept(s) for weak scroll-stop / hook — OPUS revising…`,
+                })
+                results.push({
+                  type: 'tool_result',
+                  tool_use_id: tu.id,
+                  content: neuroFeedback(concepts, scores, weak),
+                })
+              } else {
+                // Passed the pre-test (or revision budget spent) — attach the
+                // predicted-response score to each concept and ship.
+                concepts.forEach((c, i) => {
+                  c.neuro = scores[i]
+                })
+                for (const c of concepts) sse(controller, { type: 'concept', concept: c })
+                sse(controller, { type: 'done' })
+                controller.close()
+                return
               }
             } else {
               results.push({ type: 'tool_result', tool_use_id: tu.id, content: 'Unknown tool', is_error: true })
