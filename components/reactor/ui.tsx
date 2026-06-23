@@ -159,8 +159,27 @@ const sparkPaths = [
   'M1 27L11 22L20 24L30 18L39 20L49 15L60 17L71 11L81 14L92 8L101 11L111 5',
 ] as const
 
-function Sparkline({ seed }: { seed: number }) {
-  const d = sparkPaths[seed % sparkPaths.length]
+// Build an SVG path from a real numeric series (e.g. weekly cumulative counts),
+// normalised into the 112x32 sparkline box. Falls back to a preset shape only
+// when no data is supplied, so the line always reflects actual movement.
+function pathFromSeries(series: number[]): string {
+  if (series.length < 2) return ''
+  const min = Math.min(...series)
+  const max = Math.max(...series)
+  const range = max - min || 1
+  const stepX = 110 / (series.length - 1)
+  return series
+    .map((v, i) => {
+      const x = 1 + i * stepX
+      const y = 28 - ((v - min) / range) * 24 // 4px top/bottom padding
+      return `${i === 0 ? 'M' : 'L'}${x.toFixed(1)} ${y.toFixed(1)}`
+    })
+    .join('')
+}
+
+function Sparkline({ seed, series }: { seed: number; series?: number[] }) {
+  const d =
+    series && series.length >= 2 ? pathFromSeries(series) : sparkPaths[seed % sparkPaths.length]
   return (
     <svg aria-hidden="true" className="kpi-sparkline" viewBox="0 0 112 32">
       <path d={`${d}V32H1Z`} fill="currentColor" className="opacity-15" stroke="none" />
@@ -183,6 +202,7 @@ export function KpiCard({
   trend,
   accent = 'blue',
   icon: Icon = Activity,
+  spark,
 }: {
   label: string
   value: number
@@ -190,6 +210,7 @@ export function KpiCard({
   trend: 'up' | 'down' | 'flat'
   accent?: Accent
   icon?: LucideIcon
+  spark?: number[]
 }) {
   const TrendIcon = trend === 'down' ? TrendingDown : trend === 'flat' ? Minus : TrendingUp
   return (
@@ -213,7 +234,7 @@ export function KpiCard({
       <span className="relative mt-3 block font-display text-[2.1rem] font-bold leading-none tabular text-white drop-shadow-[0_1px_10px_rgba(0,0,0,0.5)]">
         {value.toLocaleString()}
       </span>
-      <Sparkline seed={label.length + value} />
+      <Sparkline seed={label.length + value} series={spark} />
     </div>
   )
 }

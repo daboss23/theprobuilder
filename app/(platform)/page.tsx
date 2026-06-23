@@ -6,14 +6,18 @@ import {
   Banknote,
   Box,
   CircleDollarSign,
+  Clapperboard,
   Clock3,
   Crosshair,
+  Cpu,
   FolderOpen,
   FileText,
   Hexagon,
   Lightbulb,
   Network,
+  Sparkles,
   Target,
+  TrendingUp,
   Trophy,
   Users,
   type LucideIcon,
@@ -31,16 +35,10 @@ import {
   accentClass,
   type Accent,
 } from '@/components/reactor/ui'
-import {
-  reactorKpis,
-  winningAngles,
-  creativeHeatmap,
-  heatmapMonths,
-  recommendations,
-  reactorStatus,
-  performanceSignals,
-} from '@/lib/reactor-data'
-import { vaultStats } from '@/lib/knowledge'
+import { GrowthAreaChart } from '@/components/reactor/charts/GrowthAreaChart'
+import { WinRateDonut } from '@/components/reactor/charts/WinRateDonut'
+import { recommendations } from '@/lib/reactor-data'
+import { getDashboardData, winningAngles } from '@/lib/dashboard-data'
 import { cn } from '@/lib/utils'
 
 export const dynamic = 'force-dynamic'
@@ -66,6 +64,12 @@ const angleIcons: Record<string, LucideIcon> = {
   Cashflow: Banknote,
 }
 
+const activityIcons: Record<string, LucideIcon> = {
+  ingest: FolderOpen,
+  render: Clapperboard,
+  outcome: Trophy,
+}
+
 const kpiStagger = [
   'stagger-1',
   'stagger-2',
@@ -85,8 +89,18 @@ function heatLevel(v: number): string {
   return 'heat-l0'
 }
 
+function timeAgo(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime()
+  const mins = Math.round(diff / 60000)
+  if (mins < 1) return 'just now'
+  if (mins < 60) return `${mins}m ago`
+  const hrs = Math.round(mins / 60)
+  if (hrs < 24) return `${hrs}h ago`
+  return `${Math.round(hrs / 24)}d ago`
+}
+
 export default async function ReactorDashboard() {
-  const stats = await vaultStats()
+  const data = await getDashboardData()
 
   return (
     <>
@@ -97,43 +111,93 @@ export default async function ReactorDashboard() {
           tagline="Engineered For Performance."
         />
         <div className="flex items-center gap-2">
-          <Pill tone="success">
+          <Pill tone={data.live ? 'success' : 'primary'}>
             <span className="dot-live h-1.5 w-1.5 rounded-full animate-pulse-glow" />
-            <span className="font-semibold uppercase tracking-[0.18em]">Live</span>
+            <span className="font-semibold uppercase tracking-[0.18em]">
+              {data.live ? 'Live' : 'Demo'}
+            </span>
           </Pill>
           <Pill tone="primary">
             <Activity size={12} />
             <span className="font-semibold uppercase tracking-[0.14em] tabular">
-              {stats.live
-                ? `${stats.total.toLocaleString()} assets stored`
-                : '2,847 assets synced'}
+              {data.total.toLocaleString()} assets {data.live ? 'stored' : 'mapped'}
             </span>
           </Pill>
         </div>
       </div>
 
       <div className="dashboard-console">
-        {/* KPI instruments — 2 rows of neon telemetry cards */}
+        {/* KPI instruments — neon telemetry cards with live counts + sparklines */}
         <section className="grid grid-cols-2 gap-3 md:grid-cols-4">
-          {reactorKpis.map((k, i) => {
+          {data.kpis.map((k, i) => {
             const id = kpiIdentity[k.label] ?? { accent: 'blue' as Accent, icon: Activity }
             return (
               <div key={k.label} className={cn('animate-fade-up', kpiStagger[i % kpiStagger.length])}>
-                <KpiCard {...k} accent={id.accent} icon={id.icon} />
+                <KpiCard
+                  label={k.label}
+                  value={k.value}
+                  delta={k.delta}
+                  trend={k.trend}
+                  accent={id.accent}
+                  icon={id.icon}
+                  spark={k.spark}
+                />
               </div>
             )
           })}
         </section>
 
-        {/* Intelligence panels */}
-        <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
+        {/* Hero analytics: intelligence growth + concept win rate */}
+        <div className="grid grid-cols-1 gap-3 xl:grid-cols-3">
+          <Panel className="xl:col-span-2">
+            <PanelHeader
+              icon={<TrendingUp size={16} />}
+              accent="cyan"
+              title="Intelligence Growth"
+              subtitle="Cumulative knowledge assets — is the Vault compounding?"
+              accessory={
+                <Pill tone="primary">
+                  <span className="tabular">+{data.growth[data.growth.length - 1].added}</span> this week
+                </Pill>
+              }
+            />
+            <div className="p-5 pt-3">
+              <GrowthAreaChart data={data.growth} />
+            </div>
+          </Panel>
+
+          <Panel>
+            <PanelHeader
+              icon={<Trophy size={16} />}
+              accent="emerald"
+              title="Concept Win Rate"
+              subtitle="Outcomes from generated campaigns"
+            />
+            <div className="p-5">
+              <WinRateDonut outcomes={data.outcomes} />
+              {data.outcomes.metrics.length > 0 && (
+                <div className="mt-4 grid grid-cols-3 gap-2 border-t border-border pt-4">
+                  {data.outcomes.metrics.map((m) => (
+                    <div key={m.name} className="text-center">
+                      <p className="font-display text-lg font-bold tabular text-glow">{m.value}</p>
+                      <p className="text-[10px] uppercase tracking-wider text-white/40">{m.name}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </Panel>
+        </div>
+
+        {/* Intelligence panels: angles · agent fuel · activity */}
+        <div className="grid grid-cols-1 gap-3 xl:grid-cols-3">
           {/* Top winning angles */}
           <Panel>
             <PanelHeader
               icon={<Network size={16} />}
               accent="blue"
               title="Top Winning Angles"
-              subtitle="Ranked by win index across all campaigns"
+              subtitle="Ranked by win index"
             />
             <div className="space-y-2 p-5">
               {winningAngles.slice(0, 5).map((a) => {
@@ -143,14 +207,11 @@ export default async function ReactorDashboard() {
                     <span className={cn('angle-tile', accentClass[a.accent])}>
                       <Icon size={15} />
                     </span>
-                    <div className="w-32 shrink-0">
+                    <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-medium text-white">{a.name}</p>
-                      <p className="text-[11px] text-white/35">{a.campaigns} campaigns</p>
-                    </div>
-                    <div className="flex-1">
                       <ProgressBar value={a.score} />
                     </div>
-                    <span className="w-9 text-right font-display text-sm font-bold tabular text-white">
+                    <span className="w-8 text-right font-display text-sm font-bold tabular text-white">
                       {a.score}
                     </span>
                     <TrendBadge trend={a.trend} value={a.delta} />
@@ -161,39 +222,74 @@ export default async function ReactorDashboard() {
             <PanelFooterLink href="/patterns">View All Angles</PanelFooterLink>
           </Panel>
 
-          {/* Campaign reactor status */}
+          {/* Agent fuel — which intelligence systems are loaded into the agent */}
           <Panel>
             <PanelHeader
-              icon={<Atom size={16} className="animate-pulse-glow" />}
-              accent="cyan"
-              title="Campaign Reactor Status"
-              subtitle="Live pipeline telemetry"
+              icon={<Cpu size={16} className="animate-pulse-glow" />}
+              accent="violet"
+              title="Agent Fuel"
+              subtitle="Intelligence systems feeding the reactor"
             />
-            <div className="space-y-4 p-5">
-              {reactorStatus.map((s) => (
-                <div key={s.label} className="telemetry-row">
-                  <div className="mb-1.5 flex items-center justify-between">
-                    <span className="text-xs text-white/55">{s.label}</span>
-                    <span className="font-display text-sm font-bold tabular text-white">
-                      {s.value.toLocaleString()}
-                      <span className="font-medium text-white/30"> / {s.total.toLocaleString()}</span>
-                    </span>
+            <div className="space-y-3 p-5">
+              {data.systemLoad.slice(0, 6).map((s) => (
+                <div key={s.system} className="telemetry-row flex items-center gap-3">
+                  <span className={cn('angle-tile', accentClass[s.accent])}>
+                    <Atom size={14} />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="mb-1 flex items-center justify-between">
+                      <span className="truncate text-sm font-medium text-white">{s.label}</span>
+                      <span className="font-display text-xs font-bold tabular text-white/70">
+                        {s.count.toLocaleString()}
+                      </span>
+                    </div>
+                    <ProgressBar value={s.pct} />
                   </div>
-                  <ProgressBar value={s.value} max={s.total} />
                 </div>
               ))}
             </div>
-            <PanelFooterLink href="/campaign-reactor">View Pipeline</PanelFooterLink>
+            <PanelFooterLink href="/network">View Agent Network</PanelFooterLink>
+          </Panel>
+
+          {/* Recent activity — live pulse of the reactor */}
+          <Panel>
+            <PanelHeader
+              icon={<Activity size={16} />}
+              accent="cyan"
+              title="Recent Activity"
+              subtitle="Latest ingests, renders & outcomes"
+            />
+            <div className="p-5">
+              <ul className="space-y-3">
+                {data.activity.map((e, i) => {
+                  const Icon = activityIcons[e.kind] ?? Sparkles
+                  return (
+                    <li key={i} className="flex items-start gap-3">
+                      <span className={cn('angle-tile h-7 w-7 shrink-0', accentClass[e.accent])}>
+                        <Icon size={12} />
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-xs font-medium text-white">{e.label}</p>
+                        <p className="truncate text-[11px] text-white/40">{e.detail}</p>
+                      </div>
+                      <span className="shrink-0 text-[10px] tabular text-white/30">
+                        {timeAgo(e.at)}
+                      </span>
+                    </li>
+                  )
+                })}
+              </ul>
+            </div>
           </Panel>
         </div>
 
-        {/* Heatmap */}
+        {/* Live heatmap — where intelligence is accumulating, by month */}
         <Panel>
           <PanelHeader
             icon={<Activity size={16} />}
             accent="violet"
             title="Creative Intelligence Heatmap"
-            subtitle="Signal intensity by dimension over the last 6 months"
+            subtitle="Signal intensity by system over the last 6 months"
             accessory={
               <div className="hidden items-center gap-2 text-[11px] text-white/40 sm:flex">
                 <span>Low</span>
@@ -207,9 +303,9 @@ export default async function ReactorDashboard() {
               <thead>
                 <tr>
                   <th className="w-40" />
-                  {heatmapMonths.map((m) => (
+                  {data.heatmap.months.map((m, i) => (
                     <th
-                      key={m}
+                      key={`${m}-${i}`}
                       className="px-2 text-center text-[11px] font-medium uppercase tracking-wider text-white/35"
                     >
                       {m}
@@ -218,7 +314,7 @@ export default async function ReactorDashboard() {
                 </tr>
               </thead>
               <tbody>
-                {creativeHeatmap.map((row) => (
+                {data.heatmap.rows.map((row) => (
                   <tr key={row.dimension}>
                     <td className="pr-3 text-sm font-medium text-white/70">{row.dimension}</td>
                     {row.cells.map((c, i) => (
@@ -247,7 +343,7 @@ export default async function ReactorDashboard() {
             accent="amber"
             title="Strategic Recommendations"
             subtitle="AI-generated next moves for TPB"
-            accessory={<Pill tone="primary">24 ready</Pill>}
+            accessory={<Pill tone="primary">{recommendations.length} ready</Pill>}
           />
           <div className="grid grid-cols-1 gap-4 p-5 lg:grid-cols-3">
             {recommendations.map((r) => (
@@ -281,7 +377,7 @@ export default async function ReactorDashboard() {
 
         {/* Compact performance read-outs */}
         <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          {performanceSignals.map((p, i) => (
+          {data.performanceSignals.map((p, i) => (
             <div
               key={p.label}
               className={cn(
