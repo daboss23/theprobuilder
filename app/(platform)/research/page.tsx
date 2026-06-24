@@ -1,4 +1,4 @@
-import { Radar, Building2, Globe, Sparkles, MessageSquare } from 'lucide-react'
+import { Radar, Building2, Globe, Sparkles, MessageSquare, Clock } from 'lucide-react'
 import { PageHeader, Panel, PanelHeader, ProgressBar, Pill } from '@/components/reactor/ui'
 import { internalSources, externalSources, researchOutputs } from '@/lib/reactor-data'
 import { vaultStats } from '@/lib/knowledge'
@@ -60,7 +60,12 @@ export default async function ResearchPage() {
           icon={<MessageSquare size={16} />}
           accent="violet"
           title="Where NOVA mines — recommended sources"
-          subtitle="The highest-signal places a trades & construction audience talks. Pick one above to deploy her."
+          subtitle="The highest-signal places a trades & construction audience talks. NOVA auto-sweeps these weekly; deploy her manually any time for a targeted dig."
+          accessory={
+            <Pill tone="primary">
+              <Clock size={12} /> Auto-sweeps weekly
+            </Pill>
+          }
         />
         <div className="grid grid-cols-1 gap-4 p-5 md:grid-cols-2">
           <div>

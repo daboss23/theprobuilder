@@ -14,7 +14,9 @@
 // missing key; a failed fetch resolves to an error event, never a crash.
 
 import Anthropic from '@anthropic-ai/sdk'
+import { createHash } from 'crypto'
 import { ingestKnowledge } from '@/lib/knowledge'
+import { getSupabaseAdmin, supabaseUrl } from '@/lib/supabase'
 import { fetchReadablePage, assertSafeUrl } from '@/lib/website-intelligence'
 import { fetchYouTubeTranscript } from '@/lib/youtube'
 import { parseModelJson } from '@/lib/parse'
@@ -233,14 +235,18 @@ async function fetchRedditThread(rawUrl: string, label?: string): Promise<Gather
 async function fetchRedditSubreddit(
   subreddit: string,
   query: string | undefined,
+  timeWindow = 'year',
 ): Promise<GatheredSource | null> {
   const sub = sanitizeSubreddit(subreddit)
   if (!sub) return null
   const q = query?.trim()
+  // Reddit accepts hour/day/week/month/year/all — the sweep uses 'week' for fresh
+  // signal, the on-demand path 'year' for the strongest threads of all time.
+  const t = /^(hour|day|week|month|year|all)$/.test(timeWindow) ? timeWindow : 'year'
 
   const listUrl = q
-    ? `https://www.reddit.com/r/${sub}/search.json?q=${encodeURIComponent(q)}&restrict_sr=on&sort=relevance&t=year&limit=12&raw_json=1`
-    : `https://www.reddit.com/r/${sub}/top.json?t=year&limit=12&raw_json=1`
+    ? `https://www.reddit.com/r/${sub}/search.json?q=${encodeURIComponent(q)}&restrict_sr=on&sort=relevance&t=${t}&limit=12&raw_json=1`
+    : `https://www.reddit.com/r/${sub}/top.json?t=${t}&limit=12&raw_json=1`
 
   const listing = await redditJson(listUrl)
   const posts = asPosts(listing).slice(0, 10)
@@ -499,6 +505,7 @@ export async function storeMarketIntel(
   profile: MarketIntelProfile,
   meta: NovaSourceMeta,
   builderId: string | null,
+  opts: { contentHash?: string } = {},
 ): Promise<{ stored: boolean; chunks: number }> {
   const metadata = {
     source_type: meta.type,
@@ -507,6 +514,7 @@ export async function storeMarketIntel(
     source_url: meta.url ?? null,
     source_label: meta.label,
     items_analyzed: meta.itemsAnalyzed,
+    content_hash: opts.contentHash ?? null,
     ingested_at: new Date().toISOString(),
   }
 
@@ -576,8 +584,119 @@ export async function runNovaResearch(
   const profile = await extractMarketIntel(gathered.text, gathered.meta)
 
   emit({ type: 'progress', message: 'Embedding intelligence into NOVA’s memory…' })
-  const { stored, chunks } = await storeMarketIntel(profile, gathered.meta, input.builderId ?? null)
+  const { stored, chunks } = await storeMarketIntel(profile, gathered.meta, input.builderId ?? null, {
+    contentHash: sourceHash(gathered.text),
+  })
 
   emit({ type: 'progress', message: 'Market Intelligence ready.' })
   emit({ type: 'complete', result: { profile, source: gathered.meta, stored, chunks } })
+}
+
+/* ------------------------------ Weekly sweep ------------------------------ */
+// NOVA's always-on mode: a scheduled background sweep (Vercel Cron) keeps her
+// memory continuously fresh, decoupled from campaign fires. Each run pulls the
+// past week's top threads across her core subreddits and embeds the new signal
+// — with content-hash dedup so identical threads aren't re-ingested week over
+// week. Campaigns then retrieve the latest intelligence instantly.
+
+function sourceHash(text: string): string {
+  return createHash('sha256').update(text).digest('hex').slice(0, 24)
+}
+
+function storeReady(): boolean {
+  return (
+    Boolean(supabaseUrl()) &&
+    Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SECRET_KEY)
+  )
+}
+
+// Has NOVA already embedded this exact source content? Keeps the weekly sweep
+// from piling duplicates. Best-effort — any failure means "not a duplicate".
+async function researchHashExists(hash: string): Promise<boolean> {
+  if (!storeReady()) return false
+  try {
+    const { data, error } = await getSupabaseAdmin()
+      .from('knowledge_chunks')
+      .select('id')
+      .eq('system', 'research')
+      .eq('metadata->>content_hash', hash)
+      .limit(1)
+    if (error) return false
+    return (data?.length ?? 0) > 0
+  } catch {
+    return false
+  }
+}
+
+// Which subreddits the sweep covers — the curated registry by default, or an
+// env override (comma-separated) so the cadence/scope can be tuned per deploy.
+function sweepSubs(): string[] {
+  const override = process.env.NOVA_SWEEP_SUBS
+  if (override?.trim()) {
+    return override
+      .split(',')
+      .map((s) => sanitizeSubreddit(s))
+      .filter(Boolean)
+  }
+  return NOVA_SUBREDDITS.map((s) => s.sub)
+}
+
+export interface NovaSweepResult {
+  ran: boolean
+  window: string
+  subsAttempted: number
+  sourcesStored: number
+  skippedDuplicates: number
+  chunks: number
+  details: { sub: string; status: 'stored' | 'duplicate' | 'empty' | 'error'; chunks: number }[]
+}
+
+/**
+ * Run a full background sweep across NOVA's core subreddits. Resilient — one
+ * subreddit failing never aborts the run. Returns a per-source summary. Safe to
+ * call with no keys (it simply stores nothing).
+ */
+export async function runNovaSweep(
+  opts: { builderId?: string | null; window?: string } = {},
+): Promise<NovaSweepResult> {
+  const window = opts.window || process.env.NOVA_SWEEP_WINDOW || 'week'
+  const subs = sweepSubs()
+  const result: NovaSweepResult = {
+    ran: true,
+    window,
+    subsAttempted: 0,
+    sourcesStored: 0,
+    skippedDuplicates: 0,
+    chunks: 0,
+    details: [],
+  }
+
+  for (const sub of subs) {
+    result.subsAttempted += 1
+    try {
+      const gathered = await fetchRedditSubreddit(sub, undefined, window)
+      if (!gathered || gathered.text.trim().length < 80) {
+        result.details.push({ sub, status: 'empty', chunks: 0 })
+        continue
+      }
+      const hash = sourceHash(gathered.text)
+      if (await researchHashExists(hash)) {
+        result.skippedDuplicates += 1
+        result.details.push({ sub, status: 'duplicate', chunks: 0 })
+        continue
+      }
+      const profile = await extractMarketIntel(gathered.text, gathered.meta)
+      const { stored, chunks } = await storeMarketIntel(profile, gathered.meta, opts.builderId ?? null, {
+        contentHash: hash,
+      })
+      if (stored) result.sourcesStored += 1
+      result.chunks += chunks
+      result.details.push({ sub, status: stored ? 'stored' : 'empty', chunks })
+    } catch (err) {
+      console.error(`NOVA sweep failed for r/${sub}:`, err)
+      result.details.push({ sub, status: 'error', chunks: 0 })
+    }
+  }
+
+  return result
 }
