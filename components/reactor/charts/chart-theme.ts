@@ -3,12 +3,12 @@
 import type { DataAccent } from '@/lib/reactor-data'
 
 export const ACCENT_RGB: Record<DataAccent, string> = {
-  blue: '79 141 255',
-  cyan: '34 211 238',
-  violet: '167 139 250',
-  emerald: '52 211 153',
-  pink: '244 114 182',
-  amber: '251 191 36',
+  blue: '96 160 255',
+  cyan: '45 224 250',
+  violet: '184 150 255',
+  emerald: '62 230 168',
+  pink: '255 120 196',
+  amber: '255 200 56',
 }
 
 export function accentColor(accent: DataAccent, alpha = 1): string {

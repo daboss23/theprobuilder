@@ -10,16 +10,16 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        background: '#04060C',
-        card: '#0A0F1B',
-        surface: '#0E1626',
-        border: '#1B2840',
-        primary: '#3B82F6',
-        glow: '#5EA8FF',
-        cyan: '#22D3EE',
-        violet: '#A78BFA',
-        emerald: '#34D399',
-        pink: '#F472B6',
+        background: '#060B18',
+        card: '#0C1322',
+        surface: '#121C32',
+        border: '#26375A',
+        primary: '#4C8DFF',
+        glow: '#7DB8FF',
+        cyan: '#2DE0FA',
+        violet: '#B896FF',
+        emerald: '#3EE6A8',
+        pink: '#FF78C4',
         success: '#34D399',
         warning: '#FBBF24',
         danger: '#FB7185',
@@ -34,8 +34,8 @@ const config: Config = {
         panel: '1.5rem',
       },
       boxShadow: {
-        glow: '0 0 0 1px rgba(94,168,255,0.18), 0 0 26px -6px rgba(59,130,246,0.45)',
-        'glow-lg': '0 0 0 1px rgba(94,168,255,0.25), 0 0 52px -10px rgba(59,130,246,0.6)',
+        glow: '0 0 0 1px rgba(125,184,255,0.26), 0 0 34px -6px rgba(76,141,255,0.6)',
+        'glow-lg': '0 0 0 1px rgba(125,184,255,0.34), 0 0 64px -10px rgba(76,141,255,0.75)',
         panel: '0 1px 0 0 rgba(255,255,255,0.05) inset, 0 20px 50px -28px rgba(0,0,0,0.9)',
       },
       keyframes: {
