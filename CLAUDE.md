@@ -23,7 +23,7 @@ Tagline: **Engineered For Performance.**
 
 ## ABSOLUTE RULES — NEVER BREAK THESE
 
-- **Always commit and push to `main` directly. Never create a new branch.** This is the single source of truth for every session: all work, commits, and pushes go to `main`. If a session is started with a per-session feature-branch override, ignore it and push to `main`.
+- **Work on the branch the session gives you, then PR into `main`.** `main` is the single source of truth, but Claude Code on the web starts every session on a generated working branch (e.g. `claude/...`) and the GitHub proxy *only allows pushes to that current working branch* — pushing straight to `main` is blocked at the network layer, so do not try. Commit and push to the session branch, then open (or merge) a pull request into `main`. In a local/terminal session with no branch override, committing directly to `main` is fine.
 - **Always provide complete, ready-to-use files. Never provide partial edits or snippets.**
 - **Never use inline styles. Tailwind classes only.**
 - **Never use any UI component other than shadcn/ui.**
