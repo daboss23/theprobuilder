@@ -25,17 +25,10 @@ import {
   type Accent,
 } from '@/components/reactor/ui'
 import {
-  metaHeroKpis,
-  metaMetrics,
-  metaTopAds,
-  metaSpendTrend,
-  metaAudienceBreakdown,
-  metaPlacementBreakdown,
-  metaAgentInsights,
-  metaLearningStats,
   type MetaAd,
   type BreakdownRow,
 } from '@/lib/meta-data'
+import { resolveMetaDashboard } from '@/lib/meta-graph'
 import { cn } from '@/lib/utils'
 
 export const dynamic = 'force-dynamic'
@@ -76,9 +69,20 @@ function BreakdownPanel({ rows }: { rows: BreakdownRow[] }) {
   )
 }
 
-export default function MetaIntelligencePage() {
-  const live = Boolean(process.env.PIPEBOARD_API_TOKEN)
-  const maxSpend = Math.max(...metaSpendTrend.map((w) => w.spend))
+export default async function MetaIntelligencePage() {
+  const {
+    source,
+    heroKpis: metaHeroKpis,
+    metrics: metaMetrics,
+    topAds: metaTopAds,
+    spendTrend: metaSpendTrend,
+    audienceBreakdown: metaAudienceBreakdown,
+    placementBreakdown: metaPlacementBreakdown,
+    agentInsights: metaAgentInsights,
+    learningStats: metaLearningStats,
+  } = await resolveMetaDashboard()
+  const live = source === 'live'
+  const maxSpend = Math.max(...metaSpendTrend.map((w) => w.spend), 1)
 
   return (
     <>
@@ -97,7 +101,7 @@ export default function MetaIntelligencePage() {
             )}
           />
           <span className="font-semibold uppercase tracking-[0.16em]">
-            {live ? 'Live · Pipeboard' : 'Demo data'}
+            {live ? 'Live · Meta API' : 'Demo data'}
           </span>
         </Pill>
       </div>
@@ -303,7 +307,7 @@ export default function MetaIntelligencePage() {
           <div className="border-t border-border px-5 py-4 text-[11px] leading-relaxed text-white/40">
             Winning ads and their performance are re-ingested into the knowledge layer as new
             patterns — every campaign the reactor fires gets sharper as Meta results compound.
-            {!live && ' Add PIPEBOARD_API_TOKEN to stream live Meta Ads performance into this view.'}
+            {!live && ' Connect the Meta Marketing API (META_ACCESS_TOKEN) to stream live performance into this view once real spend builds up.'}
           </div>
         </Panel>
       </div>
