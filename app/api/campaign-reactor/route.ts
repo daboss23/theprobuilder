@@ -63,6 +63,11 @@ const MAX_TURNS = 12
 const MCP_BETA = 'mcp-client-2025-11-20'
 const META_ADS_MCP_NAME = 'meta_ads'
 
+// Which Meta Ads MCP backs the live performance feed for a run.
+//   'pipeboard' — Pipeboard's hosted MCP (token via `?token=` query param)
+//   'meta'      — Meta's first-party Ads MCP at mcp.facebook.com/ads (OAuth bearer)
+type MetaProvider = 'pipeboard' | 'meta'
+
 interface ReactorRequest {
   angle: string
   inputs?: string[]
@@ -70,6 +75,7 @@ interface ReactorRequest {
   builderId?: string | null
   videoModel?: string | null
   imageModel?: string | null
+  metaProvider?: MetaProvider | null
   reactorInputs?: ReactorInputs
 }
 
@@ -86,9 +92,25 @@ interface Concept {
 
 /* ------------------------------ Meta Ads MCP ------------------------------ */
 
+// Default provider when a run doesn't specify one. Env-overridable so the whole
+// platform can be flipped to Meta's first-party MCP without a code change.
+function defaultMetaProvider(): MetaProvider {
+  return process.env.META_ADS_PROVIDER === 'meta' ? 'meta' : 'pipeboard'
+}
+
+// Meta's first-party Ads MCP (mcp.facebook.com/ads). Auth is an OAuth bearer
+// token passed via the connector's `authorization_token` field — not a query
+// param. Returns null (Meta Ads simply unavailable) when unconfigured.
+function metaFirstPartyServer(): Anthropic.Beta.Messages.BetaRequestMCPServerURLDefinition | null {
+  const token = process.env.META_ADS_ACCESS_TOKEN
+  if (!token) return null
+  const url = process.env.META_ADS_FIRSTPARTY_URL || 'https://mcp.facebook.com/ads'
+  return { type: 'url', name: META_ADS_MCP_NAME, url, authorization_token: token }
+}
+
 // Pipeboard's hosted Meta Ads MCP. Token auth via the documented `?token=`
 // query param. Returns null (Meta Ads simply unavailable) when unconfigured.
-function metaAdsServer(): Anthropic.Beta.Messages.BetaRequestMCPServerURLDefinition | null {
+function pipeboardServer(): Anthropic.Beta.Messages.BetaRequestMCPServerURLDefinition | null {
   const token = process.env.PIPEBOARD_API_TOKEN
   const baseUrl = process.env.META_ADS_MCP_URL || 'https://meta-ads.mcp.pipeboard.co/'
   if (!token && !process.env.META_ADS_MCP_URL) return null
@@ -96,6 +118,25 @@ function metaAdsServer(): Anthropic.Beta.Messages.BetaRequestMCPServerURLDefinit
     ? `${baseUrl}${baseUrl.includes('?') ? '&' : '?'}token=${encodeURIComponent(token)}`
     : baseUrl
   return { type: 'url', name: META_ADS_MCP_NAME, url }
+}
+
+// Resolves the Meta Ads MCP for a run. Honours the per-run provider override
+// (so both backends can be tested side by side), falling back to the env
+// default. If the requested provider isn't configured, falls back to the other
+// configured one rather than running blind — and returns null when neither is.
+function metaAdsServer(
+  requested?: MetaProvider | null,
+): { server: Anthropic.Beta.Messages.BetaRequestMCPServerURLDefinition; provider: MetaProvider } | null {
+  const provider = requested ?? defaultMetaProvider()
+  const meta = metaFirstPartyServer()
+  const pipeboard = pipeboardServer()
+
+  if (provider === 'meta' && meta) return { server: meta, provider: 'meta' }
+  if (provider === 'pipeboard' && pipeboard) return { server: pipeboard, provider: 'pipeboard' }
+  // Requested provider unconfigured — use whichever is available.
+  if (meta) return { server: meta, provider: 'meta' }
+  if (pipeboard) return { server: pipeboard, provider: 'pipeboard' }
+  return null
 }
 
 /* ------------------------------ SSE plumbing ------------------------------ */
@@ -634,7 +675,8 @@ export async function POST(request: NextRequest) {
         }
 
         const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
-        const mcpServer = metaAdsServer()
+        const metaAds = metaAdsServer(body.metaProvider)
+        const mcpServer = metaAds?.server ?? null
         const useImage = imageConfigured()
         const useVideo = videoConfigured()
         const availableVideoModels = listVideoModels().filter((m) => m.configured).map((m) => m.id)
@@ -665,7 +707,10 @@ export async function POST(request: NextRequest) {
         const oracleMemory = memoryBlock(winningConfigs)
 
         sse(controller, { type: 'step', text: 'OPUS online. Directing the intelligence network…' })
-        if (mcpServer) sse(controller, { type: 'step', text: 'Live Meta Ads performance feed connected.' })
+        if (metaAds) {
+          const via = metaAds.provider === 'meta' ? 'Meta first-party MCP' : 'Pipeboard MCP'
+          sse(controller, { type: 'step', text: `Live Meta Ads performance feed connected · ${via}.` })
+        }
         if (useImage) sse(controller, { type: 'step', text: `Image engine ready · models: ${availableImageModels.join(', ')}` })
         if (useVideo) sse(controller, { type: 'step', text: `Video engine ready · models: ${availableVideoModels.join(', ')}` })
 
