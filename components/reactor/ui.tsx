@@ -178,22 +178,48 @@ function pathFromSeries(series: number[]): string {
     .join('')
 }
 
+// Final (x, y) of a real series in the 112x32 box — anchors the glowing
+// endpoint dot so the line terminates in a bright, premium node.
+function endPointFromSeries(series: number[]): { x: number; y: number } | null {
+  if (series.length < 2) return null
+  const min = Math.min(...series)
+  const max = Math.max(...series)
+  const range = max - min || 1
+  const y = 28 - ((series[series.length - 1] - min) / range) * 24
+  return { x: 111, y: Number(y.toFixed(1)) }
+}
+
 function Sparkline({ seed, series }: { seed: number; series?: number[] }) {
-  const d =
-    series && series.length >= 2 ? pathFromSeries(series) : sparkPaths[seed % sparkPaths.length]
+  const hasSeries = !!series && series.length >= 2
+  const d = hasSeries ? pathFromSeries(series!) : sparkPaths[seed % sparkPaths.length]
+  const end = hasSeries ? endPointFromSeries(series!) : null
+  const fillId = `spark-fill-${seed}`
   return (
     <svg aria-hidden="true" className="kpi-sparkline" viewBox="0 0 112 32">
-      <path d={`${d}V32H1Z`} fill="currentColor" className="opacity-15" stroke="none" />
+      <defs>
+        <linearGradient id={fillId} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="currentColor" stopOpacity="0.42" />
+          <stop offset="60%" stopColor="currentColor" stopOpacity="0.1" />
+          <stop offset="100%" stopColor="currentColor" stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      <path d={`${d}V32H1Z`} fill={`url(#${fillId})`} stroke="none" />
       <path
         d={d}
         fill="none"
         stroke="currentColor"
         strokeLinecap="round"
         strokeLinejoin="round"
-        strokeWidth="1.6"
+        strokeWidth="1.8"
         pathLength={1}
         className="draw-line"
       />
+      {end && (
+        <>
+          <circle className="spark-dot-halo" cx={end.x} cy={end.y} r="3" />
+          <circle className="spark-dot" cx={end.x} cy={end.y} r="1.7" />
+        </>
+      )}
     </svg>
   )
 }
@@ -218,14 +244,14 @@ export function KpiCard({
   const TrendIcon = trend === 'down' ? TrendingDown : trend === 'flat' ? Minus : TrendingUp
   return (
     <div className={cn('kpi-card group p-4', accentClass[accent])}>
-      <div className="kpi-bloom" aria-hidden="true" />
-      <div className="kpi-scanline" aria-hidden="true" />
+      <span className="kpi-bloom" aria-hidden="true" />
+      <span className="kpi-grid" aria-hidden="true" />
       <div className="relative flex items-start justify-between gap-2">
         <div className="flex min-w-0 items-center gap-3">
           <span className="kpi-icon">
-            <Icon size={20} />
+            <Icon size={21} />
           </span>
-          <p className="truncate text-[10px] font-semibold uppercase tracking-[0.14em] text-white/60">
+          <p className="truncate text-[10px] font-semibold uppercase tracking-[0.2em] text-white/75">
             {label}
           </p>
         </div>
@@ -236,7 +262,7 @@ export function KpiCard({
       </div>
       <CountUp
         value={value}
-        className="count-up relative mt-3 block font-display text-[2.1rem] font-bold leading-none tabular text-white drop-shadow-[0_1px_10px_rgba(0,0,0,0.5)]"
+        className="count-up relative mt-3 block font-display text-[2.45rem] font-bold leading-none tracking-tight tabular text-white drop-shadow-[0_2px_14px_rgba(0,0,0,0.65)]"
       />
       <Sparkline seed={label.length + value} series={spark} />
     </div>

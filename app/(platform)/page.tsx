@@ -464,9 +464,10 @@ export default async function ReactorDashboard() {
                 kpiStagger[i % kpiStagger.length],
               )}
             >
-              <div className="kpi-bloom" aria-hidden="true" />
+              <span className="kpi-bloom" aria-hidden="true" />
+              <span className="kpi-grid" aria-hidden="true" />
               <div className="relative min-w-0">
-                <p className="truncate text-[10px] font-semibold uppercase tracking-[0.14em] text-white/55">
+                <p className="truncate text-[10px] font-semibold uppercase tracking-[0.18em] text-white/65">
                   {p.label}
                 </p>
                 <p className="mt-1.5 truncate font-display text-xl font-bold text-white">

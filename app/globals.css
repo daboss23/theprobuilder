@@ -335,7 +335,16 @@ body {
   z-index: 0;
   pointer-events: none;
   border-radius: inherit;
-  background: linear-gradient(135deg, rgba(110, 195, 255, 0.06), transparent 20%, transparent 74%, rgba(90, 150, 210, 0.03));
+  background: linear-gradient(
+    128deg,
+    rgba(180, 220, 255, 0.1) 0%,
+    rgba(160, 205, 255, 0.03) 14%,
+    transparent 32%,
+    transparent 74%,
+    rgba(110, 165, 220, 0.04) 100%
+  );
+  mix-blend-mode: screen;
+  opacity: 0.85;
 }
 .glass > *, .reactor-panel > * { position: relative; z-index: 1; }
 .glass-hover { transition: border-color 0.22s ease, box-shadow 0.22s ease, transform 0.22s ease; }
@@ -417,92 +426,132 @@ body {
    KPI instruments — neon-edged telemetry cards
 ---------------------------------------------------------------------------- */
 .dashboard-console { display: flex; flex-direction: column; gap: 0.85rem; }
+/* ----------------------------------------------------------------------------
+   KPI glass tile — a piece of illuminated glass floating over the page.
+   overflow is VISIBLE so the ::after accent glow can pool behind + below the
+   card. All inner decoration layers (.kpi-bloom/.kpi-grid + ::before sheen)
+   self-clip via inset:0 + border-radius:inherit, so nothing spills.
+---------------------------------------------------------------------------- */
 .kpi-card {
   position: relative;
-  overflow: hidden;
   isolation: isolate;
-  min-height: 9rem;
-  border: 1px solid rgb(var(--acc) / 0.34);
+  min-height: 9.25rem;
   border-radius: 1.4rem;
-  /* Vibrant frosted-glass tile: a colored translucency wash from the top-left
-     corner, a cool glass body, and a soft white gloss across the upper edge —
-     the saturated acrylic look from the reference dashboards. */
+  border: 1px solid rgb(var(--acc) / 0.4);
+  /* Multi-layer glass base: accent corner wash · cool top-light · accent
+     up-glow from the floor · deep navy body. Never a single flat fill. */
   background:
-    radial-gradient(150% 130% at 0% -10%, rgb(var(--acc) / 0.26), transparent 52%),
-    radial-gradient(120% 80% at 100% 0%, rgba(255, 255, 255, 0.07), transparent 56%),
-    linear-gradient(158deg, rgba(18, 28, 50, 0.74), rgba(8, 13, 26, 0.9) 58%, rgba(4, 8, 16, 0.95));
-  backdrop-filter: blur(26px) saturate(150%);
-  -webkit-backdrop-filter: blur(26px) saturate(150%);
+    radial-gradient(120% 92% at 12% -12%, rgb(var(--acc) / 0.3), transparent 44%),
+    radial-gradient(150% 130% at 88% -8%, rgba(255, 255, 255, 0.09), transparent 46%),
+    radial-gradient(170% 150% at 50% 124%, rgb(var(--acc) / 0.16), transparent 60%),
+    linear-gradient(158deg, rgba(23, 35, 60, 0.78), rgba(8, 14, 28, 0.9) 55%, rgba(4, 8, 16, 0.96));
+  backdrop-filter: blur(26px) saturate(155%);
+  -webkit-backdrop-filter: blur(26px) saturate(155%);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.16),
-    inset 0 0 0 1px rgba(255, 255, 255, 0.025),
-    inset 0 -36px 64px -34px rgb(var(--acc) / 0.55),
-    0 1px 1px rgba(0, 0, 0, 0.5),
-    0 0 44px -16px rgb(var(--acc) / 0.5),
-    0 32px 60px -28px rgba(0, 0, 0, 0.95);
-  transition: transform 0.28s cubic-bezier(0.2, 0.7, 0.2, 1), box-shadow 0.28s ease, filter 0.28s ease;
+    inset 0 1px 0 rgba(255, 255, 255, 0.24),          /* bright top edge */
+    inset 0 0 0 1px rgba(255, 255, 255, 0.04),         /* thin inner rim */
+    inset 0 3px 16px -8px rgba(255, 255, 255, 0.1),    /* upper glass glow */
+    inset 0 -44px 70px -36px rgba(0, 0, 0, 0.62),      /* deep inner floor shadow */
+    inset 0 -1px 0 rgba(0, 0, 0, 0.45),
+    0 2px 4px rgba(0, 0, 0, 0.5),
+    0 0 42px -14px rgb(var(--acc) / 0.5),              /* accent halo */
+    0 26px 48px -22px rgb(var(--acc) / 0.42),          /* colored downward bloom */
+    0 36px 62px -26px rgba(0, 0, 0, 0.96);             /* floating drop shadow */
+  transition: transform 0.32s cubic-bezier(0.2, 0.7, 0.2, 1), box-shadow 0.32s ease, filter 0.32s ease;
 }
-/* Ambient colored halo bleeding out behind the tile — separates it from the
-   page and gives the "floating glass" lift the references have. */
+/* Diagonal glossy reflection sweeping across the glass surface */
 .kpi-card::before {
   content: '';
   position: absolute;
-  inset: -1px;
-  z-index: -1;
+  inset: 0;
+  z-index: 0;
   pointer-events: none;
   border-radius: inherit;
-  background: radial-gradient(120% 90% at 50% 120%, rgb(var(--acc) / 0.4), transparent 62%);
-  filter: blur(18px);
-  opacity: 0.55;
+  background: linear-gradient(
+    122deg,
+    rgba(255, 255, 255, 0.2) 0%,
+    rgba(255, 255, 255, 0.05) 15%,
+    transparent 33%,
+    transparent 70%,
+    rgba(255, 255, 255, 0.05) 100%
+  );
+  opacity: 0.7;
+  mix-blend-mode: screen;
 }
+/* Soft accent reflection pooled on the page just below the tile — reads as
+   the card floating above a dark surface (sits outside the card box, so the
+   backdrop-filter stacking context doesn't trap it). */
 .kpi-card::after {
   content: '';
   position: absolute;
-  inset: auto 8% 0;
-  height: 1px;
-  background: linear-gradient(90deg, transparent, rgb(var(--acc) / 0.7), transparent);
-  box-shadow: 0 0 12px rgb(var(--acc) / 0.6);
+  left: 7%;
+  right: 7%;
+  top: 99%;
+  height: 46%;
+  pointer-events: none;
+  background: radial-gradient(60% 100% at 50% 0%, rgb(var(--acc) / 0.5), transparent 72%);
+  filter: blur(22px);
+  opacity: 0.45;
+  transition: opacity 0.32s ease;
 }
 .kpi-card:hover {
-  transform: translateY(-4px);
-  filter: saturate(1.16) brightness(1.04);
+  transform: translateY(-5px);
+  filter: saturate(1.14) brightness(1.04);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.2),
-    inset 0 0 0 1px rgba(255, 255, 255, 0.04),
-    inset 0 -40px 70px -32px rgb(var(--acc) / 0.7),
-    0 0 56px -12px rgb(var(--acc) / 0.6),
-    0 38px 66px -28px rgba(0, 0, 0, 0.98);
+    inset 0 1px 0 rgba(255, 255, 255, 0.3),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.06),
+    inset 0 3px 18px -8px rgba(255, 255, 255, 0.14),
+    inset 0 -48px 76px -34px rgba(0, 0, 0, 0.64),
+    0 2px 4px rgba(0, 0, 0, 0.5),
+    0 0 58px -10px rgb(var(--acc) / 0.64),
+    0 46px 74px -26px rgba(0, 0, 0, 0.98);
 }
-.kpi-card--compact { min-height: 6.75rem; }
+.kpi-card:hover::after { opacity: 0.86; }
+.kpi-card--compact { min-height: 6.9rem; }
+/* Accent corner bloom — contained inside the glass */
 .kpi-bloom {
   position: absolute;
-  right: -2.2rem;
-  top: -2.6rem;
-  height: 6.5rem;
-  width: 6.5rem;
-  border-radius: 9999px;
-  background: rgb(var(--acc) / 0.4);
-  filter: blur(34px);
-  opacity: 0.55;
+  inset: 0;
+  z-index: 0;
   pointer-events: none;
+  border-radius: inherit;
+  background: radial-gradient(56% 46% at 86% -8%, rgb(var(--acc) / 0.44), transparent 56%);
 }
+/* Faint engineered grid so the glass body never reads empty */
+.kpi-grid {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  background-image:
+    linear-gradient(rgba(170, 210, 255, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(170, 210, 255, 0.05) 1px, transparent 1px);
+  background-size: 22px 22px;
+  -webkit-mask-image: radial-gradient(120% 92% at 82% 6%, #000, transparent 76%);
+  mask-image: radial-gradient(120% 92% at 82% 6%, #000, transparent 76%);
+  opacity: 0.55;
+}
+/* Icon tile — embedded into the glass with a bevel + colored bloom behind */
 .kpi-icon {
+  position: relative;
   display: grid;
   place-items: center;
-  height: 2.85rem;
-  width: 2.85rem;
+  height: 2.95rem;
+  width: 2.95rem;
   flex-shrink: 0;
-  border-radius: 0.9rem;
-  border: 1px solid rgb(var(--acc) / 0.45);
+  border-radius: 0.95rem;
+  border: 1px solid rgb(var(--acc) / 0.5);
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.1), transparent 50%),
-    radial-gradient(circle at 50% 32%, rgb(var(--acc) / 0.32), rgba(6, 14, 26, 0.85) 78%);
+    linear-gradient(180deg, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0.02) 46%),
+    radial-gradient(circle at 50% 30%, rgb(var(--acc) / 0.4), rgba(5, 11, 22, 0.92) 78%);
   color: rgb(var(--acc-hi));
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.2),
-    inset 0 0 14px -6px rgb(var(--acc) / 0.8),
-    0 2px 6px rgba(0, 0, 0, 0.4),
-    0 0 24px -5px rgb(var(--acc) / 0.9);
+    inset 0 1px 0 rgba(255, 255, 255, 0.34),
+    inset 0 -7px 13px -5px rgba(0, 0, 0, 0.62),
+    inset 0 0 15px -4px rgb(var(--acc) / 0.6),
+    0 4px 10px -3px rgba(0, 0, 0, 0.6),
+    0 0 24px -4px rgb(var(--acc) / 0.85);
 }
 .accent-chip {
   display: inline-flex;
@@ -521,28 +570,17 @@ body {
   position: absolute;
   right: 0.9rem;
   bottom: 0.65rem;
-  width: 6.4rem;
-  height: 2rem;
+  width: 6.7rem;
+  height: 2.1rem;
   color: rgb(var(--acc));
-  opacity: 0.92;
-  filter: drop-shadow(0 0 5px rgb(var(--acc) / 0.8));
+  opacity: 0.95;
+  filter: drop-shadow(0 0 6px rgb(var(--acc) / 0.85));
 }
-/* Frosted gloss sweep across the top of the tile — the glassy reflection on
-   the upper edge, fading toward the body. Soft, premium, not a hard line. */
-.kpi-scanline {
-  position: absolute;
-  inset: 0 0 auto;
-  height: 62%;
-  pointer-events: none;
-  border-radius: 1.4rem 1.4rem 0 0;
-  background: linear-gradient(
-    160deg,
-    rgba(255, 255, 255, 0.14),
-    rgba(255, 255, 255, 0.04) 30%,
-    transparent 58%
-  );
-  -webkit-mask-image: linear-gradient(#000, transparent);
-  mask-image: linear-gradient(#000, transparent);
+/* Glowing sparkline endpoint */
+.spark-dot-halo { fill: rgb(var(--acc) / 0.35); }
+.spark-dot {
+  fill: #eafaff;
+  filter: drop-shadow(0 0 5px rgb(var(--acc) / 0.95));
 }
 
 /* Angle rows / list telemetry */
