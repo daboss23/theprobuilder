@@ -64,9 +64,10 @@ const MCP_BETA = 'mcp-client-2025-11-20'
 const META_ADS_MCP_NAME = 'meta_ads'
 
 // Which Meta Ads MCP backs the live performance feed for a run.
+//   'off'       — no Meta Ads tools attached (fire the reactor standalone)
 //   'pipeboard' — Pipeboard's hosted MCP (token via `?token=` query param)
 //   'meta'      — Meta's first-party Ads MCP at mcp.facebook.com/ads (OAuth bearer)
-type MetaProvider = 'pipeboard' | 'meta'
+type MetaProvider = 'off' | 'pipeboard' | 'meta'
 
 interface ReactorRequest {
   angle: string
@@ -128,6 +129,7 @@ function metaAdsServer(
   requested?: MetaProvider | null,
 ): { server: Anthropic.Beta.Messages.BetaRequestMCPServerURLDefinition; provider: MetaProvider } | null {
   const provider = requested ?? defaultMetaProvider()
+  if (provider === 'off') return null
   const meta = metaFirstPartyServer()
   const pipeboard = pipeboardServer()
 

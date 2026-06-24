@@ -101,6 +101,9 @@ export interface ReactorForm {
   setVideoModel: (v: string) => void
   videoRecommendation: ModelRec | null
   showVideoPicker: boolean
+  // Meta Ads performance feed for this run: 'off' (standalone), 'pipeboard', or 'meta'.
+  metaProvider: string
+  setMetaProvider: (v: string) => void
   onFaceChange: (images: string[], videos: string[]) => void
   refCount: number
   // Slide 4 — on brand
@@ -710,6 +713,31 @@ export function ReactorModal({ open, onClose, onFire, form }: ReactorModalProps)
                   <FaceLibrary onChange={form.onFaceChange} />
                 </div>
               )}
+
+              <div>
+                <p className="mb-1.5 flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-[0.08em] text-white/40">
+                  <Gauge size={12} /> Meta Performance Feed
+                </p>
+                <select
+                  value={form.metaProvider}
+                  onChange={(e) => form.setMetaProvider(e.target.value)}
+                  className={selectClass}
+                >
+                  <option value="off" className="bg-card">
+                    Off — fire the reactor standalone (no Meta data)
+                  </option>
+                  <option value="pipeboard" className="bg-card">
+                    Pipeboard — hosted Meta Ads MCP
+                  </option>
+                  <option value="meta" className="bg-card">
+                    Meta — first-party Ads MCP (mcp.facebook.com)
+                  </option>
+                </select>
+                <p className="mt-1.5 text-[11px] text-white/40">
+                  Controls whether OPUS reads live Meta ad performance during this run. Unconfigured
+                  sources fall back automatically; choose Off to run without any Meta data.
+                </p>
+              </div>
             </div>
           )}
 

@@ -108,6 +108,8 @@ export function Workbench() {
   const [videoModel, setVideoModel] = useState<string>('auto')
   const [imageModels, setImageModels] = useState<ImageModelAvailability[]>([])
   const [imageModel, setImageModel] = useState<string>('auto')
+  // Meta Ads performance feed for the run: 'off' (standalone), 'pipeboard', 'meta'.
+  const [metaProvider, setMetaProvider] = useState<string>('pipeboard')
   // Face library: reference image URLs that lock a consistent face across UGC
   // clips (Seedance 2.0 reference-to-video). One URL per line or comma-separated.
   // Selected reference assets from the Face Library (saved roster) → power
@@ -341,6 +343,7 @@ export function Workbench() {
       outputs: outputs.length ? outputs : reactorOutputTypes,
       videoModel: resolvedVideoModel,
       imageModel: resolvedImageModel,
+      metaProvider,
       reactorInputs: reactorInputsPayload,
     })
   }
@@ -542,6 +545,8 @@ export function Workbench() {
     setVideoModel,
     videoRecommendation: recommendation ?? null,
     showVideoPicker,
+    metaProvider,
+    setMetaProvider,
     onFaceChange: handleFaceSelection,
     refCount: faceUrls.length + refVideos.length,
     onBrand,
