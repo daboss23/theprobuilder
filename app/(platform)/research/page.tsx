@@ -1,6 +1,11 @@
-import { Radar, Building2, Globe, Sparkles } from 'lucide-react'
+import { Radar, Building2, Globe, Sparkles, MessageSquare } from 'lucide-react'
 import { PageHeader, Panel, PanelHeader, ProgressBar, Pill } from '@/components/reactor/ui'
 import { internalSources, externalSources, researchOutputs } from '@/lib/reactor-data'
+import { vaultStats } from '@/lib/knowledge'
+import { NOVA_SUBREDDITS, NOVA_FORUMS } from '@/lib/market-intelligence'
+import { NovaResearch } from './NovaResearch'
+
+export const dynamic = 'force-dynamic'
 
 function SourceList({ data }: { data: { name: string; count: number; signal: number }[] }) {
   return (
@@ -24,14 +29,81 @@ function SourceList({ data }: { data: { name: string; count: number; signal: num
   )
 }
 
-export default function ResearchPage() {
+export default async function ResearchPage() {
+  // Live count of what NOVA actually holds — her systems are research +
+  // transformation. Degrades to the curated demo total when the store is empty.
+  const stats = await vaultStats().catch(() => null)
+  const novaIndexed =
+    stats?.live && stats.groups.length
+      ? stats.groups
+          .filter((g) => g.system === 'research' || g.system === 'transformation')
+          .reduce((s, g) => s + g.count, 0)
+      : 0
+
   return (
     <>
       <PageHeader
         system="02"
         title="Research Intelligence"
-        subtitle="Understand the market. Mine internal and external signal into the language, beliefs, and desires that drive winning campaigns."
+        subtitle="NOVA's command center. Send her to where builders actually talk, mine the real conversations, and turn the language, beliefs, and desires into winning campaigns."
+        tagline={
+          novaIndexed > 0
+            ? `${novaIndexed.toLocaleString()} market signals in NOVA's live memory`
+            : 'Deploy NOVA to start building live market memory'
+        }
       />
+
+      <NovaResearch subreddits={NOVA_SUBREDDITS} forums={NOVA_FORUMS} />
+
+      <Panel>
+        <PanelHeader
+          icon={<MessageSquare size={16} />}
+          accent="violet"
+          title="Where NOVA mines — recommended sources"
+          subtitle="The highest-signal places a trades & construction audience talks. Pick one above to deploy her."
+        />
+        <div className="grid grid-cols-1 gap-4 p-5 md:grid-cols-2">
+          <div>
+            <p className="mb-2.5 text-[11px] font-semibold uppercase tracking-[0.1em] text-white/45">
+              Reddit communities
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {NOVA_SUBREDDITS.map((s) => (
+                <span
+                  key={s.sub}
+                  title={s.note}
+                  className="rounded-md border border-border bg-surface/50 px-2.5 py-1 text-[12px] text-white/65"
+                >
+                  r/{s.sub}
+                </span>
+              ))}
+            </div>
+          </div>
+          <div>
+            <p className="mb-2.5 text-[11px] font-semibold uppercase tracking-[0.1em] text-white/45">
+              Pro forums
+            </p>
+            <div className="space-y-2">
+              {NOVA_FORUMS.map((f) => (
+                <a
+                  key={f.url}
+                  href={f.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center justify-between gap-3 rounded-lg border border-border bg-surface/40 px-3 py-2 text-sm text-white/70 transition-colors hover:border-glow/40 hover:text-glow"
+                >
+                  <span className="font-medium">{f.name}</span>
+                  <span className="truncate text-[11px] text-white/35">{f.note}</span>
+                </a>
+              ))}
+              <p className="text-[11px] leading-relaxed text-white/35">
+                Plus YouTube transcripts and any review or article URL. Facebook Groups & LinkedIn are
+                login-walled — paste those conversations into the <span className="text-white/55">Paste</span> tab.
+              </p>
+            </div>
+          </div>
+        </div>
+      </Panel>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <Panel>

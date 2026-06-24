@@ -346,6 +346,20 @@ function extractLinks(html: string, base: URL): string[] {
   return Array.from(new Set(out))
 }
 
+/**
+ * Fetch a single public page and return cleaned, readable text. Shared with
+ * NOVA's market research so every outbound page fetch flows through the same
+ * SSRF guard (`assertSafeUrl`, re-checked on each redirect hop) and HTML
+ * extraction. Best-effort — returns '' on any failure rather than throwing.
+ */
+export async function fetchReadablePage(url: string, maxChars = 9000): Promise<string> {
+  const res = await httpGet(url, ['text/html', 'text/plain']).catch(() => null)
+  if (!res) return ''
+  const content = extractContent(res.body)
+  if (!content) return ''
+  return content.length > maxChars ? content.slice(0, maxChars) : content
+}
+
 /* --------------------------- Page discovery ------------------------------- */
 
 // Pages we never want, regardless of how they're linked.
