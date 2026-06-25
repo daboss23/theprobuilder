@@ -1153,6 +1153,41 @@ body {
 /* Discrete energy particles riding each active channel (SVG animateMotion) */
 .nrg-particle { filter: drop-shadow(0 0 3px rgba(255, 244, 232, 0.95)); }
 
+/* ============================================================================
+   CREATIVE CANVAS — pannable board where a run's parts are remixed into an ad
+   ========================================================================== */
+
+/* Viewport — grab cursor; the dotted engineering grid sits on the bg layer */
+.creative-canvas { cursor: grab; }
+.creative-canvas.is-panning { cursor: grabbing; }
+.canvas-grid {
+  background-color: rgba(3, 7, 14, 0.4);
+  background-image:
+    radial-gradient(rgba(120, 170, 235, 0.16) 1px, transparent 1px),
+    radial-gradient(rgba(120, 170, 235, 0.08) 1px, transparent 1px);
+  background-size: 28px 28px, 28px 28px;
+  -webkit-mask-image: radial-gradient(130% 130% at 50% 40%, #000, transparent 92%);
+  mask-image: radial-gradient(130% 130% at 50% 40%, #000, transparent 92%);
+}
+
+/* Building-block node — accent comes from the lane's .acc-* channel */
+.canvas-node {
+  border: 1px solid rgba(120, 165, 220, 0.16);
+  background: linear-gradient(180deg, rgba(14, 23, 40, 0.94), rgba(6, 10, 20, 0.96));
+  box-shadow:
+    inset 0 1px 0 rgba(170, 210, 255, 0.05),
+    0 12px 26px -20px rgba(0, 0, 0, 0.95);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.12s ease;
+}
+.canvas-node:hover { border-color: rgb(var(--acc) / 0.5); }
+.canvas-node.is-selected {
+  border-color: rgb(var(--acc) / 0.85);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.07),
+    0 0 0 1px rgb(var(--acc) / 0.45),
+    0 0 26px -8px rgb(var(--acc) / 0.8);
+}
+
 /* Convergence flare where channels meet the core */
 .conv-bloom { opacity: 0.18; transition: opacity 0.5s ease; }
 .conv-bloom--on { opacity: 0.85; animation: conv-bloom 2.4s ease-in-out infinite; }

@@ -12,6 +12,7 @@ import {
   LiveAgentWorkflow,
   type WorkflowControls,
 } from '@/components/campaign-reactor/workflow/LiveAgentWorkflow'
+import { CreativeCanvas } from '@/components/campaign-reactor/canvas/CreativeCanvas'
 import { reactorOutputTypes, winningAngles } from '@/lib/reactor-data'
 import { INTEL_SOURCES, intelSourceLabel } from '@/lib/intelligence-sources'
 import {
@@ -59,6 +60,9 @@ export function Workbench() {
     markOutcome,
   } = useReactorRun()
   const [modalOpen, setModalOpen] = useState(false)
+  // Output surface: the autonomous reactor (default hero) or the hands-on
+  // Creative Canvas where the run's parts are remixed into a live ad.
+  const [view, setView] = useState<'reactor' | 'canvas'>('reactor')
   // Manual controls (original left-panel inputs, now collected inside the modal)
   // Selected intelligence source IDs (the agents recommend a subset; the user
   // approves or overrides). Empty until the brief produces recommendations.
@@ -584,28 +588,49 @@ export function Workbench() {
             then fire the reactor.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => setModalOpen(true)}
-          disabled={phase === 'firing'}
-          className="fire-btn inline-flex items-center gap-2 rounded-full px-6 py-3.5 font-display text-base font-bold uppercase tracking-wide text-white"
-        >
-          {phase === 'firing' ? (
-            <>
-              <Loader2 size={16} className="animate-spin" /> Firing Reactor…
-            </>
-          ) : (
-            <>
-              <Atom size={16} /> New Creative Campaign
-            </>
-          )}
-        </button>
+        <div className="flex items-center gap-3">
+          {/* Output surface toggle — the reactor (watch it work) vs the canvas
+              (remix the parts by hand). */}
+          <div className="inline-flex rounded-full border border-white/10 bg-white/[0.03] p-1">
+            {(['reactor', 'canvas'] as const).map((v) => (
+              <button
+                key={v}
+                type="button"
+                onClick={() => setView(v)}
+                aria-pressed={view === v}
+                className={`rounded-full px-3.5 py-1.5 text-xs font-semibold capitalize transition-colors ${
+                  view === v ? 'bg-glow/15 text-glow' : 'text-white/45 hover:text-white/70'
+                }`}
+              >
+                {v}
+              </button>
+            ))}
+          </div>
+          <button
+            type="button"
+            onClick={() => setModalOpen(true)}
+            disabled={phase === 'firing'}
+            className="fire-btn inline-flex items-center gap-2 rounded-full px-6 py-3.5 font-display text-base font-bold uppercase tracking-wide text-white"
+          >
+            {phase === 'firing' ? (
+              <>
+                <Loader2 size={16} className="animate-spin" /> Firing Reactor…
+              </>
+            ) : (
+              <>
+                <Atom size={16} /> New Creative Campaign
+              </>
+            )}
+          </button>
+        </div>
       </div>
 
-      {/* Output — before firing, the empty state; once fired, the live agent
-          workflow becomes the primary experience (raw telemetry moves into a
-          collapsible drawer inside it). */}
-      {phase === 'idle' ? (
+      {/* Output — the Creative Canvas (hands-on remix) or the autonomous reactor.
+          In reactor mode: before firing, the empty state; once fired, the live
+          agent workflow (raw telemetry collapses into a drawer inside it). */}
+      {view === 'canvas' ? (
+        <CreativeCanvas offerName={offerName} onConfigure={() => setModalOpen(true)} />
+      ) : phase === 'idle' ? (
         <Panel className="min-h-[480px]">
           <PanelHeader
             icon={<Atom size={16} className="animate-pulse-glow" />}
