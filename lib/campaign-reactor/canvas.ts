@@ -44,16 +44,6 @@ export const CATEGORY_DEFS: Record<BlockCategory, CategoryDef> = {
   theme: { id: 'theme', label: 'Colour Themes', accent: 'pink', hint: 'The look' },
 }
 
-/** SVG stroke colour per category — feeds the flowing energy connectors. */
-export const CATEGORY_STROKE: Record<BlockCategory, string> = {
-  hook: '#34D399',
-  headline: '#22D3EE',
-  body: '#5EA8FF',
-  cta: '#FBBF24',
-  visual: '#A78BFA',
-  theme: '#F472B6',
-}
-
 /* -------------------------------------------------------------------------- */
 /*  Colour themes — the "mix the look" axis                                   */
 /* -------------------------------------------------------------------------- */
@@ -303,35 +293,4 @@ export function composedToText(ad: ComposedAd): string {
   if (ad.headline) lines.push('', `Headline: ${ad.headline.text}`)
   if (ad.cta) lines.push('', `CTA: ${ad.cta.text}`)
   return lines.join('\n').trim()
-}
-
-/* -------------------------------------------------------------------------- */
-/*  Layout geometry (world-space, shared by the surface)                      */
-/* -------------------------------------------------------------------------- */
-
-export const NODE_W = 236
-export const COL_W = 268
-export const LANE_TOP = 72
-export const ROW_GAP = 14
-/** Estimated row height for the initial stack (nodes are draggable afterwards). */
-export const EST_ROW_H = 108
-export const COMP_W = 372
-
-export interface Pt {
-  x: number
-  y: number
-}
-
-/** Initial world position for every block plus the composition node. */
-export function initialLayout(blocks: CanvasBlock[]): Record<string, Pt> {
-  const pos: Record<string, Pt> = {}
-  const rowByCat: Record<string, number> = {}
-  for (const b of blocks) {
-    const col = CATEGORY_ORDER.indexOf(b.category)
-    const row = rowByCat[b.category] ?? 0
-    rowByCat[b.category] = row + 1
-    pos[b.id] = { x: 24 + col * COL_W, y: LANE_TOP + row * (EST_ROW_H + ROW_GAP) }
-  }
-  pos.composition = { x: 24 + CATEGORY_ORDER.length * COL_W + 48, y: LANE_TOP }
-  return pos
 }
