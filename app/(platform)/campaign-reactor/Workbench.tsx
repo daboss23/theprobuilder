@@ -13,6 +13,7 @@ import {
   type WorkflowControls,
 } from '@/components/campaign-reactor/workflow/LiveAgentWorkflow'
 import { CreativeCanvas } from '@/components/campaign-reactor/canvas/CreativeCanvas'
+import { CreativeFlow } from '@/components/campaign-reactor/flow/CreativeFlow'
 import { reactorOutputTypes, winningAngles } from '@/lib/reactor-data'
 import { INTEL_SOURCES, intelSourceLabel } from '@/lib/intelligence-sources'
 import {
@@ -60,9 +61,9 @@ export function Workbench() {
     markOutcome,
   } = useReactorRun()
   const [modalOpen, setModalOpen] = useState(false)
-  // Output surface: the autonomous reactor (default hero) or the hands-on
-  // Creative Canvas where the run's parts are remixed into a live ad.
-  const [view, setView] = useState<'reactor' | 'canvas'>('reactor')
+  // Output surface: the autonomous reactor (default hero), the Studio (remix the
+  // run's parts into a finished ad), or the Flow (node-graph production canvas).
+  const [view, setView] = useState<'reactor' | 'studio' | 'flow'>('reactor')
   // Manual controls (original left-panel inputs, now collected inside the modal)
   // Selected intelligence source IDs (the agents recommend a subset; the user
   // approves or overrides). Empty until the brief produces recommendations.
@@ -589,10 +590,10 @@ export function Workbench() {
           </p>
         </div>
         <div className="flex items-center gap-3">
-          {/* Output surface toggle — the reactor (watch it work) vs the canvas
-              (remix the parts by hand). */}
+          {/* Output surface toggle — watch the reactor work, remix in the
+              Studio, or wire the production graph in the Flow. */}
           <div className="inline-flex rounded-full border border-white/10 bg-white/[0.03] p-1">
-            {(['reactor', 'canvas'] as const).map((v) => (
+            {(['reactor', 'studio', 'flow'] as const).map((v) => (
               <button
                 key={v}
                 type="button"
@@ -628,7 +629,13 @@ export function Workbench() {
       {/* Output — the Creative Canvas (hands-on remix) or the autonomous reactor.
           In reactor mode: before firing, the empty state; once fired, the live
           agent workflow (raw telemetry collapses into a drawer inside it). */}
-      {view === 'canvas' ? (
+      {view === 'flow' ? (
+        <CreativeFlow
+          offerName={offerName}
+          angle={angle === NO_PREFERENCE ? undefined : angle}
+          onConfigure={() => setModalOpen(true)}
+        />
+      ) : view === 'studio' ? (
         <CreativeCanvas offerName={offerName} onConfigure={() => setModalOpen(true)} />
       ) : phase === 'idle' ? (
         <Panel className="min-h-[480px]">
