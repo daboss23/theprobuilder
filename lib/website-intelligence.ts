@@ -14,9 +14,10 @@ import Anthropic from '@anthropic-ai/sdk'
 import { ingestKnowledge } from '@/lib/knowledge'
 import { getSupabaseAdmin, supabaseUrl } from '@/lib/supabase'
 import { parseModelJson } from '@/lib/parse'
+import { INTELLIGENCE_MODEL } from '@/lib/models'
 
 // ATLAS synthesises profiles with the bulk model (single-shot, cost-aware).
-const MODEL = 'claude-sonnet-4-6'
+const MODEL = INTELLIGENCE_MODEL
 const UA = 'Mozilla/5.0 (compatible; TPB-ATLAS/1.0; +https://theprobuilder.com)'
 const FETCH_TIMEOUT = 12_000
 const MAX_REDIRECTS = 4

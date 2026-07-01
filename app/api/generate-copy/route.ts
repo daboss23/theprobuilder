@@ -7,6 +7,7 @@ import { getBuilder } from '@/lib/supabase'
 import { buildBrandContext } from '@/lib/brand-context'
 import { buildFrameworksContext } from '@/lib/frameworks'
 import type { CopyOutput } from '@/types'
+import { INTELLIGENCE_MODEL } from '@/lib/models'
 
 export const runtime = 'nodejs'
 
@@ -81,7 +82,7 @@ memory. Make every line specific to ${brandName} - it should be impossible
 to swap the brand name out and use this for any other builder.`
 
     const message = await anthropic.messages.create({
-      model: 'claude-sonnet-4-6',
+      model: INTELLIGENCE_MODEL,
       max_tokens: 2000,
       system: systemPrompt,
       messages: [{ role: 'user', content: userMessage }],
