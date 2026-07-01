@@ -128,12 +128,13 @@ the base model retraining itself.
 
 | Role | Model | Why |
 |---|---|---|
-| Orchestrator / strategy | `claude-opus-4-8` | Multi-step reasoning over retrieved evidence |
-| High-volume copy (future) | `claude-sonnet-4-6` | Cheaper/faster for bulk drafting |
+| Orchestrator (tool-use loop) | `claude-fable-5` | Long-horizon multi-step reasoning over retrieved evidence |
+| Orchestrator fallback | `claude-opus-4-8` | Server-side safety fallback for classifier declines + client-side switch when the org can't run Fable 5; also serves the single-shot suggest/intelligence strategy calls |
+| High-volume copy + intelligence layers | `claude-sonnet-5` | Cheaper/faster for bulk drafting and structured passes |
 | Embeddings | Voyage `voyage-3` | Anthropic doesn't make an embeddings model |
 
-Model is a single constant (`ORCHESTRATOR_MODEL` in
-`app/api/campaign-reactor/route.ts`).
+Models are single constants (`ORCHESTRATOR_MODEL`, `ORCHESTRATOR_FALLBACK_MODEL`,
+`INTELLIGENCE_MODEL` in `lib/models.ts`).
 
 ---
 

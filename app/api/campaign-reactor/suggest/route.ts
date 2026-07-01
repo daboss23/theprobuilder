@@ -8,6 +8,7 @@ import {
   type ReactorSuggestion,
 } from '@/lib/reactor-inputs'
 import { reactorOutputTypes } from '@/lib/reactor-data'
+import { ORCHESTRATOR_FALLBACK_MODEL } from '@/lib/models'
 import { INTEL_SOURCES, recommendIntelSources } from '@/lib/intelligence-sources'
 import { angleEvidence } from '@/lib/outcomes'
 import { vaultStats } from '@/lib/knowledge'
@@ -15,10 +16,12 @@ import { parseModelJson } from '@/lib/parse'
 
 export const runtime = 'nodejs'
 
-// The Dynamic Strategy Engine — the same coordinator brain as the reactor making
-// its strategic call up front. The angle is NOT constrained to the base
+// The Dynamic Strategy Engine — the coordinator's strategic call made up front.
+// Runs on the Opus tier (not Fable 5): this is a single-shot ~500-token pick
+// fired while the user types, where Fable's always-on thinking would add
+// latency for no strategic gain. The angle is NOT constrained to the base
 // categories: NOVA/ORACLE/OPUS can surface a sharper angle the dropdown adopts.
-const MODEL = 'claude-opus-4-8'
+const MODEL = ORCHESTRATOR_FALLBACK_MODEL
 
 // Base strategic categories — a starting vocabulary, not a hard limit.
 const angleCategories = ['Profit', 'Systems', 'Time Freedom', 'Leadership', 'Cashflow', 'Growth', 'Team Accountability']

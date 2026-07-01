@@ -43,7 +43,7 @@ Tagline: **Engineered For Performance.**
 | Styling | Tailwind CSS |
 | Components | shadcn/ui exclusively |
 | Database | Supabase |
-| Copy AI | Anthropic Claude API — orchestrator `claude-opus-4-8`, bulk `claude-sonnet-5` (see `lib/models.ts`) |
+| Copy AI | Anthropic Claude API — orchestrator `claude-fable-5` (Opus 4.8 fallback), bulk `claude-sonnet-5` (see `lib/models.ts`) |
 | Embeddings | Voyage AI `voyage-3` (RAG retrieval) |
 | Vector store | Supabase `pgvector` (`knowledge_chunks`) |
 | Image AI | fal.ai (FLUX) + Higgsfield Soul — direct Gemini/OpenAI image removed (fal + Kie only) |
@@ -111,7 +111,8 @@ end. For destructive writes (Supabase inserts), surface errors clearly.
 ## API CONVENTIONS
 
 ### Claude API calls
-- **Orchestrator / strategy (Campaign Reactor agent): `claude-opus-4-8`** — multi-step reasoning over retrieved evidence. Defined once as `ORCHESTRATOR_MODEL` in `lib/models.ts`.
+- **Orchestrator (Campaign Reactor tool-use loop): `claude-fable-5`** — long-horizon multi-step reasoning over retrieved evidence. Defined once as `ORCHESTRATOR_MODEL` in `lib/models.ts`. Fable 5 rules: never send `thinking` or sampling params (`temperature`/`top_p`/`top_k`) — both 400; safety classifiers can decline with `stop_reason: "refusal"`, so the reactor opts into the server-side fallback (`SERVER_SIDE_FALLBACK_BETA` + `fallbacks: [{model: ORCHESTRATOR_FALLBACK_MODEL}]`) and also falls back client-side when the org can't run Fable 5 at all (30-day data-retention requirement → 400 on every request).
+- **Single-shot strategy calls (suggest / intelligence): `ORCHESTRATOR_FALLBACK_MODEL` (Opus 4.8)** — latency-sensitive picks fired while the user types; Fable's always-on thinking isn't worth the wait there.
 - **High-volume / single-shot copy + intelligence layers: `claude-sonnet-5`** — cheaper and faster for bulk drafting, the NEURO pre-test, and the legacy generate-copy route. Defined once as `INTELLIGENCE_MODEL` in `lib/models.ts` (same list price as the prior `claude-sonnet-4-6`, higher quality).
 - Max tokens: 2000–4000 for copy/concept generation
 - Always wrap in try/catch

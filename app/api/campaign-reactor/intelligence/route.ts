@@ -2,12 +2,15 @@ import Anthropic from '@anthropic-ai/sdk'
 import { NextRequest, NextResponse } from 'next/server'
 import { searchKnowledge, type KnowledgeSystem } from '@/lib/knowledge'
 import { parseModelJson } from '@/lib/parse'
+import { ORCHESTRATOR_FALLBACK_MODEL } from '@/lib/models'
 import type { StrategicIntelligence } from '@/lib/reactor-inputs'
 
 export const runtime = 'nodejs'
 
-// OPUS synthesizes the strategic read; same brain as the reactor.
-const MODEL = 'claude-opus-4-8'
+// OPUS synthesizes the strategic read. Runs on the Opus tier (not Fable 5) —
+// a single-shot synthesis where responsiveness beats marginal reasoning depth;
+// the full Fable 5 tool-use loop lives in the reactor route.
+const MODEL = ORCHESTRATOR_FALLBACK_MODEL
 
 interface IntelRequest {
   brief?: string

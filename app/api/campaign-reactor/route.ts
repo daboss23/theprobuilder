@@ -3,7 +3,12 @@ import { NextRequest } from 'next/server'
 import { searchKnowledge } from '@/lib/knowledge'
 import { learnings } from '@/lib/reactor-data'
 import { INTELLIGENCE, INTELLIGENCE_IDS, isIntelligenceId, type IntelligenceId } from '@/lib/agents'
-import { ORCHESTRATOR_MODEL, INTELLIGENCE_MODEL as TIER_INTELLIGENCE_MODEL } from '@/lib/models'
+import {
+  ORCHESTRATOR_MODEL,
+  ORCHESTRATOR_FALLBACK_MODEL,
+  SERVER_SIDE_FALLBACK_BETA,
+  INTELLIGENCE_MODEL as TIER_INTELLIGENCE_MODEL,
+} from '@/lib/models'
 import { generateImageWith, imageConfigured, listImageModels, type AspectRatio } from '@/lib/image'
 import {
   startVideoJob,
@@ -50,7 +55,12 @@ export const maxDuration = 300
 // OPUS — the Master Strategist brain (strategy + synthesis) — and the cheaper
 // model the intelligence layers (ATLAS/NOVA/SPARK/ECHO/ORACLE) run on.
 // Both are defined once in lib/models.ts so a model bump is a single change.
+// The orchestrator runs on Claude Fable 5 with Opus 4.8 wired as the fallback
+// at two levels: the server-side `fallbacks` param re-serves safety-classifier
+// declines inside the same call, and a client-side switch keeps the run alive
+// when the org can't use Fable 5 at all (e.g. data-retention requirement).
 const OPUS_MODEL = ORCHESTRATOR_MODEL
+const OPUS_FALLBACK_MODEL = ORCHESTRATOR_FALLBACK_MODEL
 const INTELLIGENCE_MODEL = TIER_INTELLIGENCE_MODEL
 // NEURO (Predicted Response pre-test) runs on the cheap intelligence model — it
 // is a structured grading pass, not strategy, so it never touches OPUS's budget.
@@ -780,9 +790,19 @@ export async function POST(request: NextRequest) {
         let neuroPrinciples: string | null = null
         let neuroRevisions = 0
 
+        // The model actually driving this run. Starts on the orchestrator tier
+        // (Fable 5); if the org can't run it at all (400 on every request when
+        // the 30-day data-retention requirement isn't met, 403/404 on access),
+        // the run switches to Opus 4.8 once and continues — the platform never
+        // dies on model eligibility.
+        let opusModel: string = OPUS_MODEL
+        let fallbackAnnounced = false
+
         for (let turn = 0; turn < MAX_TURNS; turn++) {
+          const onFable = opusModel !== OPUS_FALLBACK_MODEL
+          const betas: string[] = []
           const params: Anthropic.Beta.Messages.MessageCreateParamsNonStreaming = {
-            model: OPUS_MODEL,
+            model: opusModel,
             max_tokens: 4000,
             system: [{ type: 'text', text: systemPrompt, cache_control: EPHEMERAL }],
             tools,
@@ -790,17 +810,67 @@ export async function POST(request: NextRequest) {
           }
           if (mcpServer) {
             params.mcp_servers = [mcpServer]
-            params.betas = [MCP_BETA]
+            betas.push(MCP_BETA)
           }
+          // Server-side safety fallback: a Fable 5 classifier decline is
+          // re-served by Opus 4.8 inside the same call instead of failing the run.
+          if (onFable) {
+            params.fallbacks = [{ model: OPUS_FALLBACK_MODEL }]
+            betas.push(SERVER_SIDE_FALLBACK_BETA)
+          }
+          if (betas.length) params.betas = betas
 
-          const response = await withRetry(
-            () => anthropic.beta.messages.create(params),
-            (n, w) =>
+          let response: Anthropic.Beta.Messages.BetaMessage
+          try {
+            response = await withRetry(
+              () => anthropic.beta.messages.create(params),
+              (n, w) =>
+                sse(controller, {
+                  type: 'step',
+                  text: `Claude is busy (overloaded) — retrying (${n}/4) in ${w / 1000}s…`,
+                }),
+            )
+          } catch (err) {
+            // Eligibility errors on the orchestrator model (org retention config,
+            // model access) — switch to the fallback tier and redo this turn.
+            const status = (err as { status?: number })?.status
+            if (onFable && (status === 400 || status === 403 || status === 404)) {
               sse(controller, {
                 type: 'step',
-                text: `Claude is busy (overloaded) — retrying (${n}/4) in ${w / 1000}s…`,
-              }),
-          )
+                text: `Orchestrator model unavailable for this org — continuing on ${OPUS_FALLBACK_MODEL}.`,
+              })
+              opusModel = OPUS_FALLBACK_MODEL
+              turn--
+              continue
+            }
+            throw err
+          }
+
+          // Safety-fallback telemetry: a `fallback` block marks a mid-run model
+          // switch; sticky-served turns carry no block, so also check usage.
+          const fallbackServed =
+            response.content.some((b) => b.type === 'fallback') ||
+            (response.usage.iterations ?? []).some((it) => it.type === 'fallback_message')
+          if (fallbackServed && !fallbackAnnounced) {
+            fallbackAnnounced = true
+            sse(controller, {
+              type: 'step',
+              text: `Safety classifiers declined a step — continued seamlessly on ${response.model}.`,
+            })
+          }
+
+          // Whole chain refused (Fable 5 and the fallback both declined) — end
+          // the run cleanly instead of parsing empty content.
+          if (response.stop_reason === 'refusal') {
+            sse(controller, {
+              type: 'error',
+              message:
+                'The request was declined by safety classifiers on every available model. Reword the brief and fire again.',
+            })
+            controller.close()
+            return
+          }
+
           messages.push({ role: 'assistant', content: response.content })
 
           // Surface server-side Meta Ads (MCP) tool activity in the telemetry feed.
