@@ -6,8 +6,9 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { ingestKnowledge, type IngestResult } from '@/lib/knowledge'
 import { parseModelJson } from '@/lib/parse'
+import { INTELLIGENCE_MODEL } from '@/lib/models'
 
-const MODEL = 'claude-sonnet-4-6'
+const MODEL = INTELLIGENCE_MODEL
 
 // The repeatable pattern categories SPARK classifies winning creatives into.
 export const CREATIVE_PATTERNS = [

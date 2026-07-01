@@ -3,6 +3,7 @@ import { NextRequest } from 'next/server'
 import { searchKnowledge } from '@/lib/knowledge'
 import { learnings } from '@/lib/reactor-data'
 import { INTELLIGENCE, INTELLIGENCE_IDS, isIntelligenceId, type IntelligenceId } from '@/lib/agents'
+import { ORCHESTRATOR_MODEL, INTELLIGENCE_MODEL as TIER_INTELLIGENCE_MODEL } from '@/lib/models'
 import { generateImageWith, imageConfigured, listImageModels, type AspectRatio } from '@/lib/image'
 import {
   startVideoJob,
@@ -48,8 +49,9 @@ export const maxDuration = 300
 
 // OPUS — the Master Strategist brain (strategy + synthesis) — and the cheaper
 // model the intelligence layers (ATLAS/NOVA/SPARK/ECHO/ORACLE) run on.
-const OPUS_MODEL = 'claude-opus-4-8'
-const INTELLIGENCE_MODEL = 'claude-sonnet-4-6'
+// Both are defined once in lib/models.ts so a model bump is a single change.
+const OPUS_MODEL = ORCHESTRATOR_MODEL
+const INTELLIGENCE_MODEL = TIER_INTELLIGENCE_MODEL
 // NEURO (Predicted Response pre-test) runs on the cheap intelligence model — it
 // is a structured grading pass, not strategy, so it never touches OPUS's budget.
 const NEURO_MODEL = INTELLIGENCE_MODEL

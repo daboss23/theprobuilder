@@ -42,7 +42,7 @@ Tagline: **Engineered For Performance.**
 | Styling | Tailwind CSS |
 | Components | shadcn/ui exclusively |
 | Database | Supabase |
-| Copy AI | Anthropic Claude API — orchestrator `claude-opus-4-8`, bulk `claude-sonnet-4-6` |
+| Copy AI | Anthropic Claude API — orchestrator `claude-opus-4-8`, bulk `claude-sonnet-5` (see `lib/models.ts`) |
 | Embeddings | Voyage AI `voyage-3` (RAG retrieval) |
 | Vector store | Supabase `pgvector` (`knowledge_chunks`) |
 | Image AI | fal.ai (FLUX) + Higgsfield Soul — direct Gemini/OpenAI image removed (fal + Kie only) |
@@ -110,8 +110,8 @@ end. For destructive writes (Supabase inserts), surface errors clearly.
 ## API CONVENTIONS
 
 ### Claude API calls
-- **Orchestrator / strategy (Campaign Reactor agent): `claude-opus-4-8`** — multi-step reasoning over retrieved evidence. Single constant `ORCHESTRATOR_MODEL` in `app/api/campaign-reactor/route.ts`.
-- **High-volume / single-shot copy: `claude-sonnet-4-6`** — cheaper and faster for bulk drafting and the legacy generate-copy route.
+- **Orchestrator / strategy (Campaign Reactor agent): `claude-opus-4-8`** — multi-step reasoning over retrieved evidence. Defined once as `ORCHESTRATOR_MODEL` in `lib/models.ts`.
+- **High-volume / single-shot copy + intelligence layers: `claude-sonnet-5`** — cheaper and faster for bulk drafting, the NEURO pre-test, and the legacy generate-copy route. Defined once as `INTELLIGENCE_MODEL` in `lib/models.ts` (same list price as the prior `claude-sonnet-4-6`, higher quality).
 - Max tokens: 2000–4000 for copy/concept generation
 - Always wrap in try/catch
 - Always strip markdown fences before JSON.parse (use `lib/parse.ts`)

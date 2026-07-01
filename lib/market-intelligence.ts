@@ -20,10 +20,11 @@ import { getSupabaseAdmin, supabaseUrl } from '@/lib/supabase'
 import { fetchReadablePage, assertSafeUrl } from '@/lib/website-intelligence'
 import { fetchYouTubeTranscript } from '@/lib/youtube'
 import { parseModelJson } from '@/lib/parse'
+import { INTELLIGENCE_MODEL } from '@/lib/models'
 
 // NOVA extracts with the bulk model (single-shot, cost-aware) — same tier the
 // other intelligence layers run on.
-const MODEL = 'claude-sonnet-4-6'
+const MODEL = INTELLIGENCE_MODEL
 
 // Cap on how much raw conversation text we feed the extractor per run.
 const MAX_EXTRACT_CHARS = 16_000
