@@ -541,9 +541,13 @@ export const reactorInputs = [
   'Patterns',
 ]
 
-// The two creative deliverables a new campaign produces. Kept deliberately
-// simple for onboarding — every ad is either a still (image) or a moving
-// (video) creative, and its copy is generated as part of the concept. The
-// richer internal concept taxonomy (Founder / Testimonial / Campaign …) is
-// expanded from these two by the reactor route.
-export const reactorOutputTypes = ['Static Creative', 'Video Creative']
+// The creative deliverables a new campaign can produce. Kept deliberately
+// simple for onboarding — the user picks one or all, and copy is generated as
+// part of every concept. The richer internal concept taxonomy (Founder /
+// Testimonial / Campaign …) is expanded from these by the reactor route.
+export const reactorOutputTypes = [
+  'Static Creative',
+  'Video Creative',
+  'UGC Creative',
+  'Carousel Creatives',
+]

@@ -11,27 +11,33 @@ import {
   ChevronRight,
   CircleOff,
   Clapperboard,
-  Gauge,
+  GalleryHorizontalEnd,
   Globe,
   ImageIcon,
   Loader2,
   Radio,
   ShieldCheck,
   SlidersHorizontal,
+  Smartphone,
   Sparkles,
+  Tag,
   X,
   Zap,
 } from 'lucide-react'
-import type { AngleEvidence } from '@/lib/reactor-inputs'
+import { CREATIVE_SIZES, type AngleEvidence, type CreativeSize } from '@/lib/reactor-inputs'
 
-// The launch sequence — five bold steps, each a moment, not a form field.
+// The launch sequence — six bold steps, each a moment, not a form field. `orb`
+// is the short label under the stepper node; `label` titles the step.
 const STEPS = [
-  { label: 'The Brief', sub: 'Set the direction, the angle, and what to build.' },
-  { label: 'Audience & Offer', sub: 'Who you are speaking to — and what you are selling.' },
-  { label: 'Performance Feed', sub: 'Plug live Meta ad performance into this run.' },
-  { label: 'On Brand', sub: 'Apply your brand voice, tone, and compliance.' },
-  { label: 'Ignition', sub: 'Review the configuration and fire the reactor.' },
+  { orb: 'Brief', label: 'The Brief', sub: 'Name it, set the direction, and pick what to build.' },
+  { orb: 'Formats', label: 'Formats & Sizes', sub: 'Choose the dimensions for each creative you selected.' },
+  { orb: 'Audience', label: 'Audience & Offer', sub: 'Who you are speaking to — and what you are selling.' },
+  { orb: 'Feed', label: 'Performance Feed', sub: 'Plug live Meta ad performance into this run.' },
+  { orb: 'Brand', label: 'On Brand', sub: 'Apply your brand voice, tone, and compliance.' },
+  { orb: 'Ignition', label: 'Ignition', sub: 'Review the configuration and fire the reactor.' },
 ] as const
+
+const LAST_STEP = STEPS.length
 
 /**
  * A strategic input field. The platform recommends, the recommendation is
@@ -68,27 +74,34 @@ export interface StrategicField {
 // state and is threaded through here so the manual controls keep their existing
 // recommendation wiring.
 export interface ReactorForm {
-  // Step 1 — brief, angle, deliverables
+  // Step 1 — campaign name, brief, deliverables
+  campaignName: string
+  setCampaignName: (v: string) => void
   brief: string
   setBrief: (v: string) => void
+  // Angle is inferred by the agents — kept for the Quick Launch read + payload,
+  // no longer an editable field in the guided flow.
   angleField: StrategicField
-  // Creative Deliverables — Static / Video creative. OPUS recommends from the
-  // brief; the user approves or overrides.
+  // Creative Deliverables — Static / Video / UGC / Carousel. OPUS recommends
+  // from the brief; the user picks one or all.
   outputTypeList: string[]
   outputs: string[]
   toggleOutput: (v: string) => void
   recommendedDeliverables: string[]
   deliverablesReason: string
-  // Step 2 — awareness, audience, offer
+  // Step 2 — formats & sizes: selected aspect ratios per deliverable.
+  dimensions: Record<string, string[]>
+  toggleDimension: (deliverable: string, ratio: string) => void
+  // Step 3 — awareness, audience, offer
   awarenessField: StrategicField
   audienceField: StrategicField
   offerField: StrategicField
   offerName: string
   setOfferName: (v: string) => void
-  // Step 3 — Meta Ads performance feed: 'off' (standalone), 'pipeboard', 'meta'.
+  // Step 4 — Meta Ads performance feed: 'off' (standalone), 'pipeboard', 'meta'.
   metaProvider: string
   setMetaProvider: (v: string) => void
-  // Step 4 — on brand
+  // Step 5 — on brand
   onBrand: boolean
   setOnBrand: (v: boolean) => void
   // Whether the system is currently analyzing the brief.
@@ -288,55 +301,27 @@ function StrategicSelect({ field }: { field: StrategicField }) {
   )
 }
 
-// Strategic reasoning behind the recommended angle — confidence, the why, and
-// ORACLE memory evidence. Makes the dropdown feel like a strategist, not a form.
-function AngleRecommendation({ field }: { field: StrategicField }) {
-  const rec = field.recommendation
-  if (!rec?.reason || field.custom.active || field.noPreference) return null
-  const ev = rec.evidence
-  return (
-    <div className="mt-2.5 rounded-xl border border-[#FF7C54]/20 bg-[#FF5E3A]/[0.06] px-4 py-3 text-xs">
-      <div className="mb-1.5 flex items-center gap-2">
-        <span className="text-sm font-semibold text-white/90">{field.value || field.recommended}</span>
-        {typeof rec.confidence === 'number' && (
-          <span className="inline-flex items-center gap-1 rounded-full bg-[#FF5E3A]/15 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-[#FF9D4D]">
-            <Gauge size={9} /> {rec.confidence}% confidence
-          </span>
-        )}
-      </div>
-      <p className="leading-relaxed text-white/55">{rec.reason}</p>
-      {ev && ev.similar > 0 && (
-        <div className="mt-2.5 flex flex-wrap gap-x-3 gap-y-1 border-t border-white/10 pt-2.5 text-[10px] text-white/45">
-          <span>
-            <span className="text-white/65">{ev.similar}</span> similar stored campaign
-            {ev.similar === 1 ? '' : 's'}
-          </span>
-          <span>
-            <span className="text-success">{ev.winners}</span> historical winner
-            {ev.winners === 1 ? '' : 's'}
-          </span>
-          {ev.avgWinScore !== null && (
-            <span>
-              avg win score <span className="text-white/65">{ev.avgWinScore}</span>
-            </span>
-          )}
-        </div>
-      )}
-    </div>
-  )
+// Icon + one-line blurb for each creative deliverable.
+function deliverableMeta(label: string) {
+  const l = label.toLowerCase()
+  if (l.includes('ugc'))
+    return { Icon: Smartphone, blurb: 'Creator-style, phone-shot talking-head ads that feel native.' }
+  if (l.includes('carousel'))
+    return { Icon: GalleryHorizontalEnd, blurb: 'Multi-card swipe ads — proof, steps, or a story arc.' }
+  if (l.includes('video'))
+    return { Icon: Clapperboard, blurb: 'Founder VSLs, testimonials & cinematic on-site B-roll.' }
+  return { Icon: ImageIcon, blurb: 'Proof statics, founder photos & concept stills.' }
 }
 
-// Icon + one-line blurb for each of the two creative deliverables.
-function deliverableMeta(label: string) {
-  return /video/i.test(label)
-    ? {
-        Icon: Clapperboard,
-        blurb: 'Founder VSLs, testimonials, UGC & cinematic on-site B-roll.',
-      }
-    : {
-        Icon: ImageIcon,
-        blurb: 'Proof statics, founder photos & campaign concept stills.',
-      }
+// A tiny aspect-ratio preview box for the Formats step.
+function RatioPreview({ ratio }: { ratio: string }) {
+  const box =
+    ratio === '9:16' ? 'h-7 w-4' : ratio === '16:9' ? 'h-4 w-7' : 'h-5 w-5'
+  return (
+    <span className="grid h-8 w-8 shrink-0 place-items-center">
+      <span className={`${box} rounded-[3px] border border-current`} />
+    </span>
+  )
 }
 
 // The three Meta performance feed options, rendered as bold selectable cards.
@@ -369,6 +354,17 @@ function fieldSummary(field: StrategicField): string {
   if (field.custom.active) return field.custom.value.trim() || 'Custom (unset)'
   if (field.noPreference) return 'No Preference — Reactor decides'
   return field.value || 'No Preference — Reactor decides'
+}
+
+// Compact "Static 1:1, 9:16 · Video 9:16" formats line for the review step.
+function formatsSummary(form: ReactorForm): string {
+  const parts = form.outputs
+    .map((o) => {
+      const r = form.dimensions[o] ?? []
+      return r.length ? `${o.replace(/ Creatives?$/, '')} ${r.join('/')}` : ''
+    })
+    .filter(Boolean)
+  return parts.length ? parts.join(' · ') : 'Reactor decides'
 }
 
 export function ReactorModal({ open, onClose, onFire, form }: ReactorModalProps) {
@@ -418,7 +414,7 @@ export function ReactorModal({ open, onClose, onFire, form }: ReactorModalProps)
   }
 
   const meta = STEPS[step - 1]
-  const progress = (step / 5) * 100
+  const progress = (step / LAST_STEP) * 100
   const feedTitle = FEED_OPTIONS.find((f) => f.id === form.metaProvider)?.title ?? 'Standalone'
 
   return (
@@ -517,10 +513,24 @@ export function ReactorModal({ open, onClose, onFire, form }: ReactorModalProps)
           {step === 1 && (
             <div className="animate-fade-up space-y-6">
               <div>
-                <SectionLabel>Campaign Brief</SectionLabel>
+                <SectionLabel>
+                  <span className="inline-flex items-center gap-1.5">
+                    <Tag size={12} /> Campaign Name
+                  </span>
+                </SectionLabel>
+                <input
+                  value={form.campaignName}
+                  onChange={(e) => form.setCampaignName(e.target.value)}
+                  placeholder={`e.g. "Profit Leak — Q3 Prospecting"`}
+                  className="launch-input px-4 py-3.5 text-[15px]"
+                />
+              </div>
+
+              <div>
+                <SectionLabel thinking={form.suggesting}>Campaign Brief</SectionLabel>
                 <p className="-mt-1 mb-2.5 text-sm text-white/40">
                   Optional but high-leverage. Direction, tone, proof asset, creative constraints —
-                  the agents read this first.
+                  the agents read this first and infer the angle for you.
                 </p>
                 <textarea
                   value={form.brief}
@@ -531,15 +541,10 @@ export function ReactorModal({ open, onClose, onFire, form }: ReactorModalProps)
               </div>
 
               <div>
-                <SectionLabel thinking={form.suggesting}>Campaign Angle</SectionLabel>
-                <StrategicSelect field={form.angleField} />
-                <AngleRecommendation field={form.angleField} />
-              </div>
-
-              <div>
-                <SectionLabel>Creative Deliverables</SectionLabel>
+                <SectionLabel thinking={form.suggesting}>Creative Deliverables</SectionLabel>
                 <p className="-mt-1 mb-3 text-sm text-white/40">
-                  What should the reactor build? Copy is written into every concept.
+                  Pick one or all — you’ll set sizes for each next. Copy is written into every
+                  concept.
                 </p>
                 <div className="grid grid-cols-2 gap-3">
                   {form.outputTypeList.map((o) => {
@@ -583,6 +588,62 @@ export function ReactorModal({ open, onClose, onFire, form }: ReactorModalProps)
           )}
 
           {step === 2 && (
+            <div className="animate-fade-up space-y-4">
+              {form.outputs.length === 0 ? (
+                <div className="rounded-2xl border border-white/10 bg-white/[0.02] px-5 py-10 text-center">
+                  <GalleryHorizontalEnd size={30} className="mx-auto mb-3 text-white/20" />
+                  <p className="text-sm text-white/45">
+                    Pick at least one creative on the previous step to choose its sizes.
+                  </p>
+                </div>
+              ) : (
+                <>
+                  <p className="text-sm text-white/40">
+                    Each format renders at your selected ratio. Choose one or several per creative.
+                  </p>
+                  {form.outputs.map((o) => {
+                    const sizes: CreativeSize[] = CREATIVE_SIZES[o] ?? []
+                    const chosen = form.dimensions[o] ?? []
+                    const { Icon } = deliverableMeta(o)
+                    return (
+                      <div key={o}>
+                        <SectionLabel>
+                          <span className="inline-flex items-center gap-1.5">
+                            <Icon size={12} /> {o}
+                          </span>
+                        </SectionLabel>
+                        <div className="grid grid-cols-3 gap-2.5">
+                          {sizes.map((s) => {
+                            const on = chosen.includes(s.ratio)
+                            return (
+                              <button
+                                key={s.ratio}
+                                type="button"
+                                onClick={() => form.toggleDimension(o, s.ratio)}
+                                className={`pick-card flex items-center gap-2.5 p-3 text-left ${on ? 'is-on' : ''}`}
+                              >
+                                <RatioPreview ratio={s.ratio} />
+                                <span className="min-w-0">
+                                  <span className="block truncate text-sm font-semibold text-white">
+                                    {s.label}
+                                  </span>
+                                  <span className="block text-[11px] text-white/45">
+                                    {s.ratio} · {s.use}
+                                  </span>
+                                </span>
+                              </button>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </>
+              )}
+            </div>
+          )}
+
+          {step === 3 && (
             <div className="animate-fade-up space-y-6">
               <div>
                 <SectionLabel thinking={form.suggesting}>Awareness Stage</SectionLabel>
@@ -611,7 +672,7 @@ export function ReactorModal({ open, onClose, onFire, form }: ReactorModalProps)
             </div>
           )}
 
-          {step === 3 && (
+          {step === 4 && (
             <div className="animate-fade-up space-y-3">
               <SectionLabel>Meta Performance Feed</SectionLabel>
               <p className="-mt-1 text-sm text-white/40">
@@ -650,7 +711,7 @@ export function ReactorModal({ open, onClose, onFire, form }: ReactorModalProps)
             </div>
           )}
 
-          {step === 4 && (
+          {step === 5 && (
             <div className="animate-fade-up space-y-4">
               <button
                 type="button"
@@ -687,10 +748,10 @@ export function ReactorModal({ open, onClose, onFire, form }: ReactorModalProps)
             </div>
           )}
 
-          {step === 5 && (
+          {step === 6 && (
             <div className="animate-fade-up space-y-5">
               <div className="space-y-2 rounded-2xl border border-white/10 bg-black/30 p-5">
-                <SummaryRow label="Angle" value={fieldSummary(form.angleField)} />
+                <SummaryRow label="Campaign" value={form.campaignName.trim() || 'Untitled campaign'} />
                 <SummaryRow label="Audience" value={fieldSummary(form.audienceField)} />
                 <SummaryRow label="Awareness" value={fieldSummary(form.awarenessField)} />
                 <SummaryRow label="Offer" value={fieldSummary(form.offerField)} />
@@ -699,6 +760,7 @@ export function ReactorModal({ open, onClose, onFire, form }: ReactorModalProps)
                   label="Deliverables"
                   value={form.outputs.length ? form.outputs.join(' · ') : 'Reactor decides'}
                 />
+                <SummaryRow label="Formats" value={formatsSummary(form)} />
                 <SummaryRow label="Perf. feed" value={feedTitle} />
                 <SummaryRow label="On Brand" value={form.onBrand ? 'On' : 'Off'} />
                 {form.brief.trim() && (
@@ -738,10 +800,10 @@ export function ReactorModal({ open, onClose, onFire, form }: ReactorModalProps)
           )}
 
           <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/30">
-            Step {step} of 5
+            Step {step} of {LAST_STEP}
           </span>
 
-          {step < 5 ? (
+          {step < LAST_STEP ? (
             <button
               type="button"
               onClick={() => setStep((s) => s + 1)}

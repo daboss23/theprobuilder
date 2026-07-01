@@ -101,11 +101,15 @@ export function briefToPrompt(brief: ProductionBrief | undefined, fallback: stri
 }
 
 export interface ReactorInputs {
+  /** Human-facing campaign label (the first question in the guided flow). */
+  campaignName?: string
   brief: string
   angle: string
   angleIsAgentDecided: boolean
   outputTypes: string[]
   outputTypesAgentDecided: boolean
+  /** Selected aspect ratios per deliverable, e.g. { 'Video Creative': ['9:16'] }. */
+  dimensions?: Record<string, string[]>
   awarenessStage: string
   awarenessDirective: string
   audienceType: string
@@ -218,6 +222,50 @@ export const outputTypeOptions = [
   'VSL Openers',
   'Testimonial Concepts',
 ] as const
+
+/* ---------------------------- Creative formats ---------------------------- *
+   The aspect ratios each deliverable can be rendered at, mapped to the ratios
+   the image/video pipeline actually supports (1:1 / 9:16 / 16:9). The Formats
+   step shows only the sizes relevant to the deliverables the user selected.
+--------------------------------------------------------------------------- */
+
+export type CreativeRatio = '1:1' | '9:16' | '16:9'
+
+export interface CreativeSize {
+  ratio: CreativeRatio
+  label: string
+  use: string
+  dims: string
+}
+
+export const CREATIVE_SIZES: Record<string, CreativeSize[]> = {
+  'Static Creative': [
+    { ratio: '1:1', label: 'Square', use: 'Feed', dims: '1080×1080' },
+    { ratio: '9:16', label: 'Vertical', use: 'Stories', dims: '1080×1920' },
+    { ratio: '16:9', label: 'Landscape', use: 'Desktop / in-stream', dims: '1920×1080' },
+  ],
+  'Video Creative': [
+    { ratio: '9:16', label: 'Vertical', use: 'Reels / Stories', dims: '1080×1920' },
+    { ratio: '1:1', label: 'Square', use: 'Feed', dims: '1080×1080' },
+    { ratio: '16:9', label: 'Landscape', use: 'In-stream / YouTube', dims: '1920×1080' },
+  ],
+  'UGC Creative': [
+    { ratio: '9:16', label: 'Vertical', use: 'Reels / TikTok', dims: '1080×1920' },
+    { ratio: '1:1', label: 'Square', use: 'Feed', dims: '1080×1080' },
+  ],
+  'Carousel Creatives': [
+    { ratio: '1:1', label: 'Square', use: 'Feed carousel', dims: '1080×1080' },
+    { ratio: '9:16', label: 'Vertical', use: 'Stories carousel', dims: '1080×1920' },
+  ],
+}
+
+// The size pre-selected for a deliverable so the Formats step is never blank.
+export const DEFAULT_SIZE: Record<string, CreativeRatio> = {
+  'Static Creative': '1:1',
+  'Video Creative': '9:16',
+  'UGC Creative': '9:16',
+  'Carousel Creatives': '1:1',
+}
 
 /* ------------------------------- Slide 2 ---------------------------------- */
 

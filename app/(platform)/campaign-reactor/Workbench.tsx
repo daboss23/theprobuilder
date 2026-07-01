@@ -20,6 +20,8 @@ import {
   offerOptions,
   defaultBrandSettings,
   customDirective,
+  CREATIVE_SIZES,
+  DEFAULT_SIZE,
   NO_PREFERENCE,
   type AngleEvidence,
   type DirectiveOption,
@@ -67,11 +69,16 @@ export function Workbench() {
   // recommendation once the brief has substance. The user can override, choose
   // No Preference, or enter a custom value.
   const [angle, setAngle] = useState<string>(NO_PREFERENCE)
+  // Campaign name — the first question in the guided flow; a label for the run.
+  const [campaignName, setCampaignName] = useState('')
   // Deliverables start empty — OPUS recommends a subset from the brief, which is
   // auto-selected until the user overrides.
   const [outputs, setOutputs] = useState<string[]>([])
   const [recommendedDeliverables, setRecommendedDeliverables] = useState<string[]>([])
   const [deliverablesReason, setDeliverablesReason] = useState('')
+  // Selected aspect ratios per deliverable (Formats step). Each selected
+  // deliverable is seeded with its default size so the step is never blank.
+  const [dimensions, setDimensions] = useState<Record<string, string[]>>({})
   // Strategic reasoning for the recommended angle (Dynamic Strategy Engine).
   const [angleReason, setAngleReason] = useState('')
   const [angleConfidence, setAngleConfidence] = useState<number | undefined>(undefined)
@@ -171,6 +178,35 @@ export function Workbench() {
     touchedRef.current.add('outputs')
     toggle(outputs, setOutputs, val)
   }
+  // Toggle an aspect ratio for a deliverable, but never leave it with zero sizes.
+  const toggleDimension = (deliverable: string, ratio: string) => {
+    setDimensions((prev) => {
+      const current = prev[deliverable] ?? []
+      const next = current.includes(ratio)
+        ? current.filter((r) => r !== ratio)
+        : [...current, ratio]
+      return { ...prev, [deliverable]: next.length ? next : current }
+    })
+  }
+
+  // Keep the Formats selection in sync with the chosen deliverables: seed each
+  // newly selected deliverable with its default size, and drop any deselected.
+  useEffect(() => {
+    setDimensions((prev) => {
+      const next: Record<string, string[]> = {}
+      let changed = false
+      for (const o of outputs) {
+        if (prev[o]?.length) next[o] = prev[o]
+        else {
+          const def = DEFAULT_SIZE[o] ?? CREATIVE_SIZES[o]?.[0]?.ratio
+          next[o] = def ? [def] : []
+          changed = true
+        }
+      }
+      if (!changed && Object.keys(next).length === Object.keys(prev).length) return prev
+      return next
+    })
+  }, [outputs])
 
   /* ----------------------- Agent pre-selection (suggest) ------------------- */
   // The reactor strategist pre-picks a concrete angle / awareness / audience /
@@ -323,11 +359,13 @@ export function Workbench() {
     // Enrich outcome attributes in the background (non-blocking).
     void loadIntelligence()
     const reactorInputsPayload: ReactorInputs = {
+      campaignName,
       brief,
       angle,
       angleIsAgentDecided: angle === NO_PREFERENCE || angle.trim() === '',
       outputTypes: outputs,
       outputTypesAgentDecided: outputs.length === 0,
+      dimensions,
       awarenessStage: awareness.label,
       awarenessDirective: awareness.directive,
       audienceType: audience.label,
@@ -517,6 +555,8 @@ export function Workbench() {
 
   // Everything the modal renders, threaded from this component's state.
   const form: ReactorForm = {
+    campaignName,
+    setCampaignName,
     brief,
     setBrief,
     angleField,
@@ -525,6 +565,8 @@ export function Workbench() {
     toggleOutput,
     recommendedDeliverables,
     deliverablesReason,
+    dimensions,
+    toggleDimension,
     awarenessField,
     audienceField,
     offerField,

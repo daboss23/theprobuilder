@@ -401,6 +401,11 @@ function buildInputBlocks(inputs: ReactorInputs | undefined): string {
   const parts: string[] = []
 
   if (inputs) {
+    // Block 0 — Campaign name (identity for this run)
+    if (inputs.campaignName?.trim()) {
+      parts.push(`CAMPAIGN NAME: ${inputs.campaignName.trim()}`)
+    }
+
     // Block 1 — Campaign Brief (only when provided)
     if (inputs.brief?.trim()) {
       parts.push(
@@ -444,6 +449,21 @@ function buildInputBlocks(inputs: ReactorInputs | undefined): string {
       )
     } else {
       parts.push(`Generate the following output types: ${inputs.outputTypes.join(', ')}.`)
+    }
+
+    // Block 7b — Target formats. When the user chose aspect ratios per
+    // deliverable, render each visual concept at those ratios (the
+    // generate_image / generate_video tools take an aspectRatio of 1:1/9:16/16:9).
+    const dims = inputs.dimensions
+    if (dims && Object.keys(dims).length) {
+      const lines = Object.entries(dims)
+        .filter(([, r]) => r.length)
+        .map(([d, r]) => `${d} → ${r.join(', ')}`)
+      if (lines.length) {
+        parts.push(
+          `TARGET FORMATS (render each visual concept at the requested aspect ratio(s); produce one creative per requested ratio):\n${lines.join('\n')}`,
+        )
+      }
     }
   }
 
@@ -626,8 +646,10 @@ async function runDemo(controller: ReadableStreamDefaultController, body: Reacto
   // Legacy exact-type requests still pass straight through.
   const expand = (o: string): string[] => {
     const l = o.toLowerCase()
-    if (l.includes('static')) return ['Static Concept', 'Founder Concept', 'Campaign Concept']
-    if (l.includes('video')) return ['Video Concept', 'Testimonial Concept']
+    if (l.includes('static')) return ['Static Concept', 'Founder Concept']
+    if (l.includes('ugc')) return ['Testimonial Concept', 'Video Concept']
+    if (l.includes('carousel')) return ['Campaign Concept', 'Static Concept']
+    if (l.includes('video')) return ['Video Concept', 'Founder Concept']
     return [o]
   }
   const wanted = outputs.flatMap(expand).map(norm)

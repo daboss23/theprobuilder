@@ -73,13 +73,17 @@ function fallback(brief: string, angle: string): RawSuggestion {
         : 'Strategy Call / Application'
 
   // Deliverables follow the medium implied by the brief.
-  const wantsVideo = /video|vsl|ugc|reel|tiktok|spokesperson/.test(t)
-  const wantsImage = /image|static|photo|carousel|banner/.test(t)
-  const deliverables = wantsVideo && !wantsImage
-    ? ['Video Creative']
-    : wantsImage && !wantsVideo
-      ? ['Static Creative']
-      : ['Static Creative', 'Video Creative']
+  const wantsUgc = /ugc|testimonial|talking head|spokesperson|creator|selfie/.test(t)
+  const wantsVideo = /video|vsl|reel|tiktok|founder video|motion/.test(t)
+  const wantsCarousel = /carousel|swipe|multi-?image|slides?/.test(t)
+  const wantsImage = /image|static|photo|proof ad|banner/.test(t)
+  const set = new Set<string>()
+  if (wantsUgc) set.add('UGC Creative')
+  if (wantsVideo) set.add('Video Creative')
+  if (wantsCarousel) set.add('Carousel Creatives')
+  if (wantsImage) set.add('Static Creative')
+  // Sensible default when the brief doesn't signal a medium.
+  const deliverables = set.size ? Array.from(set) : ['Static Creative', 'Video Creative']
 
   return {
     angle: pickAngle,
@@ -89,11 +93,9 @@ function fallback(brief: string, angle: string): RawSuggestion {
     audience,
     offer,
     deliverables,
-    deliverablesReason: wantsVideo && !wantsImage
-      ? 'Brief implies motion creative — leading with video.'
-      : wantsImage && !wantsVideo
-        ? 'Brief implies still creative — leading with statics.'
-        : 'Balanced starter set across static and video creative.',
+    deliverablesReason: set.size
+      ? `Brief signals ${deliverables.join(' + ')} — leading with those.`
+      : 'Balanced starter set across static and video creative.',
   }
 }
 
