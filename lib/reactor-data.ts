@@ -541,15 +541,9 @@ export const reactorInputs = [
   'Patterns',
 ]
 
-export const reactorOutputTypes = [
-  'Hooks',
-  'Headlines',
-  'Primary Text',
-  'VSL Openers',
-  'Static Concepts',
-  'Video Concepts',
-  'Founder Concepts',
-  'Testimonial Concepts',
-  'Event Concepts',
-  'Campaign Concepts',
-]
+// The two creative deliverables a new campaign produces. Kept deliberately
+// simple for onboarding — every ad is either a still (image) or a moving
+// (video) creative, and its copy is generated as part of the concept. The
+// richer internal concept taxonomy (Founder / Testimonial / Campaign …) is
+// expanded from these two by the reactor route.
+export const reactorOutputTypes = ['Static Creative', 'Video Creative']

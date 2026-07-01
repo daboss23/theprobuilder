@@ -621,7 +621,16 @@ async function runDemo(controller: ReadableStreamDefaultController, body: Reacto
     text: 'NEURO — pre-testing concepts against neuromarketing principles (predicted response)…',
   })
   const norm = (s: string) => s.toLowerCase().replace(/s$/, '').trim()
-  const wanted = outputs.map(norm)
+  // The onboarding flow offers two deliverables — Static Creative / Video
+  // Creative — which fan out into the richer internal concept taxonomy here.
+  // Legacy exact-type requests still pass straight through.
+  const expand = (o: string): string[] => {
+    const l = o.toLowerCase()
+    if (l.includes('static')) return ['Static Concept', 'Founder Concept', 'Campaign Concept']
+    if (l.includes('video')) return ['Video Concept', 'Testimonial Concept']
+    return [o]
+  }
+  const wanted = outputs.flatMap(expand).map(norm)
   for (const c of pool.filter((c) => wanted.includes(norm(c.type)) && (c.score ?? 0) >= 7)) {
     c.neuro = demoNeuroScore(c.score, c.type)
     sse(controller, { type: 'concept', concept: c })

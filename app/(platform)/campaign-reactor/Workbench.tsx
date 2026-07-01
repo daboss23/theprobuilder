@@ -59,13 +59,10 @@ export function Workbench() {
     markOutcome,
   } = useReactorRun()
   const [modalOpen, setModalOpen] = useState(false)
-  // Manual controls (original left-panel inputs, now collected inside the modal)
-  // Selected intelligence source IDs (the agents recommend a subset; the user
-  // approves or overrides). Empty until the brief produces recommendations.
+  // Selected intelligence source IDs — the agents recommend a subset from the
+  // brief (behind the scenes); OPUS runs on this set. Empty until the brief
+  // produces recommendations, then defaulted to the full set at fire time.
   const [activeInputs, setActiveInputs] = useState<string[]>([])
-  const [intelSourceMeta, setIntelSourceMeta] = useState<
-    Record<string, { recommended: boolean; reason: string }>
-  >({})
   // Strategic fields start at No Preference; Strategic Intelligence fills in the
   // recommendation once the brief has substance. The user can override, choose
   // No Preference, or enter a custom value.
@@ -103,26 +100,21 @@ export function Workbench() {
   }>({})
   const [onBrand, setOnBrand] = useState(true)
   const [copied, setCopied] = useState<string | null>(null)
-  // Available models (from the API) + the user's pick ('auto' = recommended).
+  // Available models (from the API) — the reactor auto-selects the best one for
+  // the chosen deliverables; the run always sends 'auto'.
   const [videoModels, setVideoModels] = useState<ModelAvailability[]>([])
-  const [videoModel, setVideoModel] = useState<string>('auto')
+  const [videoModel] = useState<string>('auto')
   const [imageModels, setImageModels] = useState<ImageModelAvailability[]>([])
-  const [imageModel, setImageModel] = useState<string>('auto')
+  const [imageModel] = useState<string>('auto')
   // Meta Ads performance feed for the run: 'off' (standalone), 'pipeboard', 'meta'.
   const [metaProvider, setMetaProvider] = useState<string>('pipeboard')
-  // Face library: reference image URLs that lock a consistent face across UGC
-  // clips (Seedance 2.0 reference-to-video). One URL per line or comma-separated.
-  // Selected reference assets from the Face Library (saved roster) → power
-  // Seedance 2.0 reference-to-video for consistent-character in-house UGC.
-  const [faceUrls, setFaceUrls] = useState<string[]>([])
-  const [refVideos, setRefVideos] = useState<string[]>([])
+  // Reference assets for consistent-character UGC (Seedance reference-to-video).
+  // Not collected in onboarding — kept empty so UGC still renders without refs.
+  const [faceUrls] = useState<string[]>([])
+  const [refVideos] = useState<string[]>([])
   const hasRefs = faceUrls.length > 0 || refVideos.length > 0
-  const handleFaceSelection = useCallback((images: string[], videos: string[]) => {
-    setFaceUrls(images.slice(0, 9))
-    setRefVideos(videos.slice(0, 3))
-  }, [])
 
-  // Load the model menus once so the user can pick (and we can recommend).
+  // Load the model menus once so the reactor can recommend the best model.
   useEffect(() => {
     fetch('/api/video/models')
       .then((r) => r.json())
@@ -158,15 +150,13 @@ export function Workbench() {
     return () => window.removeEventListener('open-reactor-modal', open)
   }, [])
 
-  // System recommendation based on the selected output types, recomputed live.
+  // System recommendation based on the selected deliverables, recomputed live.
   const recommendation = useMemo(
     () => (videoModels.length ? recommendVideoModel(outputs, videoModels) : null),
     [outputs, videoModels],
   )
-  // What we actually send: the explicit pick, or the recommendation when on Auto.
+  // What we actually send: the recommendation when on Auto (always, here).
   const resolvedVideoModel = videoModel === 'auto' ? recommendation?.modelId : videoModel
-  const showVideoPicker =
-    videoModels.length > 0 && outputs.some((o) => /video|founder|testimonial|event|campaign/i.test(o))
 
   // Image model: same pattern.
   const imageRecommendation = useMemo(
@@ -174,15 +164,9 @@ export function Workbench() {
     [outputs, imageModels],
   )
   const resolvedImageModel = imageModel === 'auto' ? imageRecommendation?.modelId : imageModel
-  const showImagePicker =
-    imageModels.length > 0 && outputs.some((o) => /concept|static|founder|campaign|testimonial/i.test(o))
 
   const toggle = (arr: string[], set: (v: string[]) => void, val: string) =>
     set(arr.includes(val) ? arr.filter((v) => v !== val) : [...arr, val])
-  const toggleInput = (val: string) => {
-    touchedRef.current.add('inputs')
-    toggle(activeInputs, setActiveInputs, val)
-  }
   const toggleOutput = (val: string) => {
     touchedRef.current.add('outputs')
     toggle(outputs, setOutputs, val)
@@ -193,9 +177,8 @@ export function Workbench() {
   // offer from the brief, so each field already shows the agent's choice. The
   // user can override any of them; a manual change locks that field.
   const [suggesting, setSuggesting] = useState(false)
-  // Strategic Intelligence read, loaded when the modal reaches the strategic step.
+  // Strategic Intelligence read — loaded at fire time to enrich logged outcomes.
   const [intelligence, setIntelligence] = useState<StrategicIntelligence | null>(null)
-  const [intelLoading, setIntelLoading] = useState(false)
   const touchedRef = useRef<Set<string>>(new Set())
   const markTouched = (field: string) => {
     touchedRef.current.add(field)
@@ -272,16 +255,12 @@ export function Workbench() {
         if (!touched.has('outputs') && suggestion.deliverables?.length) {
           setOutputs(suggestion.deliverables)
         }
-        // Intelligence sources: store reasons + auto-select what the agents picked.
-        if (suggestion.intelligenceSources?.length) {
-          const meta: Record<string, { recommended: boolean; reason: string }> = {}
-          for (const s of suggestion.intelligenceSources) {
-            meta[s.id] = { recommended: s.recommended, reason: s.reason }
-          }
-          setIntelSourceMeta(meta)
-          if (!touched.has('inputs')) {
-            setActiveInputs(suggestion.intelligenceSources.filter((s) => s.recommended).map((s) => s.id))
-          }
+        // Intelligence sources: auto-select what the agents picked (no UI — this
+        // feeds OPUS behind the scenes).
+        if (suggestion.intelligenceSources?.length && !touched.has('inputs')) {
+          setActiveInputs(
+            suggestion.intelligenceSources.filter((s) => s.recommended).map((s) => s.id),
+          )
         }
       } catch {
         /* suggestion is best-effort — leave fields as they are */
@@ -294,10 +273,9 @@ export function Workbench() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [brief, modalOpen])
 
-  // Load the Strategic Intelligence read for the review step. Runs once when the
-  // modal reaches Step 5 (not per keystroke), grounded in the current inputs.
+  // Load the Strategic Intelligence read so logged outcomes carry the strategic
+  // configuration OPUS reasoned over. Best-effort, grounded in current inputs.
   const loadIntelligence = useCallback(async () => {
-    setIntelLoading(true)
     try {
       const res = await fetch('/api/campaign-reactor/intelligence', {
         method: 'POST',
@@ -312,15 +290,15 @@ export function Workbench() {
       }).then((r) => r.json())
       if (res.intelligence) setIntelligence(res.intelligence as StrategicIntelligence)
     } catch {
-      /* best-effort — the panel keeps its previous read */
-    } finally {
-      setIntelLoading(false)
+      /* best-effort — outcome attributes fall back to the raw inputs */
     }
   }, [brief, angle, awareness, audience, offer])
 
   // Fire from the modal — assembles the full ReactorInputs from every step plus
   // the classic payload fields, then posts into the shared SSE pipeline.
   const fire = () => {
+    // Enrich outcome attributes in the background (non-blocking).
+    void loadIntelligence()
     const reactorInputsPayload: ReactorInputs = {
       brief,
       angle,
@@ -337,9 +315,12 @@ export function Workbench() {
       onBrandEnabled: onBrand,
       brandSettings: defaultBrandSettings,
     }
+    // Intelligence sourcing is automatic — use the agent's picks, or the full
+    // set when the brief was too thin to produce a recommendation.
+    const sources = activeInputs.length ? activeInputs : INTEL_SOURCES.map((s) => s.id)
     streamReactor({
       angle,
-      inputs: activeInputs.map(intelSourceLabel),
+      inputs: sources.map(intelSourceLabel),
       outputs: outputs.length ? outputs : reactorOutputTypes,
       videoModel: resolvedVideoModel,
       imageModel: resolvedImageModel,
@@ -511,8 +492,7 @@ export function Workbench() {
     },
   }
 
-  // Everything the modal renders, threaded from this component's state so the
-  // manual controls keep their recommendation + reference-library wiring.
+  // Everything the modal renders, threaded from this component's state.
   const form: ReactorForm = {
     brief,
     setBrief,
@@ -527,30 +507,11 @@ export function Workbench() {
     offerField,
     offerName,
     setOfferName,
-    suggesting,
-    intelligence,
-    intelligenceLoading: intelLoading,
-    loadIntelligence,
-    intelSources: INTEL_SOURCES,
-    activeInputs,
-    toggleInput,
-    intelSourceMeta,
-    imageModels,
-    imageModel,
-    setImageModel,
-    imageRecommendation: imageRecommendation ?? null,
-    showImagePicker,
-    videoModels,
-    videoModel,
-    setVideoModel,
-    videoRecommendation: recommendation ?? null,
-    showVideoPicker,
     metaProvider,
     setMetaProvider,
-    onFaceChange: handleFaceSelection,
-    refCount: faceUrls.length + refVideos.length,
     onBrand,
     setOnBrand,
+    suggesting,
   }
 
   // Everything the live agent workflow needs to keep the production actions
@@ -580,7 +541,7 @@ export function Workbench() {
         <div>
           <h2 className="font-display text-lg font-semibold text-white">Configure your campaign</h2>
           <p className="mt-0.5 text-sm text-white/45">
-            Brief, audience, offer, intelligence, and models — collected across five quick steps,
+            Brief, audience, offer, performance feed, and brand — collected across five quick steps,
             then fire the reactor.
           </p>
         </div>

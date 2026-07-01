@@ -58,9 +58,10 @@ export function recommendIntelSources(brief: string, deliverables: string[]): In
     set.add('market')
     set.add('strategicMemory')
   } else {
-    // Generation brief — default to creative + copy DNA and frameworks.
+    // Generation brief — default to creative + copy DNA and frameworks. Every
+    // creative carries copy, so Copy DNA (ECHO) rides along with any visual work.
     if (hasVisual || d.length === 0) set.add('creativeDna')
-    if (hasCopy || d.length === 0) set.add('copyDna')
+    if (hasCopy || hasVisual || d.length === 0) set.add('copyDna')
     set.add('frameworks')
   }
 

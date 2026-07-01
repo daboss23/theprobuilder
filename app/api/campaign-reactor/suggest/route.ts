@@ -76,10 +76,10 @@ function fallback(brief: string, angle: string): RawSuggestion {
   const wantsVideo = /video|vsl|ugc|reel|tiktok|spokesperson/.test(t)
   const wantsImage = /image|static|photo|carousel|banner/.test(t)
   const deliverables = wantsVideo && !wantsImage
-    ? ['Video Concepts', 'Hooks', 'VSL Openers']
+    ? ['Video Creative']
     : wantsImage && !wantsVideo
-      ? ['Static Concepts', 'Hooks', 'Headlines', 'Primary Text']
-      : ['Hooks', 'Headlines', 'Static Concepts', 'Primary Text']
+      ? ['Static Creative']
+      : ['Static Creative', 'Video Creative']
 
   return {
     angle: pickAngle,
@@ -89,11 +89,11 @@ function fallback(brief: string, angle: string): RawSuggestion {
     audience,
     offer,
     deliverables,
-    deliverablesReason: wantsVideo
-      ? 'Brief implies motion creative — leading with video deliverables.'
-      : wantsImage
-        ? 'Brief implies static creative — leading with image deliverables.'
-        : 'Balanced starter set across hooks, headlines and static concepts.',
+    deliverablesReason: wantsVideo && !wantsImage
+      ? 'Brief implies motion creative — leading with video.'
+      : wantsImage && !wantsVideo
+        ? 'Brief implies still creative — leading with statics.'
+        : 'Balanced starter set across static and video creative.',
   }
 }
 
