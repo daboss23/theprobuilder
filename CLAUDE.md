@@ -24,6 +24,7 @@ Tagline: **Engineered For Performance.**
 ## ABSOLUTE RULES — NEVER BREAK THESE
 
 - **Work on the branch the session gives you, then PR into `main`.** `main` is the single source of truth, but Claude Code on the web starts every session on a generated working branch (e.g. `claude/...`) and the GitHub proxy *only allows pushes to that current working branch* — pushing straight to `main` is blocked at the network layer, so do not try. Commit and push to the session branch, then open (or merge) a pull request into `main`. In a local/terminal session with no branch override, committing directly to `main` is fine.
+  - **"Push updates to main" = open a PR from the session branch and merge it.** This is the *only* way to get changes onto `main` from a web session — it is expected and correct, not a workaround. Do not tell the user direct pushes are impossible and stop there; go ahead and open the PR (and merge it if they asked to push to main), then report the merge. Never treat "push to main" as blocked — treat it as "PR + merge."
 - **Always provide complete, ready-to-use files. Never provide partial edits or snippets.**
 - **Never use inline styles. Tailwind classes only.**
 - **Never use any UI component other than shadcn/ui.**
