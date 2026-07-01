@@ -101,13 +101,14 @@ export function FaceLibrary({
   const selectedCount = selected.size
 
   return (
-    <div className="mt-4 rounded-lg border border-border bg-surface/30 p-3">
-      <p className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-white/40">
-        <Users size={12} /> Reference Library — In-House UGC
+    <div className="rounded-xl border border-white/10 bg-black/20 p-3.5">
+      <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-white/55">
+        <Users size={12} /> Reference Image or Video
       </p>
-      <p className="mt-1 text-[11px] text-white/35">
-        Add up to 9 reference images and up to 3 reference videos to lock anything consistent across
-        clips — a person, a specific home/build, an interior, a material palette, or a video look.
+      <p className="mt-1 text-[11px] text-white/40">
+        Optional. Add up to 9 reference images and up to 3 reference videos to lock anything
+        consistent across clips — the on-camera person, a specific home/build, an interior, a
+        material palette, or a video look.
       </p>
 
       {!configured && (
@@ -131,12 +132,14 @@ export function FaceLibrary({
           if (e.dataTransfer.files?.length) upload(e.dataTransfer.files)
         }}
         disabled={!configured || uploading}
-        className={`mt-2 flex w-full flex-col items-center justify-center gap-1 rounded-lg border border-dashed px-3 py-4 text-[11px] transition-colors disabled:opacity-50 ${
-          dragOver ? 'border-glow bg-primary/10 text-glow' : 'border-border text-white/40 hover:border-white/25'
+        className={`mt-2.5 flex w-full flex-col items-center justify-center gap-1 rounded-lg border border-dashed px-3 py-4 text-[11px] transition-colors disabled:opacity-50 ${
+          dragOver
+            ? 'border-[#FF7C54] bg-[#FF5E3A]/10 text-[#FF9D4D]'
+            : 'border-white/15 text-white/40 hover:border-white/30'
         }`}
       >
         {uploading ? (
-          <Loader2 size={16} className="animate-spin text-glow" />
+          <Loader2 size={16} className="animate-spin text-[#FF9D4D]" />
         ) : (
           <UploadCloud size={16} />
         )}
@@ -165,7 +168,7 @@ export function FaceLibrary({
               <div
                 key={f.id}
                 className={`group relative aspect-square overflow-hidden rounded-lg border ${
-                  on ? 'border-glow ring-1 ring-glow' : 'border-border'
+                  on ? 'border-[#FF7C54] ring-1 ring-[#FF5E3A]' : 'border-white/12'
                 }`}
               >
                 <button type="button" onClick={() => toggle(f.id)} className="block h-full w-full">
@@ -176,7 +179,7 @@ export function FaceLibrary({
                     <img src={f.url} alt={f.name} className="h-full w-full object-cover" />
                   )}
                   {on && (
-                    <span className="absolute left-1 top-1 grid h-4 w-4 place-items-center rounded bg-glow text-background">
+                    <span className="absolute left-1 top-1 grid h-4 w-4 place-items-center rounded bg-[#FF5E3A] text-white">
                       <Check size={11} />
                     </span>
                   )}

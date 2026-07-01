@@ -24,6 +24,7 @@ import {
   X,
   Zap,
 } from 'lucide-react'
+import { FaceLibrary } from '@/components/reactor/FaceLibrary'
 import { CREATIVE_SIZES, type AngleEvidence, type CreativeSize } from '@/lib/reactor-inputs'
 
 // The launch sequence — six bold steps, each a moment, not a form field. `orb`
@@ -92,6 +93,9 @@ export interface ReactorForm {
   // Step 2 — formats & sizes: selected aspect ratios per deliverable.
   dimensions: Record<string, string[]>
   toggleDimension: (deliverable: string, ratio: string) => void
+  // Reference images/videos for consistent-character UGC (shown when UGC is picked).
+  onFaceChange: (images: string[], videos: string[]) => void
+  refCount: number
   // Step 3 — awareness, audience, offer
   awarenessField: StrategicField
   audienceField: StrategicField
@@ -638,6 +642,12 @@ export function ReactorModal({ open, onClose, onFire, form }: ReactorModalProps)
                       </div>
                     )
                   })}
+
+                  {form.outputs.some((o) => /ugc/i.test(o)) && (
+                    <div className="border-t border-white/10 pt-4">
+                      <FaceLibrary onChange={form.onFaceChange} />
+                    </div>
+                  )}
                 </>
               )}
             </div>
@@ -761,6 +771,12 @@ export function ReactorModal({ open, onClose, onFire, form }: ReactorModalProps)
                   value={form.outputs.length ? form.outputs.join(' · ') : 'Reactor decides'}
                 />
                 <SummaryRow label="Formats" value={formatsSummary(form)} />
+                {form.refCount > 0 && (
+                  <SummaryRow
+                    label="References"
+                    value={`${form.refCount} reference${form.refCount === 1 ? '' : 's'} locked for UGC`}
+                  />
+                )}
                 <SummaryRow label="Perf. feed" value={feedTitle} />
                 <SummaryRow label="On Brand" value={form.onBrand ? 'On' : 'Off'} />
                 {form.brief.trim() && (

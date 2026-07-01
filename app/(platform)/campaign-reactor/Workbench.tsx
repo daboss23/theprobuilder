@@ -116,10 +116,15 @@ export function Workbench() {
   // Meta Ads performance feed for the run: 'off' (standalone), 'pipeboard', 'meta'.
   const [metaProvider, setMetaProvider] = useState<string>('pipeboard')
   // Reference assets for consistent-character UGC (Seedance reference-to-video).
-  // Not collected in onboarding — kept empty so UGC still renders without refs.
-  const [faceUrls] = useState<string[]>([])
-  const [refVideos] = useState<string[]>([])
+  // Collected on the Formats step when UGC Creative is selected; the selected
+  // image/video URLs flow into every "Generate UGC" call after firing.
+  const [faceUrls, setFaceUrls] = useState<string[]>([])
+  const [refVideos, setRefVideos] = useState<string[]>([])
   const hasRefs = faceUrls.length > 0 || refVideos.length > 0
+  const handleFaceSelection = useCallback((images: string[], videos: string[]) => {
+    setFaceUrls(images.slice(0, 9))
+    setRefVideos(videos.slice(0, 3))
+  }, [])
 
   // Load the model menus once so the reactor can recommend the best model.
   useEffect(() => {
@@ -578,6 +583,8 @@ export function Workbench() {
     setOnBrand,
     suggesting,
     extractSite,
+    onFaceChange: handleFaceSelection,
+    refCount: faceUrls.length + refVideos.length,
   }
 
   // Everything the live agent workflow needs to keep the production actions
