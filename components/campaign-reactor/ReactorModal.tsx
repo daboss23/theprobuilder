@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Activity,
+  ArrowRight,
   Atom,
   Check,
   ChevronDown,
@@ -11,12 +12,15 @@ import {
   CircleOff,
   Clapperboard,
   Gauge,
+  Globe,
   ImageIcon,
   Loader2,
   Radio,
   ShieldCheck,
+  SlidersHorizontal,
   Sparkles,
   X,
+  Zap,
 } from 'lucide-react'
 import type { AngleEvidence } from '@/lib/reactor-inputs'
 
@@ -89,6 +93,9 @@ export interface ReactorForm {
   setOnBrand: (v: boolean) => void
   // Whether the system is currently analyzing the brief.
   suggesting: boolean
+  // Quick Launch — extract offer/audience/positioning from a website into the
+  // brief. Resolves with the domain on success, or an error message.
+  extractSite: (url: string) => Promise<{ ok: boolean; domain?: string; error?: string }>
 }
 
 interface ReactorModalProps {
@@ -366,9 +373,15 @@ function fieldSummary(field: StrategicField): string {
 
 export function ReactorModal({ open, onClose, onFire, form }: ReactorModalProps) {
   const [step, setStep] = useState(1)
+  // Two ways in: Quick Launch (one input → fire, everything auto-decided) and
+  // the guided five-step flow. New sessions land on Quick Launch.
+  const [mode, setMode] = useState<'quick' | 'guided'>('quick')
 
   useEffect(() => {
-    if (open) setStep(1)
+    if (open) {
+      setStep(1)
+      setMode('quick')
+    }
   }, [open])
 
   const dirty = useMemo(
@@ -416,6 +429,15 @@ export function ReactorModal({ open, onClose, onFire, form }: ReactorModalProps)
       }}
     >
       <div className="launch-panel flex max-h-[92vh] w-[760px] max-w-[calc(100vw-2rem)] flex-col rounded-[1.75rem]">
+        {mode === 'quick' ? (
+          <QuickLaunch
+            form={form}
+            onFire={fire}
+            onGuided={() => setMode('guided')}
+            onClose={requestClose}
+          />
+        ) : (
+          <>
         {/* Ignition progress */}
         <div className="launch-progress">
           <i style={{ width: `${progress}%` }} />
@@ -428,14 +450,23 @@ export function ReactorModal({ open, onClose, onFire, form }: ReactorModalProps)
               <Atom size={14} className="text-[#FF9D4D]" />
               New Creative Campaign
             </span>
-            <button
-              type="button"
-              onClick={requestClose}
-              className="grid h-8 w-8 place-items-center rounded-full text-white/40 transition-colors hover:bg-white/5 hover:text-white"
-              aria-label="Close"
-            >
-              <X size={18} />
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setMode('quick')}
+                className="launch-nav !px-3 !py-1.5 !text-[11px]"
+              >
+                <Zap size={13} className="text-[#FF9D4D]" /> Quick Launch
+              </button>
+              <button
+                type="button"
+                onClick={requestClose}
+                className="grid h-8 w-8 place-items-center rounded-full text-white/40 transition-colors hover:bg-white/5 hover:text-white"
+                aria-label="Close"
+              >
+                <X size={18} />
+              </button>
+            </div>
           </div>
 
           {/* Stepper */}
@@ -722,8 +753,205 @@ export function ReactorModal({ open, onClose, onFire, form }: ReactorModalProps)
             <span />
           )}
         </div>
+          </>
+        )}
       </div>
     </div>
+  )
+}
+
+// Quick Launch — one bold input, an optional website extract, a live read of
+// what the agents inferred, and a single Fire button. Everything not set here is
+// decided by the reactor. The escape hatch drops into the full guided flow.
+function QuickLaunch({
+  form,
+  onFire,
+  onGuided,
+  onClose,
+}: {
+  form: ReactorForm
+  onFire: () => void
+  onGuided: () => void
+  onClose: () => void
+}) {
+  const [url, setUrl] = useState('')
+  const [extracting, setExtracting] = useState(false)
+  const [extractMsg, setExtractMsg] = useState<{ ok: boolean; text: string } | null>(null)
+
+  const handleExtract = async () => {
+    if (!url.trim() || extracting) return
+    setExtracting(true)
+    setExtractMsg(null)
+    const res = await form.extractSite(url.trim())
+    setExtracting(false)
+    if (res.ok) {
+      setExtractMsg({ ok: true, text: `Pulled intel from ${res.domain} into your brief.` })
+      setUrl('')
+    } else {
+      setExtractMsg({ ok: false, text: res.error ?? 'Could not read that site.' })
+    }
+  }
+
+  const reads: { label: string; value: string }[] = [
+    { label: 'Angle', value: form.angleField.recommended ?? '' },
+    { label: 'Audience', value: form.audienceField.recommended ?? '' },
+    { label: 'Offer', value: form.offerField.recommended ?? '' },
+  ].filter((r) => r.value)
+  const hasBrief = form.brief.trim().length >= 12
+  const showReads = hasBrief && (reads.length > 0 || form.recommendedDeliverables.length > 0)
+
+  return (
+    <>
+      <div className="launch-progress">
+        <i style={{ width: '100%' }} />
+      </div>
+
+      <div className="flex items-center justify-between gap-3 px-7 pb-4 pt-5">
+        <span className="launch-eyebrow">
+          <Zap size={14} className="text-[#FF9D4D]" />
+          Quick Launch
+        </span>
+        <button
+          type="button"
+          onClick={onClose}
+          className="grid h-8 w-8 place-items-center rounded-full text-white/40 transition-colors hover:bg-white/5 hover:text-white"
+          aria-label="Close"
+        >
+          <X size={18} />
+        </button>
+      </div>
+
+      <div className="min-h-0 flex-1 overflow-y-auto px-7 pb-7">
+        <div className="animate-fade-up space-y-6">
+          <div>
+            <h2 className="font-display text-3xl font-bold tracking-tight text-white">
+              Fire a campaign in one line.
+            </h2>
+            <p className="mt-1.5 text-sm text-white/45">
+              Describe what you want — the reactor infers the angle, audience, offer, and creative,
+              then builds it. Nothing else required.
+            </p>
+          </div>
+
+          <div>
+            <SectionLabel thinking={form.suggesting}>Your Campaign</SectionLabel>
+            <textarea
+              value={form.brief}
+              onChange={(e) => form.setBrief(e.target.value)}
+              placeholder={`e.g. "A founder video for builders doing $2M–$3M who are still on the tools. Lead with a member who got off the tools in 14 months. Drive strategy-call applications."`}
+              className="launch-input h-32 resize-none px-4 py-3.5 text-[15px] leading-relaxed"
+            />
+          </div>
+
+          <div>
+            <SectionLabel>
+              <span className="inline-flex items-center gap-1.5">
+                <Globe size={12} /> Add your website
+              </span>
+            </SectionLabel>
+            <p className="-mt-1 mb-2.5 text-sm text-white/40">
+              Optional. ATLAS reads your site and folds your offer, audience, and positioning into
+              the brief.
+            </p>
+            <div className="flex gap-2">
+              <input
+                value={url}
+                onChange={(e) => setUrl(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleExtract()}
+                placeholder="https://yourbusiness.com"
+                className="launch-input flex-1 px-4 py-3 text-[15px]"
+              />
+              <button
+                type="button"
+                onClick={handleExtract}
+                disabled={extracting || !url.trim()}
+                className="launch-nav launch-nav--primary shrink-0 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                {extracting ? (
+                  <>
+                    <Loader2 size={15} className="animate-spin" /> Reading…
+                  </>
+                ) : (
+                  <>
+                    <Globe size={15} /> Extract
+                  </>
+                )}
+              </button>
+            </div>
+            {extractMsg && (
+              <p
+                className={`mt-2 flex items-center gap-1.5 text-xs ${
+                  extractMsg.ok ? 'text-success' : 'text-danger'
+                }`}
+              >
+                {extractMsg.ok ? <Check size={13} /> : null}
+                {extractMsg.text}
+              </p>
+            )}
+          </div>
+
+          {/* Live read of what the reactor inferred from the brief */}
+          <div className="rounded-xl border border-[#FF7C54]/20 bg-[#FF5E3A]/[0.05] px-4 py-3">
+            {form.suggesting ? (
+              <p className="flex items-center gap-2 text-xs text-white/55">
+                <Loader2 size={13} className="animate-spin text-[#FF9D4D]" /> Reading your brief…
+              </p>
+            ) : showReads ? (
+              <div className="space-y-2">
+                <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-[#FF9D4D]">
+                  <Sparkles size={11} /> Reactor read
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  {reads.map((r) => (
+                    <span
+                      key={r.label}
+                      className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[11px] text-white/70"
+                    >
+                      <span className="text-white/40">{r.label}</span> {r.value}
+                    </span>
+                  ))}
+                  {form.recommendedDeliverables.map((d) => (
+                    <span
+                      key={d}
+                      className="inline-flex items-center gap-1 rounded-full border border-[#FF7C54]/30 bg-[#FF5E3A]/10 px-2.5 py-1 text-[11px] text-[#FF9D4D]"
+                    >
+                      {d}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <p className="text-xs leading-relaxed text-white/45">
+                Angle, audience, offer, and creative are all decided for you. Add a line above and
+                the reactor’s read appears here.
+              </p>
+            )}
+          </div>
+
+          <div>
+            <button
+              type="button"
+              onClick={onFire}
+              className="fire-btn flex w-full items-center justify-center gap-2 rounded-full px-4 py-4 font-display text-lg font-bold uppercase tracking-wide text-white"
+            >
+              <Atom size={18} /> ⚡ Fire Reactor
+            </button>
+            <p className="mt-2.5 text-center text-[11px] uppercase tracking-[0.14em] text-white/35">
+              OPUS · Strategic synthesis · Self-critique scoring
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={onGuided}
+            className="group flex w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.02] px-4 py-3 text-sm font-medium text-white/60 transition-colors hover:border-white/20 hover:text-white"
+          >
+            <SlidersHorizontal size={15} /> Prefer full control? Set it up step-by-step
+            <ArrowRight size={15} className="transition-transform group-hover:translate-x-0.5" />
+          </button>
+        </div>
+      </div>
+    </>
   )
 }
 

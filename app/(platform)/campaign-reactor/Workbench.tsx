@@ -294,6 +294,29 @@ export function Workbench() {
     }
   }, [brief, angle, awareness, audience, offer])
 
+  // Quick Launch website extraction — pull a business's own offer / audience /
+  // positioning off their site and fold it into the brief, so a one-input launch
+  // still fires grounded in their real intel. Best-effort; never blocks.
+  const extractSite = useCallback(async (rawUrl: string) => {
+    try {
+      const res = await fetch('/api/campaign-reactor/extract-site', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: rawUrl }),
+      }).then((r) => r.json())
+      if (res?.ok && res.intel) {
+        setBrief((prev) => {
+          const block = `From ${res.domain}:\n${res.intel}`
+          return prev.trim() ? `${prev.trim()}\n\n${block}` : block
+        })
+        return { ok: true as const, domain: res.domain as string }
+      }
+      return { ok: false as const, error: (res?.error as string) || 'Could not read that site.' }
+    } catch {
+      return { ok: false as const, error: 'Could not reach that site. Check the address.' }
+    }
+  }, [])
+
   // Fire from the modal — assembles the full ReactorInputs from every step plus
   // the classic payload fields, then posts into the shared SSE pipeline.
   const fire = () => {
@@ -512,6 +535,7 @@ export function Workbench() {
     onBrand,
     setOnBrand,
     suggesting,
+    extractSite,
   }
 
   // Everything the live agent workflow needs to keep the production actions
