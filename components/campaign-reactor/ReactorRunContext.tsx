@@ -2,6 +2,7 @@
 
 import { createContext, useCallback, useContext, useRef, useState, type ReactNode } from 'react'
 import { briefToPrompt, type ProductionBrief, type ReactorInputs, type NeuroScore } from '@/lib/reactor-inputs'
+import type { MetaAdPackage } from '@/lib/meta-ads'
 import type { Verdict, OutcomeAttributes } from '@/lib/outcomes'
 import {
   idleWorkflow,
@@ -24,6 +25,8 @@ export interface Concept {
   imageUrl?: string
   productionBrief?: ProductionBrief
   neuro?: NeuroScore
+  /** The complete, launch-ready Meta ad unit for this concept. */
+  adPackage?: MetaAdPackage
 }
 
 export interface TelemetryLine {

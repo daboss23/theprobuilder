@@ -158,7 +158,12 @@ Supabase) it runs the real agent and the telemetry shows its actual searches.
   single-agent version is validated with real keys.
 - ⏭️ **Wire the Vault uploads** to `/api/vault/ingest`, and the dashboards to
   live `knowledge_chunks` counts.
-- ⏭️ **Performance ingest** (Meta API) to auto-populate `campaign_outcomes`.
+- ✅ **Performance ingest** (Meta API) auto-populates `campaign_outcomes`:
+  ad-level CTR/CPL/ROAS graded against the account cohort, winners re-ingested
+  into the Vault (`lib/meta-ingest.ts`, `POST /api/meta/ingest`).
+- ✅ **Launch-ready Meta ad units** — every concept ships with a validated
+  `adPackage` (fold-safe primary text, headline/description limits, CTA type);
+  contract in `lib/meta-ads.ts`, enforced at the submit gate.
 
 ---
 

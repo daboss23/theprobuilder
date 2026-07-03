@@ -1,8 +1,30 @@
 'use client'
 
-import { Activity, Check, Copy as CopyIcon, Film, Hexagon, ImageIcon, Loader2, Trophy, Users } from 'lucide-react'
+import { useState } from 'react'
+import {
+  Activity,
+  AlertTriangle,
+  Check,
+  Copy as CopyIcon,
+  Film,
+  Hexagon,
+  ImageIcon,
+  Loader2,
+  Megaphone,
+  Trophy,
+  Users,
+} from 'lucide-react'
 import { Pill } from '@/components/reactor/ui'
 import { NEURO_AXES, NEURO_PASS_MARK, type NeuroScore } from '@/lib/reactor-inputs'
+import {
+  DESCRIPTION_MAX,
+  HEADLINE_MAX,
+  PRIMARY_TEXT_FOLD,
+  ctaLabel,
+  formatForAdsManager,
+  validateAdPackage,
+  type MetaAdPackage,
+} from '@/lib/meta-ads'
 import type {
   Concept,
   CreativeState,
@@ -75,6 +97,105 @@ function NeuroPanel({ neuro }: { neuro: NeuroScore }) {
       <p className="mt-1 text-[10px] italic text-white/30">
         Estimate from neuromarketing principles — a prediction, not measured brain data.
       </p>
+    </div>
+  )
+}
+
+// One labelled field of the Meta ad unit with a live character count that
+// warns when Meta would truncate it.
+function AdField({ label, value, max }: { label: string; value: string; max: number }) {
+  const over = value.length > max
+  return (
+    <div className="flex items-baseline gap-2">
+      <span className="w-[4.5rem] shrink-0 text-[10px] uppercase tracking-wide text-white/45">{label}</span>
+      <span className="min-w-0 flex-1 text-[12px] text-white/80">{value}</span>
+      <span className={`shrink-0 text-[10px] tabular ${over ? 'font-semibold text-warning' : 'text-white/30'}`}>
+        {value.length}/{max}
+      </span>
+    </div>
+  )
+}
+
+/**
+ * The launch-ready Meta ad unit for a concept: primary text with the mobile
+ * "See more" fold made visible at 125 chars, headline/description with live
+ * char counts against Meta's limits, the CTA button, compliance issues from
+ * the shared validator, and a paste-ready copy for Ads Manager.
+ */
+function MetaAdUnit({ conceptType, pkg }: { conceptType: string; pkg: MetaAdPackage }) {
+  const [copied, setCopied] = useState(false)
+  const issues = validateAdPackage(pkg)
+  const primary = pkg.primaryText ?? ''
+  const above = primary.slice(0, PRIMARY_TEXT_FOLD)
+  const below = primary.slice(PRIMARY_TEXT_FOLD)
+
+  const copyForAdsManager = async () => {
+    try {
+      await navigator.clipboard.writeText(formatForAdsManager(conceptType, pkg))
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1600)
+    } catch {
+      /* clipboard unavailable — leave the button as-is */
+    }
+  }
+
+  return (
+    <div className="mt-2.5 rounded-lg border border-success/15 bg-success/[0.03] p-2.5">
+      <div className="mb-1.5 flex items-center justify-between gap-2">
+        <span className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-success/80">
+          <Megaphone size={11} /> Meta Ad Unit
+        </span>
+        <button
+          type="button"
+          onClick={copyForAdsManager}
+          className="flex items-center gap-1 text-[11px] text-white/40 hover:text-success"
+        >
+          {copied ? <Check size={12} /> : <CopyIcon size={12} />}
+          {copied ? 'Copied' : 'Copy for Ads Manager'}
+        </button>
+      </div>
+
+      <p className="whitespace-pre-line text-[12px] leading-relaxed">
+        <span className="text-white/85">{above}</span>
+        {below && (
+          <>
+            <span
+              className="mx-1 rounded border border-white/15 bg-white/[0.05] px-1 py-px align-middle text-[9px] font-medium uppercase tracking-wide text-white/40"
+              title={`Meta shows the first ${PRIMARY_TEXT_FOLD} characters before the "See more" fold on mobile`}
+            >
+              …See more
+            </span>
+            <span className="text-white/40">{below}</span>
+          </>
+        )}
+      </p>
+
+      <div className="mt-2 space-y-1 border-t border-white/[0.06] pt-2">
+        <AdField label="Headline" value={pkg.headline ?? ''} max={HEADLINE_MAX} />
+        {pkg.description && <AdField label="Descrip." value={pkg.description} max={DESCRIPTION_MAX} />}
+        <div className="flex items-center gap-2">
+          <span className="w-[4.5rem] shrink-0 text-[10px] uppercase tracking-wide text-white/45">CTA</span>
+          <span className="inline-flex rounded-md border border-white/15 bg-white/[0.06] px-2 py-0.5 text-[11px] font-semibold text-white/85">
+            {ctaLabel(pkg)}
+          </span>
+        </div>
+      </div>
+
+      {issues.length > 0 && (
+        <ul className="mt-2 space-y-1 border-t border-white/[0.06] pt-2">
+          {issues.map((issue, ii) => (
+            <li
+              key={ii}
+              className={`flex items-start gap-1.5 text-[11px] ${
+                issue.severity === 'error' ? 'text-danger' : 'text-warning'
+              }`}
+            >
+              <AlertTriangle size={11} className="mt-0.5 shrink-0" />
+              {issue.message}
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   )
 }
@@ -212,6 +333,8 @@ export function ConceptResultCard({
         </div>
       </div>
       <p className="text-sm text-white/80">{c.text}</p>
+
+      {c.adPackage && <MetaAdUnit conceptType={c.type} pkg={c.adPackage} />}
 
       {c.productionBrief && c.productionBrief.frames?.length > 0 && (
         <div className="mt-2.5 rounded-lg border border-primary/15 bg-primary/[0.04] p-2.5">
