@@ -5,6 +5,7 @@ import {
   Activity,
   AlertTriangle,
   Check,
+  ChevronRight,
   Copy as CopyIcon,
   Film,
   Hexagon,
@@ -13,6 +14,7 @@ import {
   Megaphone,
   Trophy,
   Users,
+  Wand2,
 } from 'lucide-react'
 import { Pill } from '@/components/reactor/ui'
 import { NEURO_AXES, NEURO_PASS_MARK, type NeuroScore } from '@/lib/reactor-inputs'
@@ -224,6 +226,7 @@ export function ConceptResultCard({
   onGenerateCreative,
   onAnimate,
   onGenerateUGC,
+  onConfigureInStudio,
   onMarkOutcome,
 }: {
   concept: Concept
@@ -243,9 +246,11 @@ export function ConceptResultCard({
   onGenerateCreative: () => void
   onAnimate: (image: string) => void
   onGenerateUGC: () => void
+  onConfigureInStudio: () => void
   onMarkOutcome: (verdict: Verdict) => void
 }) {
   const creativeBusy = creativeState?.status === 'working' || video?.status === 'rendering'
+  const hasCreative = Boolean(image || (video?.status === 'done' && video.url))
 
   return (
     <div
@@ -332,88 +337,107 @@ export function ConceptResultCard({
           </button>
         </div>
       </div>
-      <p className="text-sm text-white/80">{c.text}</p>
-
-      {c.adPackage && <MetaAdUnit conceptType={c.type} pkg={c.adPackage} />}
-
-      {c.productionBrief && c.productionBrief.frames?.length > 0 && (
-        <div className="mt-2.5 rounded-lg border border-primary/15 bg-primary/[0.04] p-2.5">
-          <div className="mb-1.5 flex flex-wrap items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-glow/80">
-            <Film size={11} /> Production Brief
-            {c.productionBrief.pattern && (
-              <span className="font-normal text-white/30">· {c.productionBrief.pattern}</span>
-            )}
-          </div>
-          <ol className="space-y-1">
-            {c.productionBrief.frames.map((f, fi) => (
-              <li key={fi} className="flex gap-2 text-[11px] text-white/60">
-                <span className="shrink-0 font-mono text-glow/60">{f.label}</span>
-                <span>{f.description}</span>
-              </li>
-            ))}
-          </ol>
-        </div>
-      )}
-
-      {(c.basis || c.learningCheck) && (
-        <div className="mt-2 space-y-1 border-t border-border pt-2 text-[11px] text-white/40">
-          {c.basis && (
-            <p>
-              <span className="text-glow/70">Grounded in:</span> {c.basis}
-            </p>
-          )}
-          {c.learningCheck && (
-            <p>
-              <span className="text-success/70">Rubric:</span> {c.learningCheck}
-            </p>
-          )}
-        </div>
-      )}
-
-      {c.neuro && <NeuroPanel neuro={c.neuro} />}
-
-      {/* Generated still creative (agent or manual) — provider chip overlaid on
-          the card only; the image file stays untouched. */}
+      {/* The ad creative is the hero — the system renders it automatically once
+          the run lands, so the finished ad is the first thing on the card. */}
       {image && (
-        <div className="relative mt-3">
+        <div className="relative mt-2">
           <ProviderChip model={imageMeta?.model} provider={imageMeta?.provider} />
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={image} alt={c.type} className="w-full rounded-lg border border-border" />
         </div>
       )}
-
-      {/* Generated video — provider chip overlaid on the player only. */}
       {video?.status === 'done' && video.url && (
-        <div className="relative mt-3">
+        <div className="relative mt-2">
           <ProviderChip model={video.model} provider={video.provider} />
           <video src={video.url} controls playsInline className="w-full rounded-lg border border-border" />
         </div>
       )}
-      {video?.status === 'rendering' && (
-        <div className="mt-3 grid aspect-video w-full place-items-center rounded-lg border border-border bg-background/40">
+      {(creativeState?.status === 'working' || video?.status === 'rendering') && !image && (
+        <div className="mt-2 grid aspect-video w-full place-items-center rounded-lg border border-border bg-background/40">
           <span className="flex items-center gap-2 text-xs text-cyan">
-            <Loader2 size={14} className="animate-spin" /> Rendering video…
+            <Loader2 size={14} className="animate-spin" />
+            {video?.status === 'rendering' ? 'Rendering video creative…' : 'Rendering creative…'}
           </span>
         </div>
       )}
+      {image && video?.status === 'rendering' && (
+        <p className="mt-2 flex items-center gap-2 text-[11px] text-cyan">
+          <Loader2 size={12} className="animate-spin" /> Animating the still into a video…
+        </p>
+      )}
       {video?.status === 'error' && (
-        <p className="mt-3 rounded-lg border border-warning/30 bg-warning/[0.06] p-2 text-[11px] text-warning">
+        <p className="mt-2 rounded-lg border border-warning/30 bg-warning/[0.06] p-2 text-[11px] text-warning">
           {video.message || 'Video render failed — check FAL_KEY / HF_CREDENTIALS or try again.'}
         </p>
       )}
-
-      {/* Creative render status (in-flight / error) */}
-      {creativeState?.status === 'working' && (
-        <div className="mt-3 grid aspect-square w-full place-items-center rounded-lg border border-border bg-background/40">
-          <span className="flex items-center gap-2 text-xs text-cyan">
-            <Loader2 size={14} className="animate-spin" /> Rendering creative…
-          </span>
-        </div>
-      )}
       {creativeState?.status === 'error' && (
-        <p className="mt-3 rounded-lg border border-warning/30 bg-warning/[0.06] p-2 text-[11px] text-warning">
+        <p className="mt-2 rounded-lg border border-warning/30 bg-warning/[0.06] p-2 text-[11px] text-warning">
           {creativeState.message}
         </p>
+      )}
+
+      {/* Like it? Take the finished creative into the Studio to edit the ad.
+          Also offered on package-only concepts (demo / keyless) so the flow
+          into the Studio always exists. */}
+      {(hasCreative || c.adPackage) && (
+        <button
+          type="button"
+          onClick={onConfigureInStudio}
+          className="fire-btn mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl px-4 py-2.5 font-display text-xs font-bold uppercase tracking-[0.14em] text-white"
+        >
+          <Wand2 size={14} /> Configure in Studio
+        </button>
+      )}
+
+      <p className="mt-3 text-[12px] leading-relaxed text-white/55">{c.text}</p>
+
+      {c.adPackage && <MetaAdUnit conceptType={c.type} pkg={c.adPackage} />}
+
+      {/* The strategy behind the ad — collapsed so the creative stays the hero. */}
+      {(c.productionBrief?.frames?.length || c.neuro || c.basis || c.learningCheck) && (
+        <details className="group mt-2.5 rounded-lg border border-white/[0.07] bg-white/[0.02]">
+          <summary className="flex cursor-pointer items-center gap-1.5 px-2.5 py-2 text-[10px] font-semibold uppercase tracking-wider text-white/45 transition-colors hover:text-white/70 [&::-webkit-details-marker]:hidden">
+            <ChevronRight size={12} className="transition-transform group-open:rotate-90" />
+            Why this will convert — strategy, pre-test &amp; grounding
+          </summary>
+          <div className="space-y-2.5 px-2.5 pb-2.5">
+            {c.productionBrief && c.productionBrief.frames?.length > 0 && (
+              <div className="rounded-lg border border-primary/15 bg-primary/[0.04] p-2.5">
+                <div className="mb-1.5 flex flex-wrap items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-glow/80">
+                  <Film size={11} /> Production Brief
+                  {c.productionBrief.pattern && (
+                    <span className="font-normal text-white/30">· {c.productionBrief.pattern}</span>
+                  )}
+                </div>
+                <ol className="space-y-1">
+                  {c.productionBrief.frames.map((f, fi) => (
+                    <li key={fi} className="flex gap-2 text-[11px] text-white/60">
+                      <span className="shrink-0 font-mono text-glow/60">{f.label}</span>
+                      <span>{f.description}</span>
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            )}
+
+            {(c.basis || c.learningCheck) && (
+              <div className="space-y-1 text-[11px] text-white/40">
+                {c.basis && (
+                  <p>
+                    <span className="text-glow/70">Grounded in:</span> {c.basis}
+                  </p>
+                )}
+                {c.learningCheck && (
+                  <p>
+                    <span className="text-success/70">Rubric:</span> {c.learningCheck}
+                  </p>
+                )}
+              </div>
+            )}
+
+            {c.neuro && <NeuroPanel neuro={c.neuro} />}
+          </div>
+        </details>
       )}
     </div>
   )

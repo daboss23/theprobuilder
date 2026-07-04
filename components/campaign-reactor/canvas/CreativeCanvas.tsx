@@ -1,165 +1,143 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
+  AlertTriangle,
   Atom,
   Check,
   Copy as CopyIcon,
+  Film,
+  Globe,
   ImageIcon,
-  Layers,
-  RotateCcw,
+  Loader2,
+  MessageCircle,
+  Share2,
   Sparkles,
-  X,
+  ThumbsUp,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { accentClass } from '@/components/reactor/ui'
-import { useReactorRun } from '@/components/campaign-reactor/ReactorRunContext'
-import { AdPreviewCard } from './AdPreviewCard'
+import { useReactorRun, type Concept } from '@/components/campaign-reactor/ReactorRunContext'
 import {
-  autoComposition,
   blocksInCategory,
   buildBlocks,
   CATEGORY_DEFS,
-  CATEGORY_ORDER,
-  composeAd,
-  composedToText,
-  themeById,
   type BlockCategory,
   type CanvasBlock,
-  type Composition,
 } from '@/lib/campaign-reactor/canvas'
+import {
+  DESCRIPTION_MAX,
+  HEADLINE_MAX,
+  META_CTA_LABELS,
+  META_CTA_OPTIONS,
+  PRIMARY_TEXT_FOLD,
+  formatForAdsManager,
+  validateAdPackage,
+  type MetaAdPackage,
+  type MetaCta,
+} from '@/lib/meta-ads'
 
 /* -------------------------------------------------------------------------- */
-/*  A single swappable option in the remix rail                               */
+/*  Helpers                                                                   */
 /* -------------------------------------------------------------------------- */
 
-function RemixRow({
-  block,
-  selected,
-  recommended,
-  onSelect,
+/** Split a Meta primary text into its hook (first line/sentence) + body. */
+function splitPrimary(primary: string): { hook: string; body: string } {
+  const t = (primary ?? '').trim()
+  if (!t) return { hook: '', body: '' }
+  const nl = t.indexOf('\n')
+  if (nl !== -1) return { hook: t.slice(0, nl).trim(), body: t.slice(nl + 1).trim() }
+  const m = t.match(/^.*?[.!?](\s|$)/)
+  if (m && m[0].length < t.length) return { hook: m[0].trim(), body: t.slice(m[0].length).trim() }
+  return { hook: t, body: '' }
+}
+
+/** Concepts that can supply the ad's creative (a still or a clip). */
+const isVisual = (c: Concept) => c.type.includes('Concept')
+
+/** The best-scoring concept carrying a complete ad package — the auto seed. */
+function bestPackaged(concepts: Concept[]): Concept | undefined {
+  return concepts
+    .filter((c) => c.adPackage)
+    .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))[0]
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Editable field chrome — label + live character count                       */
+/* -------------------------------------------------------------------------- */
+
+function FieldLabel({
+  label,
+  count,
+  max,
+  hint,
 }: {
-  block: CanvasBlock
-  selected: boolean
-  recommended: boolean
-  onSelect: (cat: BlockCategory, id: string) => void
+  label: string
+  count?: number
+  max?: number
+  hint?: string
 }) {
-  const theme = block.themeId ? themeById(block.themeId) : null
-  const isVisual = block.category === 'visual'
-
+  const over = typeof count === 'number' && typeof max === 'number' && count > max
   return (
-    <button
-      type="button"
-      onClick={() => onSelect(block.category, block.id)}
-      aria-pressed={selected}
-      className={cn(
-        'flex w-full items-start gap-2.5 rounded-lg border p-2.5 text-left transition-colors',
-        selected
-          ? 'border-[rgb(var(--acc)/0.55)] bg-[rgb(var(--acc)/0.10)]'
-          : 'border-white/10 bg-white/[0.02] hover:border-white/20 hover:bg-white/[0.04]',
-      )}
-    >
-      {/* Leading thumbnail — theme swatch, visual still, or nothing for copy */}
-      {theme ? (
-        <span className={cn('mt-0.5 h-9 w-9 shrink-0 rounded-md bg-gradient-to-br', theme.swatchFrom, theme.swatchTo)} />
-      ) : isVisual ? (
-        block.imageUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={block.imageUrl} alt={block.label} className="mt-0.5 h-9 w-9 shrink-0 rounded-md object-cover" />
-        ) : (
-          <span className="acc-text mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-md bg-white/[0.04]">
-            <ImageIcon size={14} />
-          </span>
-        )
-      ) : null}
-
-      <span className="min-w-0 flex-1">
-        {(recommended || typeof block.score === 'number') && (
-          <span className="mb-0.5 flex items-center gap-1.5">
-            {recommended && (
-              <span className="acc-text-hi inline-flex items-center gap-0.5 rounded-full bg-[rgb(var(--acc)/0.14)] px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide">
-                <Sparkles size={9} /> Opus pick
-              </span>
-            )}
-            {typeof block.score === 'number' && (
-              <span className="rounded-full border border-white/10 px-1.5 text-[9px] font-medium text-white/50">
-                {block.score}/10
-              </span>
-            )}
-          </span>
-        )}
-        <span
-          className={cn(
-            'block line-clamp-2 text-[12px] leading-snug',
-            selected ? 'text-white' : 'text-white/75',
-          )}
-        >
-          {theme ? theme.label : block.text}
-        </span>
-        {block.basis && (
-          <span className="mt-0.5 block line-clamp-1 text-[10px] text-white/35">
-            <span className="acc-text">Grounded in</span> · {block.basis}
+    <div className="mb-1.5 flex items-baseline justify-between gap-2">
+      <span className="text-[11px] font-bold uppercase tracking-wider text-white/60">{label}</span>
+      <span className="flex items-center gap-2">
+        {hint && <span className="text-[10px] text-white/30">{hint}</span>}
+        {typeof count === 'number' && typeof max === 'number' && (
+          <span className={cn('text-[10px] tabular', over ? 'font-semibold text-warning' : 'text-white/35')}>
+            {count}/{max}
           </span>
         )}
       </span>
-
-      {selected && <Check size={14} className="acc-text mt-0.5 shrink-0" />}
-    </button>
+    </div>
   )
 }
 
 /* -------------------------------------------------------------------------- */
-/*  One lane of the remix rail                                                */
+/*  OPUS recommendation chips — the run's winning parts, one lane per field    */
 /* -------------------------------------------------------------------------- */
 
-function RemixSection({
+function SuggestionLane({
   category,
   blocks,
-  selectedId,
-  recommendedId,
-  onSelect,
-  onClear,
+  onApply,
 }: {
   category: BlockCategory
   blocks: CanvasBlock[]
-  selectedId: string | null
-  recommendedId: string | null
-  onSelect: (cat: BlockCategory, id: string) => void
-  onClear: (cat: BlockCategory) => void
+  onApply: (text: string) => void
 }) {
   const def = CATEGORY_DEFS[category]
-  const options = blocksInCategory(blocks, category)
+  const options = blocksInCategory(blocks, category).slice(0, 4)
   if (!options.length) return null
-
   return (
     <div className={cn('space-y-1.5', accentClass[def.accent])}>
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <span className="h-1.5 w-1.5 rounded-full bg-[rgb(var(--acc))]" />
-          <span className="acc-text-hi text-[11px] font-bold uppercase tracking-wider">{def.label}</span>
-          <span className="rounded-full border border-white/10 bg-white/[0.04] px-1.5 text-[10px] font-medium text-white/45">
-            {options.length}
-          </span>
-        </div>
-        {selectedId && (
-          <button
-            type="button"
-            onClick={() => onClear(category)}
-            className="inline-flex items-center gap-1 text-[10px] font-medium text-white/30 transition-colors hover:text-danger"
-          >
-            <X size={11} /> clear
-          </button>
-        )}
-      </div>
+      <span className="flex items-center gap-1.5">
+        <span className="h-1.5 w-1.5 rounded-full bg-[rgb(var(--acc))]" />
+        <span className="acc-text-hi text-[10px] font-bold uppercase tracking-wider">{def.label}</span>
+        <span className="text-[10px] text-white/30">— tap to use</span>
+      </span>
       <div className="grid gap-1.5">
         {options.map((b) => (
-          <RemixRow
+          <button
             key={b.id}
-            block={b}
-            selected={selectedId === b.id}
-            recommended={recommendedId === b.id}
-            onSelect={onSelect}
-          />
+            type="button"
+            onClick={() => onApply(b.text)}
+            className="flex w-full items-start gap-2 rounded-lg border border-white/10 bg-white/[0.02] p-2 text-left transition-colors hover:border-[rgb(var(--acc)/0.45)] hover:bg-[rgb(var(--acc)/0.07)]"
+          >
+            <span className="min-w-0 flex-1">
+              <span className="block line-clamp-2 text-[11px] leading-snug text-white/75">{b.text}</span>
+              {b.basis && (
+                <span className="mt-0.5 block line-clamp-1 text-[9px] text-white/30">
+                  <span className="acc-text">Grounded in</span> · {b.basis}
+                </span>
+              )}
+            </span>
+            {typeof b.score === 'number' && (
+              <span className="shrink-0 rounded-full border border-white/10 px-1.5 text-[9px] font-medium text-white/45">
+                {b.score}/10
+              </span>
+            )}
+          </button>
         ))}
       </div>
     </div>
@@ -167,70 +145,207 @@ function RemixSection({
 }
 
 /* -------------------------------------------------------------------------- */
-/*  The Creative Canvas — finished brief on the left, remix rail on the right */
+/*  The live Facebook feed preview — a real, light-mode Meta ad card           */
+/* -------------------------------------------------------------------------- */
+
+function FacebookAdPreview({
+  primaryText,
+  headline,
+  description,
+  ctaText,
+  imageUrl,
+  videoUrl,
+  rendering,
+}: {
+  primaryText: string
+  headline: string
+  description: string
+  ctaText: string
+  imageUrl?: string
+  videoUrl?: string
+  rendering: boolean
+}) {
+  const above = primaryText.slice(0, PRIMARY_TEXT_FOLD)
+  const below = primaryText.slice(PRIMARY_TEXT_FOLD)
+
+  return (
+    <div className="overflow-hidden rounded-xl border border-white/10 bg-white shadow-[0_18px_44px_-22px_rgba(0,0,0,0.9)]">
+      {/* Page header */}
+      <div className="flex items-center gap-2.5 px-3.5 pb-2 pt-3">
+        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-gradient-to-br from-primary to-cyan text-[11px] font-bold text-white">
+          TPB
+        </span>
+        <span className="min-w-0">
+          <span className="block truncate text-[14px] font-semibold leading-tight text-[#050505]">
+            The Professional Builder
+          </span>
+          <span className="flex items-center gap-1 text-[12px] leading-tight text-[#65676B]">
+            Sponsored · <Globe size={11} />
+          </span>
+        </span>
+      </div>
+
+      {/* Primary text with the mobile "See more" fold made visible */}
+      <p className="whitespace-pre-line px-3.5 pb-2.5 text-[14px] leading-snug text-[#050505]">
+        {above}
+        {below && (
+          <>
+            <span
+              className="mx-1 align-middle text-[13px] font-semibold text-[#65676B]"
+              title={`Meta shows the first ${PRIMARY_TEXT_FOLD} characters before the "See more" fold on mobile`}
+            >
+              …See more
+            </span>
+            <span className="text-[#8A8D91]">{below}</span>
+          </>
+        )}
+      </p>
+
+      {/* Creative */}
+      {videoUrl ? (
+        // eslint-disable-next-line jsx-a11y/media-has-caption
+        <video src={videoUrl} controls playsInline className="max-h-[420px] w-full bg-black object-contain" />
+      ) : imageUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={imageUrl} alt="Ad creative" className="w-full object-cover" />
+      ) : (
+        <div className="grid aspect-square w-full place-items-center bg-[#F0F2F5]">
+          {rendering ? (
+            <span className="flex items-center gap-2 text-[13px] text-[#65676B]">
+              <Loader2 size={16} className="animate-spin" /> Rendering creative…
+            </span>
+          ) : (
+            <span className="flex flex-col items-center gap-2 text-[#8A8D91]">
+              <ImageIcon size={26} />
+              <span className="text-[12px]">Pick a creative from the run below</span>
+            </span>
+          )}
+        </div>
+      )}
+
+      {/* Link footer — domain, headline, description + CTA button */}
+      <div className="flex items-center justify-between gap-3 bg-[#F0F2F5] px-3.5 py-2.5">
+        <span className="min-w-0">
+          <span className="block truncate text-[11px] uppercase tracking-wide text-[#65676B]">
+            theprobuilder.com
+          </span>
+          <span className="block truncate text-[15px] font-semibold leading-snug text-[#050505]">
+            {headline || 'Your headline'}
+          </span>
+          {description && (
+            <span className="block truncate text-[12px] text-[#65676B]">{description}</span>
+          )}
+        </span>
+        <span className="shrink-0 rounded-md bg-[#E4E6EB] px-3.5 py-2 text-[13px] font-semibold text-[#050505]">
+          {ctaText}
+        </span>
+      </div>
+
+      {/* Social row — sells the in-feed realism */}
+      <div className="flex items-center justify-around border-t border-[#E4E6EB] px-3.5 py-1.5">
+        {[
+          { Icon: ThumbsUp, label: 'Like' },
+          { Icon: MessageCircle, label: 'Comment' },
+          { Icon: Share2, label: 'Share' },
+        ].map(({ Icon, label }) => (
+          <span key={label} className="flex items-center gap-1.5 py-1 text-[12px] font-medium text-[#65676B]">
+            <Icon size={14} /> {label}
+          </span>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+/* -------------------------------------------------------------------------- */
+/*  The Studio — edit the ad on the left, watch the real Meta unit update      */
 /* -------------------------------------------------------------------------- */
 
 export function CreativeCanvas({
   offerName,
+  seed,
   onConfigure,
 }: {
   offerName?: string
+  seed?: Concept | null
   onConfigure: () => void
 }) {
-  const { concepts, generateCreative, imageFor, creativeStateFor } = useReactorRun()
+  const { concepts, generateCreative, imageFor, videoFor, creativeStateFor } = useReactorRun()
 
   const blocks = useMemo(() => buildBlocks(concepts, offerName), [concepts, offerName])
-  // OPUS's recommendation: the best-scoring part in every lane. Drives the badges
-  // and the "reset" target so the user always has the finished brief to return to.
-  const recommended = useMemo(() => autoComposition(blocks), [blocks])
+  const visualConcepts = useMemo(() => concepts.filter(isVisual), [concepts])
 
-  const [composition, setComposition] = useState<Composition>(recommended)
+  /* ------------------------------ Ad fields -------------------------------- */
+  const [hook, setHook] = useState('')
+  const [body, setBody] = useState('')
+  const [headline, setHeadline] = useState('')
+  const [description, setDescription] = useState('')
+  const [cta, setCta] = useState<MetaCta>('LEARN_MORE')
+  // The concept whose render is the ad's creative — media resolves live, so a
+  // still-rendering creative pops in the moment it finishes.
+  const [creativeConcept, setCreativeConcept] = useState<Concept | null>(null)
   const [copied, setCopied] = useState(false)
 
-  // A new run lands → snap back to OPUS's freshly-recommended brief.
+  // Seed the editor from the concept sent via "Configure in Studio" (or the
+  // best-scoring packaged concept when arriving without one). Re-seeds only
+  // when the source changes so in-progress edits are never clobbered.
+  const seedKeyRef = useRef<string | null>(null)
   useEffect(() => {
-    setComposition(autoComposition(blocks))
-  }, [blocks])
+    const source = seed ?? bestPackaged(concepts)
+    if (!source) return
+    const key = `${seed ? 'seed' : 'auto'}:${source.text}`
+    if (seedKeyRef.current === key) return
+    seedKeyRef.current = key
 
-  const select = useCallback(
-    (cat: BlockCategory, id: string) => setComposition((c) => ({ ...c, [cat]: id })),
-    [],
-  )
-  const clear = useCallback((cat: BlockCategory) => setComposition((c) => ({ ...c, [cat]: null })), [])
-  const reset = useCallback(() => setComposition(autoComposition(blocks)), [blocks])
+    const pkg = source.adPackage
+    if (pkg) {
+      const { hook: h, body: b } = splitPrimary(pkg.primaryText)
+      setHook(h)
+      setBody(b)
+      setHeadline(pkg.headline ?? '')
+      setDescription(pkg.description ?? '')
+      const c = (pkg.cta ?? '').toUpperCase() as MetaCta
+      setCta(META_CTA_OPTIONS.includes(c) ? c : 'LEARN_MORE')
+    }
+    setCreativeConcept(isVisual(source) ? source : (visualConcepts[0] ?? null))
+    // visualConcepts derives from concepts — concepts is the real dependency.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [seed, concepts])
 
-  const ad = useMemo(() => composeAd(blocks, composition), [blocks, composition])
+  /* ------------------------- Live creative resolution ---------------------- */
+  const video = creativeConcept ? videoFor(creativeConcept) : undefined
+  const image = creativeConcept ? imageFor(creativeConcept) : undefined
+  const creativeState = creativeConcept ? creativeStateFor(creativeConcept) : undefined
+  const rendering = creativeState?.status === 'working' || video?.status === 'rendering'
+  const videoUrl = video?.status === 'done' ? video.url : undefined
 
-  /* ------------------------- Live visual rendering ------------------------- */
-  const visualConcept = ad.visual?.concept
-  const previewImage = visualConcept ? imageFor(visualConcept) : ad.visual?.imageUrl
-  const creativeState = visualConcept ? creativeStateFor(visualConcept) : undefined
-  const isVideo = visualConcept ? /video|testimonial/i.test(visualConcept.type) : false
-  const canGenerate = Boolean(visualConcept) && !isVideo && !previewImage
-  const onGenerateImage = useCallback(() => {
-    if (visualConcept) generateCreative(visualConcept, {})
-  }, [visualConcept, generateCreative])
+  const onGenerate = useCallback(() => {
+    if (creativeConcept) generateCreative(creativeConcept, {})
+  }, [creativeConcept, generateCreative])
 
-  const copy = useCallback(() => {
-    navigator.clipboard?.writeText(composedToText(ad))
-    setCopied(true)
-    setTimeout(() => setCopied(false), 1600)
-  }, [ad])
+  /* ------------------------------ The ad unit ------------------------------ */
+  const primaryText = [hook.trim(), body.trim()].filter(Boolean).join('\n\n')
+  const pkg: MetaAdPackage = {
+    primaryText,
+    headline: headline.trim(),
+    description: description.trim() || undefined,
+    cta,
+  }
+  const issues = validateAdPackage(pkg)
 
-  // Has the user deviated from OPUS's recommended brief?
-  const isRemixed = useMemo(
-    () => CATEGORY_ORDER.some((cat) => composition[cat] !== recommended[cat]),
-    [composition, recommended],
-  )
-
-  // Brief strength — the average rubric score of the scored parts in play.
-  const strength = useMemo(() => {
-    const scored = CATEGORY_ORDER.map((cat) => blocks.find((b) => b.id === composition[cat])).filter(
-      (b): b is CanvasBlock => Boolean(b) && typeof b!.score === 'number',
-    )
-    if (!scored.length) return null
-    return Math.round((scored.reduce((s, b) => s + (b.score ?? 0), 0) / scored.length) * 10) / 10
-  }, [blocks, composition])
+  const copyForAdsManager = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(
+        formatForAdsManager(creativeConcept?.type ?? 'Studio Ad', pkg),
+      )
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1600)
+    } catch {
+      /* clipboard unavailable — leave the button as-is */
+    }
+    // pkg is rebuilt each render from the fields below.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [creativeConcept, hook, body, headline, description, cta])
 
   /* --------------------------------- Empty --------------------------------- */
   if (concepts.length === 0) {
@@ -240,17 +355,17 @@ export function CreativeCanvas({
           <span className="mx-auto mb-4 grid h-14 w-14 place-items-center rounded-2xl border border-white/10 bg-white/[0.03]">
             <Sparkles size={26} className="text-glow/60" />
           </span>
-          <h3 className="font-display text-base font-semibold text-white">The canvas is empty</h3>
+          <h3 className="font-display text-base font-semibold text-white">The Studio is empty</h3>
           <p className="mx-auto mt-1.5 text-sm text-white/45">
-            Fire the reactor first. OPUS assembles a finished ad from everything it generates — then you
-            can swap any part from a clean menu and watch the ad update live.
+            Fire the reactor first — it drafts the ad and renders the creative automatically. Then
+            hit “Configure in Studio” on the one you like to edit it here as a real Meta ad.
           </p>
           <button
             type="button"
             onClick={onConfigure}
-            className="fire-btn mt-5 inline-flex items-center gap-2 rounded-full px-5 py-3 font-display text-sm font-bold uppercase tracking-wide text-white"
+            className="mt-5 inline-flex items-center gap-2 rounded-full border border-glow/30 bg-glow/10 px-5 py-2.5 text-sm font-semibold text-glow transition-colors hover:bg-glow/20"
           >
-            <Atom size={15} /> New Creative Campaign
+            <Atom size={14} /> Open the campaign brief
           </button>
         </div>
       </div>
@@ -262,86 +377,203 @@ export function CreativeCanvas({
       {/* Toolbar */}
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3">
         <div className="flex flex-wrap items-center gap-2.5">
-          <span className="font-mono text-[10px] uppercase tracking-[0.28em] text-glow/70">Creative Canvas</span>
+          <span className="font-mono text-[10px] uppercase tracking-[0.28em] text-glow/70">Ad Studio</span>
           <span
             className={cn(
               'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold',
-              isRemixed
+              issues.some((i) => i.severity === 'error')
                 ? 'border-warning/30 bg-warning/[0.08] text-warning'
-                : 'border-glow/30 bg-glow/10 text-glow',
+                : 'border-success/30 bg-success/10 text-success',
             )}
           >
-            {isRemixed ? <Layers size={11} /> : <Sparkles size={11} />}
-            {isRemixed ? 'Remixed' : "OPUS's recommended brief"}
+            {issues.some((i) => i.severity === 'error') ? (
+              <AlertTriangle size={11} />
+            ) : (
+              <Check size={11} />
+            )}
+            {issues.some((i) => i.severity === 'error') ? 'Needs attention' : 'Launch-ready'}
           </span>
-          {strength !== null && (
-            <span className="hidden items-center gap-1 text-[11px] text-white/45 sm:inline-flex">
-              Strength <span className="font-semibold text-white/70">{strength}/10</span>
-            </span>
-          )}
         </div>
-        <div className="flex items-center gap-1.5">
-          <button
-            type="button"
-            onClick={reset}
-            disabled={!isRemixed}
-            title="Reset to OPUS's recommended brief"
-            className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-white/12 bg-white/[0.04] px-3 py-1.5 text-[11px] font-medium text-white/60 transition-colors hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            <RotateCcw size={12} /> Reset
-          </button>
-          <button
-            type="button"
-            onClick={copy}
-            className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-glow/30 bg-glow/10 px-3 py-1.5 text-[11px] font-semibold text-glow transition-colors hover:bg-glow/20"
-          >
-            {copied ? <Check size={12} /> : <CopyIcon size={12} />}
-            {copied ? 'Copied' : 'Copy ad copy'}
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={copyForAdsManager}
+          className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-glow/30 bg-glow/10 px-3 py-1.5 text-[11px] font-semibold text-glow transition-colors hover:bg-glow/20"
+        >
+          {copied ? <Check size={12} /> : <CopyIcon size={12} />}
+          {copied ? 'Copied' : 'Copy for Ads Manager'}
+        </button>
       </div>
 
-      {/* Studio — finished ad (left) + remix rail (right) */}
-      <div className="grid lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)]">
-        {/* The finished, recommended ad */}
-        <section className="border-b border-border p-5 lg:border-b-0 lg:border-r">
-          <div className="mx-auto max-w-[400px]">
-            <p className="mb-3 flex items-center gap-1.5 text-[12px] text-white/45">
-              <Atom size={13} className="text-glow" />
-              {isRemixed
-                ? 'Your remix — built on OPUS’s recommended parts.'
-                : 'OPUS assembled this from the highest-scoring parts of your run.'}
-            </p>
-            <AdPreviewCard
-              ad={ad}
-              image={previewImage}
-              imageBusy={creativeState?.status === 'working'}
-              imageError={creativeState?.status === 'error' ? creativeState.message : undefined}
-              canGenerate={canGenerate}
-              onGenerateImage={onGenerateImage}
+      <div className="grid lg:grid-cols-[minmax(0,1.05fr)_minmax(0,1fr)]">
+        {/* ------------------------------ Editor ------------------------------ */}
+        <section className="order-last space-y-4 border-b border-border p-5 lg:order-first lg:border-b-0 lg:border-r">
+          <div>
+            <FieldLabel
+              label="Hook — first line"
+              count={hook.length}
+              max={PRIMARY_TEXT_FOLD}
+              hint="Lands before the “See more” fold"
             />
+            <textarea
+              value={hook}
+              onChange={(e) => setHook(e.target.value)}
+              rows={2}
+              placeholder="The scroll-stopper — one contrarian, specific line."
+              className="w-full resize-none rounded-xl border border-white/12 bg-black/40 px-3.5 py-2.5 text-[14px] leading-snug text-white placeholder:text-white/25 outline-none transition-colors focus:border-glow/40"
+            />
+          </div>
+
+          <div>
+            <FieldLabel label="Primary text — the argument" />
+            <textarea
+              value={body}
+              onChange={(e) => setBody(e.target.value)}
+              rows={5}
+              placeholder="Proof, mechanism, and the ask — the body of the ad."
+              className="w-full resize-none rounded-xl border border-white/12 bg-black/40 px-3.5 py-2.5 text-[14px] leading-snug text-white placeholder:text-white/25 outline-none transition-colors focus:border-glow/40"
+            />
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <FieldLabel label="Headline" count={headline.length} max={HEADLINE_MAX} />
+              <input
+                value={headline}
+                onChange={(e) => setHeadline(e.target.value)}
+                placeholder="Under the creative, next to the button"
+                className="w-full rounded-xl border border-white/12 bg-black/40 px-3.5 py-2.5 text-[14px] text-white placeholder:text-white/25 outline-none transition-colors focus:border-glow/40"
+              />
+            </div>
+            <div>
+              <FieldLabel label="Description" count={description.length} max={DESCRIPTION_MAX} />
+              <input
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="Optional proof line"
+                className="w-full rounded-xl border border-white/12 bg-black/40 px-3.5 py-2.5 text-[14px] text-white placeholder:text-white/25 outline-none transition-colors focus:border-glow/40"
+              />
+            </div>
+          </div>
+
+          <div>
+            <FieldLabel label="CTA button" hint="Meta button types" />
+            <div className="flex flex-wrap gap-1.5">
+              {META_CTA_OPTIONS.map((option) => (
+                <button
+                  key={option}
+                  type="button"
+                  onClick={() => setCta(option)}
+                  aria-pressed={cta === option}
+                  className={cn(
+                    'rounded-full border px-3 py-1.5 text-[12px] font-semibold transition-colors',
+                    cta === option
+                      ? 'border-glow/50 bg-glow/15 text-glow'
+                      : 'border-white/12 bg-white/[0.03] text-white/55 hover:border-white/25 hover:text-white/80',
+                  )}
+                >
+                  {META_CTA_LABELS[option]}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Creative rail — swap in any render from this run */}
+          {visualConcepts.length > 0 && (
+            <div>
+              <FieldLabel label="Creative" hint="Renders from this run" />
+              <div className="flex flex-wrap gap-2">
+                {visualConcepts.map((c, i) => {
+                  const img = imageFor(c)
+                  const vid = videoFor(c)
+                  const active = creativeConcept?.text === c.text
+                  return (
+                    <button
+                      key={`${c.type}-${i}`}
+                      type="button"
+                      onClick={() => setCreativeConcept(c)}
+                      title={c.type}
+                      aria-pressed={active}
+                      className={cn(
+                        'relative h-16 w-16 overflow-hidden rounded-lg border transition-all',
+                        active
+                          ? 'border-glow/60 shadow-[0_0_0_2px_rgba(94,168,255,0.35)]'
+                          : 'border-white/12 hover:border-white/30',
+                      )}
+                    >
+                      {img ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={img} alt={c.type} className="h-full w-full object-cover" />
+                      ) : (
+                        <span className="grid h-full w-full place-items-center bg-white/[0.03] text-white/35">
+                          {/video|testimonial/i.test(c.type) ? <Film size={16} /> : <ImageIcon size={16} />}
+                        </span>
+                      )}
+                      {vid?.status === 'done' && (
+                        <span className="absolute bottom-0.5 right-0.5 grid h-4 w-4 place-items-center rounded bg-black/70 text-white">
+                          <Film size={9} />
+                        </span>
+                      )}
+                    </button>
+                  )
+                })}
+              </div>
+              {creativeConcept && !image && !videoUrl && !rendering && (
+                <button
+                  type="button"
+                  onClick={onGenerate}
+                  className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-glow/30 bg-glow/10 px-3 py-1.5 text-[11px] font-semibold text-glow transition-colors hover:bg-glow/20"
+                >
+                  <ImageIcon size={12} /> Generate this creative
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* Compliance readout — same validator as the launch gate */}
+          {issues.length > 0 && (
+            <ul className="space-y-1 rounded-xl border border-warning/20 bg-warning/[0.04] p-3">
+              {issues.map((issue, ii) => (
+                <li
+                  key={ii}
+                  className={cn(
+                    'flex items-start gap-1.5 text-[11px]',
+                    issue.severity === 'error' ? 'text-danger' : 'text-warning',
+                  )}
+                >
+                  <AlertTriangle size={11} className="mt-0.5 shrink-0" />
+                  {issue.message}
+                </li>
+              ))}
+            </ul>
+          )}
+
+          {/* OPUS recommendations — winning parts from the run, one tap to use */}
+          <div className="space-y-3 border-t border-white/[0.07] pt-4">
+            <span className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-white/60">
+              <Sparkles size={12} className="text-glow" /> OPUS recommendations
+            </span>
+            <SuggestionLane category="hook" blocks={blocks} onApply={setHook} />
+            <SuggestionLane category="headline" blocks={blocks} onApply={setHeadline} />
+            <SuggestionLane category="body" blocks={blocks} onApply={setBody} />
           </div>
         </section>
 
-        {/* Remix rail */}
-        <section className="flex min-h-0 flex-col p-4">
-          <div className="mb-3 flex items-center gap-2">
-            <Layers size={14} className="text-white/40" />
-            <span className="font-display text-sm font-semibold text-white">Remix</span>
-            <span className="text-[11px] text-white/40">— tap any option to swap it into the ad</span>
-          </div>
-          <div className="grid max-h-[58vh] gap-4 overflow-y-auto pr-1">
-            {CATEGORY_ORDER.map((cat) => (
-              <RemixSection
-                key={cat}
-                category={cat}
-                blocks={blocks}
-                selectedId={composition[cat]}
-                recommendedId={recommended[cat]}
-                onSelect={select}
-                onClear={clear}
-              />
-            ))}
+        {/* ----------------------------- Preview ------------------------------ */}
+        <section className="p-5">
+          <p className="mb-3 flex items-center gap-1.5 text-[12px] text-white/45">
+            <Atom size={13} className="text-glow" />
+            Live preview — exactly how the ad reads in the Meta feed.
+          </p>
+          <div className="mx-auto max-w-[420px]">
+            <FacebookAdPreview
+              primaryText={primaryText}
+              headline={headline.trim()}
+              description={description.trim()}
+              ctaText={META_CTA_LABELS[cta]}
+              imageUrl={image}
+              videoUrl={videoUrl}
+              rendering={Boolean(rendering)}
+            />
           </div>
         </section>
       </div>

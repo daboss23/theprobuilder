@@ -110,6 +110,8 @@ export interface ReactorInputs {
   outputTypesAgentDecided: boolean
   /** Selected aspect ratios per deliverable, e.g. { 'Video Creative': ['9:16'] }. */
   dimensions?: Record<string, string[]>
+  /** How many distinct versions of every image/video creative the reactor makes (1–4). */
+  variations?: number
   awarenessStage: string
   awarenessDirective: string
   audienceType: string

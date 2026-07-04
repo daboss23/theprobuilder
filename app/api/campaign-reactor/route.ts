@@ -486,6 +486,15 @@ function buildInputBlocks(inputs: ReactorInputs | undefined): string {
         )
       }
     }
+
+    // Block 7c — Creative variations. Each visual deliverable ships as N
+    // genuinely different concepts, never paraphrases of one another.
+    const variations = Math.min(Math.max(inputs.variations ?? 1, 1), 4)
+    if (variations > 1) {
+      parts.push(
+        `CREATIVE VARIATIONS: Produce exactly ${variations} distinct variations of EVERY visual deliverable (static, video, UGC, and carousel concepts). Each variation must take a genuinely different creative approach — a different hook, a different winning pattern or proof asset, a different visual construction. Never submit a paraphrase of another variation. Submit each variation as its own concept with its own production brief and ad package.`,
+      )
+    }
   }
 
   // Block 8 — Intelligence systems (every run)
@@ -676,9 +685,30 @@ async function runDemo(controller: ReadableStreamDefaultController, body: Reacto
     return [o]
   }
   const wanted = outputs.flatMap(expand).map(norm)
+  // Honor the requested variation count: every VISUAL concept fans out into N
+  // distinct takes (copy concepts stay single — variations are a creative knob).
+  const variations = Math.min(Math.max(body.reactorInputs?.variations ?? 1, 1), 4)
+  const variantTwists = [
+    '',
+    'Alternate take — flip the hook to the cost of waiting, swap in a different named member proof.',
+    'Alternate take — lead with the after-state (margin + weekends back) before revealing the mechanism.',
+    'Alternate take — problem-first pattern interrupt on a chaotic site, single stark stat as the turn.',
+  ]
   for (const c of pool.filter((c) => wanted.includes(norm(c.type)) && (c.score ?? 0) >= 7)) {
     c.neuro = demoNeuroScore(c.score, c.type)
     sse(controller, { type: 'concept', concept: c })
+    if (/concept/i.test(c.type) && !/hook|headline|primary|vsl/i.test(c.type)) {
+      for (let k = 2; k <= variations; k++) {
+        const twist = variantTwists[k - 1] ?? variantTwists[1]
+        const variant: Concept = {
+          ...c,
+          text: `${c.text} Variation ${k}: ${twist}`,
+          adPackage: demoAdPackage(c.type, a),
+          neuro: demoNeuroScore(c.score, c.type),
+        }
+        sse(controller, { type: 'concept', concept: variant })
+      }
+    }
   }
   sse(controller, { type: 'done' })
 }

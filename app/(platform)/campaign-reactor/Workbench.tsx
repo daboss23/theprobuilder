@@ -56,11 +56,14 @@ export function Workbench() {
   // in-flight reactor run survives navigating to another dashboard and back.
   const {
     phase,
+    concepts,
     streamReactor,
     generateCreative,
     animate,
     generateUGC,
     markOutcome,
+    imageFor,
+    videoFor,
   } = useReactorRun()
   const [modalOpen, setModalOpen] = useState(false)
   // Output surface: the autonomous reactor (default hero), the Studio (remix the
@@ -84,6 +87,10 @@ export function Workbench() {
   // Selected aspect ratios per deliverable (Formats step). Each selected
   // deliverable is seeded with its default size so the step is never blank.
   const [dimensions, setDimensions] = useState<Record<string, string[]>>({})
+  // How many distinct versions of every image/video creative the reactor makes.
+  const [variations, setVariations] = useState(2)
+  // The concept the user sent into the Studio via "Configure in Studio".
+  const [studioSeed, setStudioSeed] = useState<Concept | null>(null)
   // Strategic reasoning for the recommended angle (Dynamic Strategy Engine).
   const [angleReason, setAngleReason] = useState('')
   const [angleConfidence, setAngleConfidence] = useState<number | undefined>(undefined)
@@ -384,6 +391,7 @@ export function Workbench() {
       outputTypes: outputs,
       outputTypesAgentDecided: outputs.length === 0,
       dimensions,
+      variations,
       awarenessStage: awareness.label,
       awarenessDirective: awareness.directive,
       audienceType: audience.label,
@@ -437,14 +445,61 @@ export function Workbench() {
     frameworks: activeInputs.map(intelSourceLabel),
   })
 
+  // The render size for a concept — the first ratio picked on the Formats step
+  // for its deliverable family, falling back to the platform defaults.
+  const aspectFor = useCallback(
+    (c: Concept) => {
+      const video = isVideoConcept(c)
+      const key = video ? 'Video Creative' : 'Static Creative'
+      return dimensions[key]?.[0] ?? (video ? '9:16' : '1:1')
+    },
+    [dimensions],
+  )
+
   // Thin wrappers: the run logic lives in the persistent provider; here we just
   // thread the current model picks + reference library into each call.
-  const runCreative = (c: Concept) =>
-    generateCreative(c, { imageModel: resolvedImageModel, videoModel: resolvedVideoModel })
+  const runCreative = useCallback(
+    (c: Concept) =>
+      generateCreative(c, {
+        imageModel: resolvedImageModel,
+        videoModel: resolvedVideoModel,
+        aspectRatio: aspectFor(c),
+      }),
+    [generateCreative, resolvedImageModel, resolvedVideoModel, aspectFor],
+  )
   const runAnimate = (c: Concept, imageUrl: string) =>
     animate(c, imageUrl, { videoModel: resolvedVideoModel })
   const runUGC = (c: Concept) =>
     generateUGC(c, { videoModel: resolvedVideoModel, faceUrls, refVideos })
+
+  // The system creates the ad, not the user: once the run lands, every visual
+  // concept renders its creative automatically (when a provider is configured).
+  // A new firing resets the ledger so the next run auto-renders too.
+  const autoGenRef = useRef<Set<string>>(new Set())
+  useEffect(() => {
+    if (phase === 'firing') {
+      autoGenRef.current = new Set()
+      return
+    }
+    if (phase !== 'done') return
+    const canImage = imageModels.some((m) => m.configured)
+    const canVideo = videoModels.some((m) => m.configured)
+    for (const c of concepts) {
+      if (!c.type.includes('Concept')) continue
+      if (autoGenRef.current.has(c.text)) continue
+      if (isVideoConcept(c) ? !canVideo : !canImage) continue
+      autoGenRef.current.add(c.text)
+      if (imageFor(c) || videoFor(c)) continue
+      runCreative(c)
+    }
+  }, [phase, concepts, imageModels, videoModels, imageFor, videoFor, runCreative])
+
+  // "Configure in Studio" — carry the concept (copy + creative) into the Studio
+  // editor so the user refines a real ad instead of starting from parts.
+  const configureInStudio = useCallback((c: Concept) => {
+    setStudioSeed(c)
+    setView('studio')
+  }, [])
 
   // Keep the custom audience/offer DirectiveOption in sync with the typed text so
   // its directive instructs OPUS to treat the value as a hard constraint.
@@ -585,6 +640,8 @@ export function Workbench() {
     deliverablesReason,
     dimensions,
     toggleDimension,
+    variations,
+    setVariations,
     awarenessField,
     audienceField,
     offerField,
@@ -616,28 +673,24 @@ export function Workbench() {
     onGenerateCreative: runCreative,
     onAnimate: runAnimate,
     onGenerateUGC: runUGC,
+    onConfigureInStudio: configureInStudio,
     onMarkOutcome: (c, v) => markOutcome(c, v, angle, outcomeAttributes(c)),
     onRetry: fire,
   }
 
   return (
     <div className="space-y-6">
-      {/* The brief wizard opens itself on arrival — the header only carries the
+      {/* The brief wizard opens itself on arrival — the top row only carries the
           run status and the output-surface toggle. */}
       <div className="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h2 className="font-display text-lg font-semibold text-white">Configure your campaign</h2>
-          <p className="mt-0.5 text-sm text-white/45">
-            {phase === 'firing' ? (
-              <span className="inline-flex items-center gap-1.5 text-glow/80">
-                <Loader2 size={13} className="animate-spin" /> Reactor firing — agents are working
-                through your brief.
-              </span>
-            ) : (
-              'Brief, audience, offer, performance feed, and brand — collected across five quick steps, then fire the reactor.'
-            )}
-          </p>
-        </div>
+        {phase === 'firing' ? (
+          <span className="inline-flex items-center gap-1.5 text-sm text-glow/80">
+            <Loader2 size={13} className="animate-spin" /> Reactor firing — agents are working
+            through your brief.
+          </span>
+        ) : (
+          <span />
+        )}
         {/* Output surface toggle — watch the reactor work, remix in the
             Studio, or wire the production graph in the Flow. */}
         <div className="inline-flex rounded-full border border-white/10 bg-white/[0.03] p-1">
@@ -667,7 +720,11 @@ export function Workbench() {
           onConfigure={() => setModalOpen(true)}
         />
       ) : view === 'studio' ? (
-        <CreativeCanvas offerName={offerName} onConfigure={() => setModalOpen(true)} />
+        <CreativeCanvas
+          offerName={offerName}
+          seed={studioSeed}
+          onConfigure={() => setModalOpen(true)}
+        />
       ) : phase === 'idle' ? (
         <Panel className="min-h-[480px]">
           <PanelHeader
