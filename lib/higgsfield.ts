@@ -16,13 +16,15 @@ const IMAGE_ENDPOINT = process.env.HIGGSFIELD_IMAGE_ENDPOINT || '/v1/text2image/
 const VIDEO_ENDPOINT = process.env.HIGGSFIELD_VIDEO_ENDPOINT || '/v1/image2video/dop'
 const VIDEO_MODEL = process.env.HIGGSFIELD_VIDEO_MODEL || 'dop-turbo'
 
-export type AspectRatio = '1:1' | '9:16' | '16:9'
+export type AspectRatio = '1:1' | '9:16' | '16:9' | '4:3' | '3:4'
 export type VideoStatus = 'queued' | 'in_progress' | 'completed' | 'failed' | 'nsfw' | 'unknown'
 
 const ASPECT_DIMENSIONS: Record<AspectRatio, string> = {
   '1:1': process.env.HIGGSFIELD_IMAGE_SIZE || '1080x1080',
   '9:16': '1080x1920',
   '16:9': '1920x1080',
+  '4:3': '1440x1080',
+  '3:4': '1080x1440',
 }
 
 /** Resolve credentials from any of the supported env shapes. */

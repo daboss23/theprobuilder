@@ -12,6 +12,8 @@ import {
   LiveAgentWorkflow,
   type WorkflowControls,
 } from '@/components/campaign-reactor/workflow/LiveAgentWorkflow'
+import { CreativeCanvas } from '@/components/campaign-reactor/canvas/CreativeCanvas'
+import { CreativeFlow } from '@/components/campaign-reactor/flow/CreativeFlow'
 import { reactorOutputTypes, winningAngles } from '@/lib/reactor-data'
 import { INTEL_SOURCES, intelSourceLabel } from '@/lib/intelligence-sources'
 import {
@@ -61,6 +63,9 @@ export function Workbench() {
     markOutcome,
   } = useReactorRun()
   const [modalOpen, setModalOpen] = useState(false)
+  // Output surface: the autonomous reactor (default hero), the Studio (remix the
+  // run's parts into a finished ad), or the Flow (node-graph production canvas).
+  const [view, setView] = useState<'reactor' | 'studio' | 'flow'>('reactor')
   // Selected intelligence source IDs — the agents recommend a subset from the
   // brief (behind the scenes); OPUS runs on this set. Empty until the brief
   // produces recommendations, then defaulted to the full set at fire time.
@@ -618,28 +623,55 @@ export function Workbench() {
             then fire the reactor.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => setModalOpen(true)}
-          disabled={phase === 'firing'}
-          className="fire-btn inline-flex items-center gap-2 rounded-full px-6 py-3.5 font-display text-base font-bold uppercase tracking-wide text-white"
-        >
-          {phase === 'firing' ? (
-            <>
-              <Loader2 size={16} className="animate-spin" /> Firing Reactor…
-            </>
-          ) : (
-            <>
-              <Atom size={16} /> New Creative Campaign
-            </>
-          )}
-        </button>
+        <div className="flex items-center gap-3">
+          {/* Output surface toggle — watch the reactor work, remix in the
+              Studio, or wire the production graph in the Flow. */}
+          <div className="inline-flex rounded-full border border-white/10 bg-white/[0.03] p-1">
+            {(['reactor', 'studio', 'flow'] as const).map((v) => (
+              <button
+                key={v}
+                type="button"
+                onClick={() => setView(v)}
+                aria-pressed={view === v}
+                className={`rounded-full px-3.5 py-1.5 text-xs font-semibold capitalize transition-colors ${
+                  view === v ? 'bg-glow/15 text-glow' : 'text-white/45 hover:text-white/70'
+                }`}
+              >
+                {v}
+              </button>
+            ))}
+          </div>
+          <button
+            type="button"
+            onClick={() => setModalOpen(true)}
+            disabled={phase === 'firing'}
+            className="fire-btn inline-flex items-center gap-2 rounded-full px-6 py-3.5 font-display text-base font-bold uppercase tracking-wide text-white"
+          >
+            {phase === 'firing' ? (
+              <>
+                <Loader2 size={16} className="animate-spin" /> Firing Reactor…
+              </>
+            ) : (
+              <>
+                <Atom size={16} /> New Creative Campaign
+              </>
+            )}
+          </button>
+        </div>
       </div>
 
-      {/* Output — before firing, the empty state; once fired, the live agent
-          workflow becomes the primary experience (raw telemetry moves into a
-          collapsible drawer inside it). */}
-      {phase === 'idle' ? (
+      {/* Output — the Creative Canvas (hands-on remix) or the autonomous reactor.
+          In reactor mode: before firing, the empty state; once fired, the live
+          agent workflow (raw telemetry collapses into a drawer inside it). */}
+      {view === 'flow' ? (
+        <CreativeFlow
+          offerName={offerName}
+          angle={angle === NO_PREFERENCE ? undefined : angle}
+          onConfigure={() => setModalOpen(true)}
+        />
+      ) : view === 'studio' ? (
+        <CreativeCanvas offerName={offerName} onConfigure={() => setModalOpen(true)} />
+      ) : phase === 'idle' ? (
         <Panel className="min-h-[480px]">
           <PanelHeader
             icon={<Atom size={16} className="animate-pulse-glow" />}

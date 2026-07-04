@@ -1064,6 +1064,32 @@ export async function POST(request: NextRequest) {
       } catch (err) {
         console.error('Campaign Reactor error:', err)
         const status = (err as { status?: number })?.status
+        const rawMessage = err instanceof Error ? err.message : ''
+
+        // A key is configured but the account is out of credit (or otherwise
+        // can't bill) — the live run can't proceed. Rather than hard-faulting,
+        // honour the platform's "always works end to end" rule and fall back to
+        // the curated demo intelligence so the canvas still fills. Matches the
+        // missing-key fallback at the top of the handler.
+        const isBilling =
+          status === 402 ||
+          /credit balance is too low|billing|insufficient (?:quota|funds|credit)|exceeded your (?:current )?quota|payment required/i.test(
+            rawMessage,
+          )
+        if (isBilling) {
+          try {
+            sse(controller, {
+              type: 'step',
+              text: 'Live Anthropic credit unavailable — switching to demo intelligence so the run completes. Add credit in Plans & Billing for the live OPUS network.',
+            })
+            await runDemo(controller, body)
+            controller.close()
+            return
+          } catch (demoErr) {
+            console.error('Campaign Reactor demo fallback error:', demoErr)
+          }
+        }
+
         const message =
           status === 529 || status === 503
             ? 'Claude is temporarily overloaded. Please fire the reactor again in a moment.'

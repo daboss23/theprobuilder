@@ -4,7 +4,7 @@
  * (fal / FLUX, Higgsfield) the same way.
  */
 
-export type AspectRatio = '1:1' | '9:16' | '16:9'
+export type AspectRatio = '1:1' | '9:16' | '16:9' | '4:3' | '3:4'
 
 export type ImageProvider = 'higgsfield' | 'fal'
 

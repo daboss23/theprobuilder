@@ -13,8 +13,10 @@ const NODE: Record<PhaseStatus, string> = {
 }
 
 /** Class for the connector leading from `prev` into `cur`. */
-function linkClass(prev: PhaseEntry | undefined, cur: PhaseEntry, reduced: boolean): string {
-  if (!prev) return 'opacity-0'
+function linkClass(prev: PhaseEntry | undefined, cur: PhaseEntry | undefined, reduced: boolean): string {
+  // The first node has no incoming link and the last has no outgoing one, so a
+  // missing endpoint simply means "no connector here".
+  if (!prev || !cur) return 'opacity-0'
   if (prev.status === 'complete' && cur.status === 'active') {
     return cn('phase-link phase-link--done', !reduced && 'phase-link--flow')
   }
