@@ -90,9 +90,12 @@ export interface ReactorForm {
   toggleOutput: (v: string) => void
   recommendedDeliverables: string[]
   deliverablesReason: string
-  // Step 2 — formats & sizes: selected aspect ratios per deliverable.
+  // Step 2 — formats & sizes: selected aspect ratios per deliverable, plus how
+  // many distinct versions of every image/video creative the reactor makes.
   dimensions: Record<string, string[]>
   toggleDimension: (deliverable: string, ratio: string) => void
+  variations: number
+  setVariations: (n: number) => void
   // Reference images/videos for consistent-character UGC (shown when UGC is picked).
   onFaceChange: (images: string[], videos: string[]) => void
   refCount: number
@@ -360,7 +363,7 @@ function fieldSummary(field: StrategicField): string {
   return field.value || 'No Preference — Reactor decides'
 }
 
-// Compact "Static 1:1, 9:16 · Video 9:16" formats line for the review step.
+// Compact "Static 1:1, 9:16 · Video 9:16 · ×2 variations" line for the review step.
 function formatsSummary(form: ReactorForm): string {
   const parts = form.outputs
     .map((o) => {
@@ -368,7 +371,8 @@ function formatsSummary(form: ReactorForm): string {
       return r.length ? `${o.replace(/ Creatives?$/, '')} ${r.join('/')}` : ''
     })
     .filter(Boolean)
-  return parts.length ? parts.join(' · ') : 'Reactor decides'
+  const base = parts.length ? parts.join(' · ') : 'Reactor decides'
+  return form.variations > 1 ? `${base} · ×${form.variations} variations` : base
 }
 
 export function ReactorModal({ open, onClose, onFire, form }: ReactorModalProps) {
@@ -642,6 +646,39 @@ export function ReactorModal({ open, onClose, onFire, form }: ReactorModalProps)
                       </div>
                     )
                   })}
+
+                  {/* How many distinct versions of every creative the reactor makes */}
+                  <div className="border-t border-white/10 pt-4">
+                    <SectionLabel>Variations per creative</SectionLabel>
+                    <p className="-mt-1 mb-3 text-sm text-white/40">
+                      The reactor creates this many distinct versions of every image and video
+                      creative — different hook, pattern, and proof on each.
+                    </p>
+                    <div className="grid grid-cols-4 gap-2.5">
+                      {[1, 2, 3, 4].map((n) => {
+                        const on = form.variations === n
+                        return (
+                          <button
+                            key={n}
+                            type="button"
+                            onClick={() => form.setVariations(n)}
+                            aria-pressed={on}
+                            className={`pick-card flex flex-col items-center gap-1 p-3 text-center ${on ? 'is-on' : ''}`}
+                          >
+                            <span className="font-display text-xl font-bold text-white">×{n}</span>
+                            <span className="text-[11px] text-white/45">
+                              {n === 1 ? 'Single' : `${n} versions`}
+                            </span>
+                            {n === 2 && (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-[#FF9D4D]">
+                                <Sparkles size={9} /> Recommended
+                              </span>
+                            )}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
 
                   {form.outputs.some((o) => /ugc/i.test(o)) && (
                     <div className="border-t border-white/10 pt-4">

@@ -36,6 +36,7 @@ export interface WorkflowControls {
   onGenerateCreative: (c: Concept) => void
   onAnimate: (c: Concept, image: string) => void
   onGenerateUGC: (c: Concept) => void
+  onConfigureInStudio: (c: Concept) => void
   onMarkOutcome: (c: Concept, verdict: Verdict) => void
   onRetry: () => void
 }
@@ -304,6 +305,7 @@ export function LiveAgentWorkflow(controls: WorkflowControls) {
               onGenerateCreative={() => controls.onGenerateCreative(c)}
               onAnimate={(img) => controls.onAnimate(c, img)}
               onGenerateUGC={() => controls.onGenerateUGC(c)}
+              onConfigureInStudio={() => controls.onConfigureInStudio(c)}
               onMarkOutcome={(v) => controls.onMarkOutcome(c, v)}
             />
           ))}
