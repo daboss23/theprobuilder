@@ -7,7 +7,6 @@ import { cn } from '@/lib/utils'
 import { accentClass } from '@/components/reactor/ui'
 import { INTELLIGENCE, INTELLIGENCE_IDS, type IntelligenceId } from '@/lib/agents'
 import { useReactorRun, type Concept } from '@/components/campaign-reactor/ReactorRunContext'
-import type { Verdict } from '@/lib/outcomes'
 import {
   ACTIVE_STATUSES,
   derivePhases,
@@ -31,13 +30,10 @@ export interface WorkflowControls {
   faceCount: number
   refVideoCount: number
   copied: string | null
-  verdictOptions: { value: Verdict; label: string }[]
   onCopy: (text: string) => void
-  onGenerateCreative: (c: Concept) => void
   onAnimate: (c: Concept, image: string) => void
   onGenerateUGC: (c: Concept) => void
   onConfigureInStudio: (c: Concept) => void
-  onMarkOutcome: (c: Concept, verdict: Verdict) => void
   onRetry: () => void
 }
 
@@ -93,7 +89,6 @@ export function LiveAgentWorkflow(controls: WorkflowControls) {
     imageMetaFor,
     videoFor,
     creativeStateFor,
-    logged,
   } = useReactorRun()
 
   const prefersReduced = useReducedMotion()
@@ -299,14 +294,10 @@ export function LiveAgentWorkflow(controls: WorkflowControls) {
               faceCount={controls.faceCount}
               refVideoCount={controls.refVideoCount}
               copied={controls.copied === c.text}
-              logged={logged.has(c.text)}
-              verdictOptions={controls.verdictOptions}
               onCopy={() => controls.onCopy(c.text)}
-              onGenerateCreative={() => controls.onGenerateCreative(c)}
               onAnimate={(img) => controls.onAnimate(c, img)}
               onGenerateUGC={() => controls.onGenerateUGC(c)}
               onConfigureInStudio={() => controls.onConfigureInStudio(c)}
-              onMarkOutcome={(v) => controls.onMarkOutcome(c, v)}
             />
           ))}
         </div>

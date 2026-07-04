@@ -96,7 +96,10 @@ GEMINI_API_KEY               # Nano Banana 2 image model (Gemini) — or GOOGLE_
 HF_CREDENTIALS               # Higgsfield image + video ("KEY_ID:KEY_SECRET")
 FAL_KEY                      # fal.ai gateway → Seedance/Kling/Veo/Wan video models
 PIPEBOARD_API_TOKEN          # Meta Ads MCP (live ad performance) — optional
-META_ACCESS_TOKEN            # Meta Marketing API (System User token) — /meta dashboard + performance ingest
+META_ACCESS_TOKEN            # Meta Marketing API (System User token) — /meta dashboard + performance ingest + creative publish
+META_AD_ACCOUNT_ID           # Ad account for "Push Creative to Meta" (with or without act_ prefix)
+META_PAGE_ID                 # Facebook Page the pushed creatives run under
+META_LINK_URL                # Optional — destination link on pushed creatives (default https://theprobuilder.com)
 META_APP_SECRET              # Optional — adds appsecret_proof request signing
 META_INGEST_MIN_SPEND        # Optional — spend floor to grade an ad (default 50)
 META_INGEST_DATE_PRESET      # Optional — Graph date_preset for the sync (default last_30d)

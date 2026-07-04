@@ -29,27 +29,16 @@ import {
   type DirectiveOption,
   type ReactorInputs,
   type ReactorSuggestion,
-  type StrategicIntelligence,
 } from '@/lib/reactor-inputs'
 import { recommendVideoModel } from '@/lib/video/recommend'
 import type { ModelAvailability } from '@/lib/video/types'
 import { recommendImageModel } from '@/lib/image/recommend'
 import type { ImageModelAvailability } from '@/lib/image/types'
 import { useReactorRun, type Concept } from '@/components/campaign-reactor/ReactorRunContext'
-import type { Verdict, OutcomeAttributes } from '@/lib/outcomes'
 
 // The native campaign-angle choices (the No Preference / Custom sentinels are
 // added by the dropdown itself).
 const ANGLE_NAMES = winningAngles.map((a) => a.name)
-
-// Client-safe verdict menu (no import from lib/outcomes runtime — that module is
-// server-only). Mirrors the Performance Intelligence verdict set.
-const VERDICT_OPTIONS: { value: Verdict; label: string }[] = [
-  { value: 'winner', label: 'Winner' },
-  { value: 'high_performer', label: 'High Performer' },
-  { value: 'average', label: 'Average' },
-  { value: 'loser', label: 'Loser' },
-]
 
 export function Workbench() {
   // Run + media state lives in the persistent platform-layout provider, so an
@@ -61,7 +50,6 @@ export function Workbench() {
     generateCreative,
     animate,
     generateUGC,
-    markOutcome,
     imageFor,
     videoFor,
   } = useReactorRun()
@@ -238,8 +226,6 @@ export function Workbench() {
   // offer from the brief, so each field already shows the agent's choice. The
   // user can override any of them; a manual change locks that field.
   const [suggesting, setSuggesting] = useState(false)
-  // Strategic Intelligence read — loaded at fire time to enrich logged outcomes.
-  const [intelligence, setIntelligence] = useState<StrategicIntelligence | null>(null)
   const touchedRef = useRef<Set<string>>(new Set())
   const markTouched = (field: string) => {
     touchedRef.current.add(field)
@@ -334,27 +320,6 @@ export function Workbench() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [brief, modalOpen])
 
-  // Load the Strategic Intelligence read so logged outcomes carry the strategic
-  // configuration OPUS reasoned over. Best-effort, grounded in current inputs.
-  const loadIntelligence = useCallback(async () => {
-    try {
-      const res = await fetch('/api/campaign-reactor/intelligence', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          brief,
-          angle,
-          awareness: awareness.label,
-          audience: audience.label,
-          offer: offer.label,
-        }),
-      }).then((r) => r.json())
-      if (res.intelligence) setIntelligence(res.intelligence as StrategicIntelligence)
-    } catch {
-      /* best-effort — outcome attributes fall back to the raw inputs */
-    }
-  }, [brief, angle, awareness, audience, offer])
-
   // Quick Launch website extraction — pull a business's own offer / audience /
   // positioning off their site and fold it into the brief, so a one-input launch
   // still fires grounded in their real intel. Best-effort; never blocks.
@@ -381,8 +346,6 @@ export function Workbench() {
   // Fire from the modal — assembles the full ReactorInputs from every step plus
   // the classic payload fields, then posts into the shared SSE pipeline.
   const fire = () => {
-    // Enrich outcome attributes in the background (non-blocking).
-    void loadIntelligence()
     const reactorInputsPayload: ReactorInputs = {
       campaignName,
       brief,
@@ -425,25 +388,6 @@ export function Workbench() {
   // A concept whose brief is a moving creative (Video / Testimonial) renders a
   // video ad; everything else renders a still.
   const isVideoConcept = (c: Concept) => /video|testimonial/i.test(c.type)
-
-  // The strategic attributes captured with every logged outcome — what ORACLE
-  // learns from. Sourced from the current run inputs + the concept itself.
-  const outcomeAttributes = (c: Concept): OutcomeAttributes => ({
-    campaignType: angle,
-    audience: audience.label,
-    awareness: awareness.label,
-    offer: offer.label,
-    pattern: c.productionBrief?.pattern || intelligence?.primaryPattern || angle,
-    creativeStructure: intelligence?.recommendedCreativeStructure,
-    copyStructure: intelligence?.recommendedCopyStructure,
-    platform: 'Meta',
-    assetType: c.type,
-    // Full strategic configuration so ORACLE can reuse exactly what won.
-    proofAssets: [c.basis, ...(intelligence?.knowledgeAssetsConsulted ?? [])].filter(
-      (x): x is string => Boolean(x),
-    ),
-    frameworks: activeInputs.map(intelSourceLabel),
-  })
 
   // The render size for a concept — the first ratio picked on the Formats step
   // for its deliverable family, falling back to the platform defaults.
@@ -668,13 +612,10 @@ export function Workbench() {
     faceCount: faceUrls.length,
     refVideoCount: refVideos.length,
     copied,
-    verdictOptions: VERDICT_OPTIONS,
     onCopy: copy,
-    onGenerateCreative: runCreative,
     onAnimate: runAnimate,
     onGenerateUGC: runUGC,
     onConfigureInStudio: configureInStudio,
-    onMarkOutcome: (c, v) => markOutcome(c, v, angle, outcomeAttributes(c)),
     onRetry: fire,
   }
 
