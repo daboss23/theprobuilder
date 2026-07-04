@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
+  Activity,
   AlertTriangle,
   Atom,
   Check,
@@ -11,12 +12,14 @@ import {
   ImageIcon,
   Loader2,
   MessageCircle,
+  Rocket,
   Share2,
   Sparkles,
   ThumbsUp,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { accentClass } from '@/components/reactor/ui'
+import { accentClass, Pill } from '@/components/reactor/ui'
+import { NEURO_AXES, NEURO_PASS_MARK, type NeuroScore } from '@/lib/reactor-inputs'
 import { useReactorRun, type Concept } from '@/components/campaign-reactor/ReactorRunContext'
 import {
   blocksInCategory,
@@ -89,6 +92,49 @@ function FieldLabel({
           </span>
         )}
       </span>
+    </div>
+  )
+}
+
+/* -------------------------------------------------------------------------- */
+/*  NEURO pre-test readout — predicted response for the configured ad          */
+/* -------------------------------------------------------------------------- */
+
+function PretestBar({ label, value }: { label: string; value: number }) {
+  const tone = value >= 8 ? 'bg-success' : value >= NEURO_PASS_MARK ? 'bg-glow' : 'bg-warning'
+  return (
+    <div className="flex items-center gap-2">
+      <span className="w-[5rem] shrink-0 text-[10px] uppercase tracking-wide text-white/45">{label}</span>
+      <div className="flex flex-1 gap-0.5" aria-hidden>
+        {Array.from({ length: 10 }).map((_, i) => (
+          <span key={i} className={`h-1.5 flex-1 rounded-sm ${i < value ? tone : 'bg-white/10'}`} />
+        ))}
+      </div>
+      <span className="w-7 shrink-0 text-right text-[10px] font-medium text-white/70">{value}</span>
+    </div>
+  )
+}
+
+function PretestPanel({ neuro, demo }: { neuro: NeuroScore; demo?: boolean }) {
+  return (
+    <div className="rounded-xl border border-glow/15 bg-glow/[0.04] p-3">
+      <div className="mb-1.5 flex items-center justify-between gap-2">
+        <span className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-glow/80">
+          <Activity size={11} /> Predicted Response{demo ? ' (demo)' : ''}
+        </span>
+        <Pill tone={neuro.overall >= 8 ? 'success' : neuro.overall >= NEURO_PASS_MARK ? 'primary' : 'warning'}>
+          {neuro.overall}/10
+        </Pill>
+      </div>
+      <div className="space-y-1">
+        {NEURO_AXES.map(({ key, label }) => (
+          <PretestBar key={key} label={label} value={neuro[key]} />
+        ))}
+      </div>
+      {neuro.reason && <p className="mt-2 text-[11px] text-white/55">{neuro.reason}</p>}
+      <p className="mt-1 text-[10px] italic text-white/30">
+        Estimate from neuromarketing principles — a prediction, not measured brain data.
+      </p>
     </div>
   )
 }
@@ -332,6 +378,68 @@ export function CreativeCanvas({
     cta,
   }
   const issues = validateAdPackage(pkg)
+  const hasErrors = issues.some((i) => i.severity === 'error')
+
+  /* --------------- Pre-test (NEURO) + Push Creative to Meta ---------------- */
+  const [pretest, setPretest] = useState<{
+    status: 'idle' | 'testing' | 'done'
+    neuro?: NeuroScore
+    demo?: boolean
+  }>({ status: 'idle' })
+  const [push, setPush] = useState<{
+    status: 'idle' | 'pushing' | 'done' | 'error'
+    message?: string
+  }>({ status: 'idle' })
+
+  // The ad changed — the old pre-test and push result no longer describe it.
+  useEffect(() => {
+    setPretest((p) => (p.status === 'done' ? { status: 'idle' } : p))
+    setPush((p) => (p.status === 'idle' || p.status === 'pushing' ? p : { status: 'idle' }))
+  }, [primaryText, headline, description, cta])
+
+  const runPretest = useCallback(async () => {
+    setPretest({ status: 'testing' })
+    try {
+      const res = await fetch('/api/studio/pretest', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          pkg: { primaryText, headline: headline.trim(), description: description.trim() || undefined, cta },
+          conceptType: creativeConcept?.type ?? 'Studio Ad',
+        }),
+      }).then((r) => r.json())
+      if (res.ok && res.neuro) setPretest({ status: 'done', neuro: res.neuro as NeuroScore, demo: res.demo })
+      else setPretest({ status: 'idle' })
+    } catch {
+      setPretest({ status: 'idle' })
+    }
+  }, [primaryText, headline, description, cta, creativeConcept])
+
+  const pushToMeta = useCallback(async () => {
+    setPush({ status: 'pushing' })
+    try {
+      const res = await fetch('/api/meta/publish', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          pkg: { primaryText, headline: headline.trim(), description: description.trim() || undefined, cta },
+          imageUrl: image,
+          videoUrl,
+          name: creativeConcept?.type,
+        }),
+      }).then((r) => r.json())
+      if (res.ok) {
+        setPush({
+          status: 'done',
+          message: `Creative ${res.creativeId ? `#${res.creativeId} ` : ''}is in your Meta creative library — attach it to an ad set in Ads Manager.`,
+        })
+      } else {
+        setPush({ status: 'error', message: res.error || 'Meta rejected the creative.' })
+      }
+    } catch {
+      setPush({ status: 'error', message: 'Could not reach Meta — try again.' })
+    }
+  }, [primaryText, headline, description, cta, image, videoUrl, creativeConcept])
 
   const copyForAdsManager = useCallback(async () => {
     try {
@@ -564,7 +672,7 @@ export function CreativeCanvas({
             <Atom size={13} className="text-glow" />
             Live preview — exactly how the ad reads in the Meta feed.
           </p>
-          <div className="mx-auto max-w-[420px]">
+          <div className="mx-auto max-w-[420px] space-y-3">
             <FacebookAdPreview
               primaryText={primaryText}
               headline={headline.trim()}
@@ -574,6 +682,57 @@ export function CreativeCanvas({
               videoUrl={videoUrl}
               rendering={Boolean(rendering)}
             />
+
+            {/* Pre-test before spend, then push the finished creative to Meta */}
+            {pretest.status === 'done' && pretest.neuro && (
+              <PretestPanel neuro={pretest.neuro} demo={pretest.demo} />
+            )}
+            <div className="grid gap-2">
+              <button
+                type="button"
+                onClick={runPretest}
+                disabled={pretest.status === 'testing' || !primaryText.trim()}
+                className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-glow/30 bg-glow/10 px-4 py-2.5 text-[12px] font-semibold text-glow transition-colors hover:bg-glow/20 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {pretest.status === 'testing' ? (
+                  <Loader2 size={13} className="animate-spin" />
+                ) : (
+                  <Activity size={13} />
+                )}
+                {pretest.status === 'testing'
+                  ? 'Pre-testing against neuromarketing principles…'
+                  : pretest.status === 'done'
+                    ? 'Re-run pre-test'
+                    : 'Pre-test this ad — predicted response before spend'}
+              </button>
+              <button
+                type="button"
+                onClick={pushToMeta}
+                disabled={push.status === 'pushing' || hasErrors || !primaryText.trim() || !headline.trim()}
+                title={hasErrors ? 'Fix the compliance issues first' : undefined}
+                className="fire-btn inline-flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3 font-display text-sm font-bold uppercase tracking-[0.14em] text-white"
+              >
+                {push.status === 'pushing' ? (
+                  <>
+                    <Loader2 size={15} className="animate-spin" /> Pushing to Meta…
+                  </>
+                ) : (
+                  <>
+                    <Rocket size={15} /> Push Creative to Meta
+                  </>
+                )}
+              </button>
+              {push.status === 'done' && (
+                <p className="flex items-start gap-1.5 rounded-xl border border-success/25 bg-success/[0.06] p-2.5 text-[11px] text-success">
+                  <Check size={12} className="mt-0.5 shrink-0" /> {push.message}
+                </p>
+              )}
+              {push.status === 'error' && (
+                <p className="flex items-start gap-1.5 rounded-xl border border-warning/25 bg-warning/[0.06] p-2.5 text-[11px] text-warning">
+                  <AlertTriangle size={12} className="mt-0.5 shrink-0" /> {push.message}
+                </p>
+              )}
+            </div>
           </div>
         </section>
       </div>
