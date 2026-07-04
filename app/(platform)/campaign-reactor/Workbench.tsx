@@ -12,6 +12,8 @@ import {
   LiveAgentWorkflow,
   type WorkflowControls,
 } from '@/components/campaign-reactor/workflow/LiveAgentWorkflow'
+import { CreativeCanvas } from '@/components/campaign-reactor/canvas/CreativeCanvas'
+import { CreativeFlow } from '@/components/campaign-reactor/flow/CreativeFlow'
 import { reactorOutputTypes, winningAngles } from '@/lib/reactor-data'
 import { INTEL_SOURCES, intelSourceLabel } from '@/lib/intelligence-sources'
 import {
@@ -20,6 +22,8 @@ import {
   offerOptions,
   defaultBrandSettings,
   customDirective,
+  CREATIVE_SIZES,
+  DEFAULT_SIZE,
   NO_PREFERENCE,
   type AngleEvidence,
   type DirectiveOption,
@@ -59,22 +63,27 @@ export function Workbench() {
     markOutcome,
   } = useReactorRun()
   const [modalOpen, setModalOpen] = useState(false)
-  // Manual controls (original left-panel inputs, now collected inside the modal)
-  // Selected intelligence source IDs (the agents recommend a subset; the user
-  // approves or overrides). Empty until the brief produces recommendations.
+  // Output surface: the autonomous reactor (default hero), the Studio (remix the
+  // run's parts into a finished ad), or the Flow (node-graph production canvas).
+  const [view, setView] = useState<'reactor' | 'studio' | 'flow'>('reactor')
+  // Selected intelligence source IDs — the agents recommend a subset from the
+  // brief (behind the scenes); OPUS runs on this set. Empty until the brief
+  // produces recommendations, then defaulted to the full set at fire time.
   const [activeInputs, setActiveInputs] = useState<string[]>([])
-  const [intelSourceMeta, setIntelSourceMeta] = useState<
-    Record<string, { recommended: boolean; reason: string }>
-  >({})
   // Strategic fields start at No Preference; Strategic Intelligence fills in the
   // recommendation once the brief has substance. The user can override, choose
   // No Preference, or enter a custom value.
   const [angle, setAngle] = useState<string>(NO_PREFERENCE)
+  // Campaign name — the first question in the guided flow; a label for the run.
+  const [campaignName, setCampaignName] = useState('')
   // Deliverables start empty — OPUS recommends a subset from the brief, which is
   // auto-selected until the user overrides.
   const [outputs, setOutputs] = useState<string[]>([])
   const [recommendedDeliverables, setRecommendedDeliverables] = useState<string[]>([])
   const [deliverablesReason, setDeliverablesReason] = useState('')
+  // Selected aspect ratios per deliverable (Formats step). Each selected
+  // deliverable is seeded with its default size so the step is never blank.
+  const [dimensions, setDimensions] = useState<Record<string, string[]>>({})
   // Strategic reasoning for the recommended angle (Dynamic Strategy Engine).
   const [angleReason, setAngleReason] = useState('')
   const [angleConfidence, setAngleConfidence] = useState<number | undefined>(undefined)
@@ -103,17 +112,17 @@ export function Workbench() {
   }>({})
   const [onBrand, setOnBrand] = useState(true)
   const [copied, setCopied] = useState<string | null>(null)
-  // Available models (from the API) + the user's pick ('auto' = recommended).
+  // Available models (from the API) — the reactor auto-selects the best one for
+  // the chosen deliverables; the run always sends 'auto'.
   const [videoModels, setVideoModels] = useState<ModelAvailability[]>([])
-  const [videoModel, setVideoModel] = useState<string>('auto')
+  const [videoModel] = useState<string>('auto')
   const [imageModels, setImageModels] = useState<ImageModelAvailability[]>([])
-  const [imageModel, setImageModel] = useState<string>('auto')
+  const [imageModel] = useState<string>('auto')
   // Meta Ads performance feed for the run: 'off' (standalone), 'pipeboard', 'meta'.
   const [metaProvider, setMetaProvider] = useState<string>('pipeboard')
-  // Face library: reference image URLs that lock a consistent face across UGC
-  // clips (Seedance 2.0 reference-to-video). One URL per line or comma-separated.
-  // Selected reference assets from the Face Library (saved roster) → power
-  // Seedance 2.0 reference-to-video for consistent-character in-house UGC.
+  // Reference assets for consistent-character UGC (Seedance reference-to-video).
+  // Collected on the Formats step when UGC Creative is selected; the selected
+  // image/video URLs flow into every "Generate UGC" call after firing.
   const [faceUrls, setFaceUrls] = useState<string[]>([])
   const [refVideos, setRefVideos] = useState<string[]>([])
   const hasRefs = faceUrls.length > 0 || refVideos.length > 0
@@ -122,7 +131,7 @@ export function Workbench() {
     setRefVideos(videos.slice(0, 3))
   }, [])
 
-  // Load the model menus once so the user can pick (and we can recommend).
+  // Load the model menus once so the reactor can recommend the best model.
   useEffect(() => {
     fetch('/api/video/models')
       .then((r) => r.json())
@@ -138,17 +147,25 @@ export function Workbench() {
       .catch(() => {})
   }, [])
 
-  // Dashboard's "New Creative Campaign" CTA links here with ?modal=open — open
-  // the guided modal on arrival, then strip the param so refresh doesn't reopen.
+  // The brief wizard IS the entry point — it opens automatically when the user
+  // arrives with no run in flight (there is no separate CTA button). A dismissed
+  // wizard stays closed; the topbar button re-raises it via the event below.
+  const autoOpened = useRef(false)
   useEffect(() => {
-    if (typeof window === 'undefined') return
-    const params = new URLSearchParams(window.location.search)
-    if (params.get('modal') === 'open') {
-      setModalOpen(true)
-      params.delete('modal')
-      const qs = params.toString()
-      window.history.replaceState(null, '', window.location.pathname + (qs ? `?${qs}` : ''))
+    if (autoOpened.current) return
+    autoOpened.current = true
+    if (typeof window !== 'undefined') {
+      // Strip the legacy ?modal=open param so refresh/share URLs stay clean.
+      const params = new URLSearchParams(window.location.search)
+      if (params.get('modal') === 'open') {
+        params.delete('modal')
+        const qs = params.toString()
+        window.history.replaceState(null, '', window.location.pathname + (qs ? `?${qs}` : ''))
+      }
     }
+    if (phase === 'idle') setModalOpen(true)
+    // Mount-time decision only — phase changes after arrival must not re-open.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // Topbar "New Creative Campaign" button signals this when already on the page.
@@ -158,15 +175,13 @@ export function Workbench() {
     return () => window.removeEventListener('open-reactor-modal', open)
   }, [])
 
-  // System recommendation based on the selected output types, recomputed live.
+  // System recommendation based on the selected deliverables, recomputed live.
   const recommendation = useMemo(
     () => (videoModels.length ? recommendVideoModel(outputs, videoModels) : null),
     [outputs, videoModels],
   )
-  // What we actually send: the explicit pick, or the recommendation when on Auto.
+  // What we actually send: the recommendation when on Auto (always, here).
   const resolvedVideoModel = videoModel === 'auto' ? recommendation?.modelId : videoModel
-  const showVideoPicker =
-    videoModels.length > 0 && outputs.some((o) => /video|founder|testimonial|event|campaign/i.test(o))
 
   // Image model: same pattern.
   const imageRecommendation = useMemo(
@@ -174,28 +189,50 @@ export function Workbench() {
     [outputs, imageModels],
   )
   const resolvedImageModel = imageModel === 'auto' ? imageRecommendation?.modelId : imageModel
-  const showImagePicker =
-    imageModels.length > 0 && outputs.some((o) => /concept|static|founder|campaign|testimonial/i.test(o))
 
   const toggle = (arr: string[], set: (v: string[]) => void, val: string) =>
     set(arr.includes(val) ? arr.filter((v) => v !== val) : [...arr, val])
-  const toggleInput = (val: string) => {
-    touchedRef.current.add('inputs')
-    toggle(activeInputs, setActiveInputs, val)
-  }
   const toggleOutput = (val: string) => {
     touchedRef.current.add('outputs')
     toggle(outputs, setOutputs, val)
   }
+  // Toggle an aspect ratio for a deliverable, but never leave it with zero sizes.
+  const toggleDimension = (deliverable: string, ratio: string) => {
+    setDimensions((prev) => {
+      const current = prev[deliverable] ?? []
+      const next = current.includes(ratio)
+        ? current.filter((r) => r !== ratio)
+        : [...current, ratio]
+      return { ...prev, [deliverable]: next.length ? next : current }
+    })
+  }
+
+  // Keep the Formats selection in sync with the chosen deliverables: seed each
+  // newly selected deliverable with its default size, and drop any deselected.
+  useEffect(() => {
+    setDimensions((prev) => {
+      const next: Record<string, string[]> = {}
+      let changed = false
+      for (const o of outputs) {
+        if (prev[o]?.length) next[o] = prev[o]
+        else {
+          const def = DEFAULT_SIZE[o] ?? CREATIVE_SIZES[o]?.[0]?.ratio
+          next[o] = def ? [def] : []
+          changed = true
+        }
+      }
+      if (!changed && Object.keys(next).length === Object.keys(prev).length) return prev
+      return next
+    })
+  }, [outputs])
 
   /* ----------------------- Agent pre-selection (suggest) ------------------- */
   // The reactor strategist pre-picks a concrete angle / awareness / audience /
   // offer from the brief, so each field already shows the agent's choice. The
   // user can override any of them; a manual change locks that field.
   const [suggesting, setSuggesting] = useState(false)
-  // Strategic Intelligence read, loaded when the modal reaches the strategic step.
+  // Strategic Intelligence read — loaded at fire time to enrich logged outcomes.
   const [intelligence, setIntelligence] = useState<StrategicIntelligence | null>(null)
-  const [intelLoading, setIntelLoading] = useState(false)
   const touchedRef = useRef<Set<string>>(new Set())
   const markTouched = (field: string) => {
     touchedRef.current.add(field)
@@ -272,16 +309,12 @@ export function Workbench() {
         if (!touched.has('outputs') && suggestion.deliverables?.length) {
           setOutputs(suggestion.deliverables)
         }
-        // Intelligence sources: store reasons + auto-select what the agents picked.
-        if (suggestion.intelligenceSources?.length) {
-          const meta: Record<string, { recommended: boolean; reason: string }> = {}
-          for (const s of suggestion.intelligenceSources) {
-            meta[s.id] = { recommended: s.recommended, reason: s.reason }
-          }
-          setIntelSourceMeta(meta)
-          if (!touched.has('inputs')) {
-            setActiveInputs(suggestion.intelligenceSources.filter((s) => s.recommended).map((s) => s.id))
-          }
+        // Intelligence sources: auto-select what the agents picked (no UI — this
+        // feeds OPUS behind the scenes).
+        if (suggestion.intelligenceSources?.length && !touched.has('inputs')) {
+          setActiveInputs(
+            suggestion.intelligenceSources.filter((s) => s.recommended).map((s) => s.id),
+          )
         }
       } catch {
         /* suggestion is best-effort — leave fields as they are */
@@ -294,10 +327,9 @@ export function Workbench() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [brief, modalOpen])
 
-  // Load the Strategic Intelligence read for the review step. Runs once when the
-  // modal reaches Step 5 (not per keystroke), grounded in the current inputs.
+  // Load the Strategic Intelligence read so logged outcomes carry the strategic
+  // configuration OPUS reasoned over. Best-effort, grounded in current inputs.
   const loadIntelligence = useCallback(async () => {
-    setIntelLoading(true)
     try {
       const res = await fetch('/api/campaign-reactor/intelligence', {
         method: 'POST',
@@ -312,21 +344,46 @@ export function Workbench() {
       }).then((r) => r.json())
       if (res.intelligence) setIntelligence(res.intelligence as StrategicIntelligence)
     } catch {
-      /* best-effort — the panel keeps its previous read */
-    } finally {
-      setIntelLoading(false)
+      /* best-effort — outcome attributes fall back to the raw inputs */
     }
   }, [brief, angle, awareness, audience, offer])
+
+  // Quick Launch website extraction — pull a business's own offer / audience /
+  // positioning off their site and fold it into the brief, so a one-input launch
+  // still fires grounded in their real intel. Best-effort; never blocks.
+  const extractSite = useCallback(async (rawUrl: string) => {
+    try {
+      const res = await fetch('/api/campaign-reactor/extract-site', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: rawUrl }),
+      }).then((r) => r.json())
+      if (res?.ok && res.intel) {
+        setBrief((prev) => {
+          const block = `From ${res.domain}:\n${res.intel}`
+          return prev.trim() ? `${prev.trim()}\n\n${block}` : block
+        })
+        return { ok: true as const, domain: res.domain as string }
+      }
+      return { ok: false as const, error: (res?.error as string) || 'Could not read that site.' }
+    } catch {
+      return { ok: false as const, error: 'Could not reach that site. Check the address.' }
+    }
+  }, [])
 
   // Fire from the modal — assembles the full ReactorInputs from every step plus
   // the classic payload fields, then posts into the shared SSE pipeline.
   const fire = () => {
+    // Enrich outcome attributes in the background (non-blocking).
+    void loadIntelligence()
     const reactorInputsPayload: ReactorInputs = {
+      campaignName,
       brief,
       angle,
       angleIsAgentDecided: angle === NO_PREFERENCE || angle.trim() === '',
       outputTypes: outputs,
       outputTypesAgentDecided: outputs.length === 0,
+      dimensions,
       awarenessStage: awareness.label,
       awarenessDirective: awareness.directive,
       audienceType: audience.label,
@@ -337,9 +394,12 @@ export function Workbench() {
       onBrandEnabled: onBrand,
       brandSettings: defaultBrandSettings,
     }
+    // Intelligence sourcing is automatic — use the agent's picks, or the full
+    // set when the brief was too thin to produce a recommendation.
+    const sources = activeInputs.length ? activeInputs : INTEL_SOURCES.map((s) => s.id)
     streamReactor({
       angle,
-      inputs: activeInputs.map(intelSourceLabel),
+      inputs: sources.map(intelSourceLabel),
       outputs: outputs.length ? outputs : reactorOutputTypes,
       videoModel: resolvedVideoModel,
       imageModel: resolvedImageModel,
@@ -511,9 +571,10 @@ export function Workbench() {
     },
   }
 
-  // Everything the modal renders, threaded from this component's state so the
-  // manual controls keep their recommendation + reference-library wiring.
+  // Everything the modal renders, threaded from this component's state.
   const form: ReactorForm = {
+    campaignName,
+    setCampaignName,
     brief,
     setBrief,
     angleField,
@@ -522,35 +583,21 @@ export function Workbench() {
     toggleOutput,
     recommendedDeliverables,
     deliverablesReason,
+    dimensions,
+    toggleDimension,
     awarenessField,
     audienceField,
     offerField,
     offerName,
     setOfferName,
-    suggesting,
-    intelligence,
-    intelligenceLoading: intelLoading,
-    loadIntelligence,
-    intelSources: INTEL_SOURCES,
-    activeInputs,
-    toggleInput,
-    intelSourceMeta,
-    imageModels,
-    imageModel,
-    setImageModel,
-    imageRecommendation: imageRecommendation ?? null,
-    showImagePicker,
-    videoModels,
-    videoModel,
-    setVideoModel,
-    videoRecommendation: recommendation ?? null,
-    showVideoPicker,
     metaProvider,
     setMetaProvider,
-    onFaceChange: handleFaceSelection,
-    refCount: faceUrls.length + refVideos.length,
     onBrand,
     setOnBrand,
+    suggesting,
+    extractSite,
+    onFaceChange: handleFaceSelection,
+    refCount: faceUrls.length + refVideos.length,
   }
 
   // Everything the live agent workflow needs to keep the production actions
@@ -575,37 +622,53 @@ export function Workbench() {
 
   return (
     <div className="space-y-6">
-      {/* Trigger — the modal is the single input induction for the reactor */}
+      {/* The brief wizard opens itself on arrival — the header only carries the
+          run status and the output-surface toggle. */}
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h2 className="font-display text-lg font-semibold text-white">Configure your campaign</h2>
           <p className="mt-0.5 text-sm text-white/45">
-            Brief, audience, offer, intelligence, and models — collected across five quick steps,
-            then fire the reactor.
+            {phase === 'firing' ? (
+              <span className="inline-flex items-center gap-1.5 text-glow/80">
+                <Loader2 size={13} className="animate-spin" /> Reactor firing — agents are working
+                through your brief.
+              </span>
+            ) : (
+              'Brief, audience, offer, performance feed, and brand — collected across five quick steps, then fire the reactor.'
+            )}
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => setModalOpen(true)}
-          disabled={phase === 'firing'}
-          className="fire-btn inline-flex items-center gap-2 rounded-full px-6 py-3.5 font-display text-base font-bold uppercase tracking-wide text-white"
-        >
-          {phase === 'firing' ? (
-            <>
-              <Loader2 size={16} className="animate-spin" /> Firing Reactor…
-            </>
-          ) : (
-            <>
-              <Atom size={16} /> New Creative Campaign
-            </>
-          )}
-        </button>
+        {/* Output surface toggle — watch the reactor work, remix in the
+            Studio, or wire the production graph in the Flow. */}
+        <div className="inline-flex rounded-full border border-white/10 bg-white/[0.03] p-1">
+          {(['reactor', 'studio', 'flow'] as const).map((v) => (
+            <button
+              key={v}
+              type="button"
+              onClick={() => setView(v)}
+              aria-pressed={view === v}
+              className={`rounded-full px-3.5 py-1.5 text-xs font-semibold capitalize transition-colors ${
+                view === v ? 'bg-glow/15 text-glow' : 'text-white/45 hover:text-white/70'
+              }`}
+            >
+              {v}
+            </button>
+          ))}
+        </div>
       </div>
 
-      {/* Output — before firing, the empty state; once fired, the live agent
-          workflow becomes the primary experience (raw telemetry moves into a
-          collapsible drawer inside it). */}
-      {phase === 'idle' ? (
+      {/* Output — the Creative Canvas (hands-on remix) or the autonomous reactor.
+          In reactor mode: before firing, the empty state; once fired, the live
+          agent workflow (raw telemetry collapses into a drawer inside it). */}
+      {view === 'flow' ? (
+        <CreativeFlow
+          offerName={offerName}
+          angle={angle === NO_PREFERENCE ? undefined : angle}
+          onConfigure={() => setModalOpen(true)}
+        />
+      ) : view === 'studio' ? (
+        <CreativeCanvas offerName={offerName} onConfigure={() => setModalOpen(true)} />
+      ) : phase === 'idle' ? (
         <Panel className="min-h-[480px]">
           <PanelHeader
             icon={<Atom size={16} className="animate-pulse-glow" />}
@@ -616,9 +679,16 @@ export function Workbench() {
           <div className="grid place-items-center px-6 py-24 text-center">
             <Atom size={40} className="mb-4 text-white/15" />
             <p className="max-w-sm text-sm text-white/40">
-              Select your intelligence inputs and angle, then fire the reactor. The agent walks
-              your frameworks, retrieves what has already worked, and drafts grounded concepts.
+              Answer the campaign brief, then fire the reactor. The agent walks your frameworks,
+              retrieves what has already worked, and drafts grounded concepts.
             </p>
+            <button
+              type="button"
+              onClick={() => setModalOpen(true)}
+              className="mt-5 inline-flex items-center gap-2 rounded-full border border-glow/30 bg-glow/10 px-5 py-2.5 text-sm font-semibold text-glow transition-colors hover:bg-glow/20"
+            >
+              <Atom size={14} /> Open the campaign brief
+            </button>
           </div>
         </Panel>
       ) : (

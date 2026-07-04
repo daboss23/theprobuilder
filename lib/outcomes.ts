@@ -36,6 +36,10 @@ export interface OutcomeAttributes {
   // Full strategic configuration — what made this win, so ORACLE can reuse it.
   proofAssets?: string[]
   frameworks?: string[]
+  // Live-performance ingest (Meta): the source ad and its measured metrics, so
+  // synced outcomes are idempotent and ORACLE memory carries real numbers.
+  metaAdId?: string
+  metrics?: Record<string, number>
 }
 
 /** A past winning strategic configuration retrieved from ORACLE memory. */

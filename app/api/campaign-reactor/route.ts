@@ -3,7 +3,12 @@ import { NextRequest } from 'next/server'
 import { searchKnowledge } from '@/lib/knowledge'
 import { learnings } from '@/lib/reactor-data'
 import { INTELLIGENCE, INTELLIGENCE_IDS, isIntelligenceId, type IntelligenceId } from '@/lib/agents'
-import { ORCHESTRATOR_MODEL, INTELLIGENCE_MODEL as TIER_INTELLIGENCE_MODEL } from '@/lib/models'
+import {
+  ORCHESTRATOR_MODEL,
+  ORCHESTRATOR_FALLBACK_MODEL,
+  SERVER_SIDE_FALLBACK_BETA,
+  INTELLIGENCE_MODEL as TIER_INTELLIGENCE_MODEL,
+} from '@/lib/models'
 import { generateImageWith, imageConfigured, listImageModels, type AspectRatio } from '@/lib/image'
 import {
   startVideoJob,
@@ -21,6 +26,13 @@ import {
   neuroFeedback,
   demoNeuroScore,
 } from '@/lib/neuro'
+import {
+  META_CRAFT_BLOCK,
+  adPackageSchema,
+  adPackageFeedback,
+  demoAdPackage,
+  type MetaAdPackage,
+} from '@/lib/meta-ads'
 
 // ORACLE strategic memory injected into OPUS at fire time — past winning
 // configurations matching the brief, so generation reuses what worked.
@@ -50,7 +62,12 @@ export const maxDuration = 300
 // OPUS — the Master Strategist brain (strategy + synthesis) — and the cheaper
 // model the intelligence layers (ATLAS/NOVA/SPARK/ECHO/ORACLE) run on.
 // Both are defined once in lib/models.ts so a model bump is a single change.
+// The orchestrator runs on Claude Fable 5 with Opus 4.8 wired as the fallback
+// at two levels: the server-side `fallbacks` param re-serves safety-classifier
+// declines inside the same call, and a client-side switch keeps the run alive
+// when the org can't use Fable 5 at all (e.g. data-retention requirement).
 const OPUS_MODEL = ORCHESTRATOR_MODEL
+const OPUS_FALLBACK_MODEL = ORCHESTRATOR_FALLBACK_MODEL
 const INTELLIGENCE_MODEL = TIER_INTELLIGENCE_MODEL
 // NEURO (Predicted Response pre-test) runs on the cheap intelligence model — it
 // is a structured grading pass, not strategy, so it never touches OPUS's budget.
@@ -91,6 +108,7 @@ interface Concept {
   imageUrl?: string
   productionBrief?: ProductionBrief
   neuro?: NeuroScore
+  adPackage?: MetaAdPackage
 }
 
 /* ------------------------------ Meta Ads MCP ------------------------------ */
@@ -270,7 +288,7 @@ function buildTools(
   tools.push({
     name: 'submit_concepts',
     description:
-      'Submit the final campaign concepts once your intelligence network has reported AND you have self-scored each concept against the Creative Learnings rubric. Each concept must cite its evidence and pass the rubric. Include imageUrl for any concept you generated a creative for.',
+      'Submit the final campaign concepts once your intelligence network has reported AND you have self-scored each concept against the Creative Learnings rubric. Each concept must cite its evidence, pass the rubric, and carry a complete launch-ready Meta ad unit (adPackage). Include imageUrl for any concept you generated a creative for.',
     input_schema: {
       type: 'object',
       properties: {
@@ -285,6 +303,7 @@ function buildTools(
               learningCheck: { type: 'string', description: 'How it satisfies the rubric' },
               score: { type: 'integer', description: 'Self-assessed 1-10. Only submit 7+.' },
               imageUrl: { type: 'string', description: 'The Higgsfield image URL for this concept, if one was generated.' },
+              adPackage: adPackageSchema,
               productionBrief: {
                 type: 'object',
                 description:
@@ -367,9 +386,11 @@ Your intelligence network:
 Process:
 1. Consult your network with consult_intelligence. Always consult NOVA and ORACLE, plus at least one of SPARK/ECHO. Use their findings as evidence — don't guess.${metaAdsLine}
 2. Call get_learnings and self-score every concept against that rubric. Revise or drop anything below 7.${imageLine}${videoLine}
-3. Call submit_concepts with concepts ONLY for these requested output types: ${outputs.join(', ')}. Each concept cites which intelligence layer its evidence came from.
+3. Call submit_concepts with concepts ONLY for these requested output types: ${outputs.join(', ')}. Each concept cites which intelligence layer its evidence came from, and each concept carries a complete adPackage — the launch-ready Meta ad unit.
 
-On submit, every concept is run through NEURO — a neural pre-test that scores its PREDICTED RESPONSE (attention, emotion, memorability, first-3-seconds hook) against neuromarketing principles. Concepts with a weak scroll-stop or hook are returned to you to revise or drop. So lead with a concrete, specific pattern-interrupt in the opening beat of every concept — don't open on the offer or a generic claim.
+${META_CRAFT_BLOCK}
+
+On submit, every concept is run through NEURO — a neural pre-test that scores its PREDICTED RESPONSE (attention, emotion, memorability, first-3-seconds hook) against neuromarketing principles — and its adPackage is validated against Meta's placement limits and the compliance constraints. Concepts with a weak scroll-stop or hook, or a non-compliant ad unit, are returned to you to revise or drop. So lead with a concrete, specific pattern-interrupt in the opening beat of every concept — don't open on the offer or a generic claim.
 
 Voice: confident, specific, builder-native. Engineered for performance.`
 }
@@ -401,6 +422,11 @@ function buildInputBlocks(inputs: ReactorInputs | undefined): string {
   const parts: string[] = []
 
   if (inputs) {
+    // Block 0 — Campaign name (identity for this run)
+    if (inputs.campaignName?.trim()) {
+      parts.push(`CAMPAIGN NAME: ${inputs.campaignName.trim()}`)
+    }
+
     // Block 1 — Campaign Brief (only when provided)
     if (inputs.brief?.trim()) {
       parts.push(
@@ -444,6 +470,21 @@ function buildInputBlocks(inputs: ReactorInputs | undefined): string {
       )
     } else {
       parts.push(`Generate the following output types: ${inputs.outputTypes.join(', ')}.`)
+    }
+
+    // Block 7b — Target formats. When the user chose aspect ratios per
+    // deliverable, render each visual concept at those ratios (the
+    // generate_image / generate_video tools take an aspectRatio of 1:1/9:16/16:9).
+    const dims = inputs.dimensions
+    if (dims && Object.keys(dims).length) {
+      const lines = Object.entries(dims)
+        .filter(([, r]) => r.length)
+        .map(([d, r]) => `${d} → ${r.join(', ')}`)
+      if (lines.length) {
+        parts.push(
+          `TARGET FORMATS (render each visual concept at the requested aspect ratio(s); produce one creative per requested ratio):\n${lines.join('\n')}`,
+        )
+      }
     }
   }
 
@@ -611,17 +652,30 @@ async function runDemo(controller: ReadableStreamDefaultController, body: Reacto
     { type: 'Campaign Concept', text: `The ${a} Reactor: founder video + static proof ad + member testimonial, sequenced cold → warm → apply.`, basis: 'OPUS (stacks highest-win formats)', learningCheck: 'Stacks the three highest-win formats', score: 9 },
   ]
   // Visual concepts carry a production brief — the platform plans before it renders.
+  // Every concept carries a launch-ready Meta ad unit, same as the live agent.
   for (const c of pool) {
     if (/static|video|founder|testimonial|event|campaign/i.test(c.type) && /concept/i.test(c.type)) {
       c.productionBrief = demoBrief(c.type, a)
     }
+    c.adPackage = demoAdPackage(c.type, a)
   }
   sse(controller, {
     type: 'step',
     text: 'NEURO — pre-testing concepts against neuromarketing principles (predicted response)…',
   })
   const norm = (s: string) => s.toLowerCase().replace(/s$/, '').trim()
-  const wanted = outputs.map(norm)
+  // The onboarding flow offers two deliverables — Static Creative / Video
+  // Creative — which fan out into the richer internal concept taxonomy here.
+  // Legacy exact-type requests still pass straight through.
+  const expand = (o: string): string[] => {
+    const l = o.toLowerCase()
+    if (l.includes('static')) return ['Static Concept', 'Founder Concept']
+    if (l.includes('ugc')) return ['Testimonial Concept', 'Video Concept']
+    if (l.includes('carousel')) return ['Campaign Concept', 'Static Concept']
+    if (l.includes('video')) return ['Video Concept', 'Founder Concept']
+    return [o]
+  }
+  const wanted = outputs.flatMap(expand).map(norm)
   for (const c of pool.filter((c) => wanted.includes(norm(c.type)) && (c.score ?? 0) >= 7)) {
     c.neuro = demoNeuroScore(c.score, c.type)
     sse(controller, { type: 'concept', concept: c })
@@ -749,9 +803,19 @@ export async function POST(request: NextRequest) {
         let neuroPrinciples: string | null = null
         let neuroRevisions = 0
 
+        // The model actually driving this run. Starts on the orchestrator tier
+        // (Fable 5); if the org can't run it at all (400 on every request when
+        // the 30-day data-retention requirement isn't met, 403/404 on access),
+        // the run switches to Opus 4.8 once and continues — the platform never
+        // dies on model eligibility.
+        let opusModel: string = OPUS_MODEL
+        let fallbackAnnounced = false
+
         for (let turn = 0; turn < MAX_TURNS; turn++) {
+          const onFable = opusModel !== OPUS_FALLBACK_MODEL
+          const betas: string[] = []
           const params: Anthropic.Beta.Messages.MessageCreateParamsNonStreaming = {
-            model: OPUS_MODEL,
+            model: opusModel,
             max_tokens: 4000,
             system: [{ type: 'text', text: systemPrompt, cache_control: EPHEMERAL }],
             tools,
@@ -759,17 +823,67 @@ export async function POST(request: NextRequest) {
           }
           if (mcpServer) {
             params.mcp_servers = [mcpServer]
-            params.betas = [MCP_BETA]
+            betas.push(MCP_BETA)
           }
+          // Server-side safety fallback: a Fable 5 classifier decline is
+          // re-served by Opus 4.8 inside the same call instead of failing the run.
+          if (onFable) {
+            params.fallbacks = [{ model: OPUS_FALLBACK_MODEL }]
+            betas.push(SERVER_SIDE_FALLBACK_BETA)
+          }
+          if (betas.length) params.betas = betas
 
-          const response = await withRetry(
-            () => anthropic.beta.messages.create(params),
-            (n, w) =>
+          let response: Anthropic.Beta.Messages.BetaMessage
+          try {
+            response = await withRetry(
+              () => anthropic.beta.messages.create(params),
+              (n, w) =>
+                sse(controller, {
+                  type: 'step',
+                  text: `Claude is busy (overloaded) — retrying (${n}/4) in ${w / 1000}s…`,
+                }),
+            )
+          } catch (err) {
+            // Eligibility errors on the orchestrator model (org retention config,
+            // model access) — switch to the fallback tier and redo this turn.
+            const status = (err as { status?: number })?.status
+            if (onFable && (status === 400 || status === 403 || status === 404)) {
               sse(controller, {
                 type: 'step',
-                text: `Claude is busy (overloaded) — retrying (${n}/4) in ${w / 1000}s…`,
-              }),
-          )
+                text: `Orchestrator model unavailable for this org — continuing on ${OPUS_FALLBACK_MODEL}.`,
+              })
+              opusModel = OPUS_FALLBACK_MODEL
+              turn--
+              continue
+            }
+            throw err
+          }
+
+          // Safety-fallback telemetry: a `fallback` block marks a mid-run model
+          // switch; sticky-served turns carry no block, so also check usage.
+          const fallbackServed =
+            response.content.some((b) => b.type === 'fallback') ||
+            (response.usage.iterations ?? []).some((it) => it.type === 'fallback_message')
+          if (fallbackServed && !fallbackAnnounced) {
+            fallbackAnnounced = true
+            sse(controller, {
+              type: 'step',
+              text: `Safety classifiers declined a step — continued seamlessly on ${response.model}.`,
+            })
+          }
+
+          // Whole chain refused (Fable 5 and the fallback both declined) — end
+          // the run cleanly instead of parsing empty content.
+          if (response.stop_reason === 'refusal') {
+            sse(controller, {
+              type: 'error',
+              message:
+                'The request was declined by safety classifiers on every available model. Reword the brief and fire again.',
+            })
+            controller.close()
+            return
+          }
+
           messages.push({ role: 'assistant', content: response.content })
 
           // Surface server-side Meta Ads (MCP) tool activity in the telemetry feed.
@@ -903,6 +1017,18 @@ export async function POST(request: NextRequest) {
             } else if (tu.name === 'submit_concepts') {
               const concepts = (tu.input as { concepts?: Concept[] }).concepts ?? []
 
+              // Meta ad-unit compliance gate — Meta's placement limits + TPB's
+              // hard compliance phrases, enforced in code before anything ships.
+              const compliance = adPackageFeedback(concepts)
+              sse(controller, {
+                type: 'step',
+                text: `Validating Meta ad units · ${concepts.length} package(s)${
+                  compliance.failingIndices.length
+                    ? ` · ${compliance.failingIndices.length} non-compliant`
+                    : ' · all launch-ready'
+                }`,
+              })
+
               // NEURO — neural pre-test: estimate the predicted response of each
               // concept before it ships. Grounded in neuromarketing principles
               // (retrieved once, reused across any revision).
@@ -926,18 +1052,31 @@ export async function POST(request: NextRequest) {
                 }`,
               })
 
-              if (weak.length > 0 && neuroRevisions < MAX_NEURO_REVISIONS) {
-                // Step 5 — hand the weak scores back to OPUS so it revises the
-                // openings (or drops the concept), same as the rubric self-critique.
+              const needsRevision = weak.length > 0 || compliance.failingIndices.length > 0
+              if (needsRevision && neuroRevisions < MAX_NEURO_REVISIONS) {
+                // Step 5 — hand the weak scores / compliance failures back to
+                // OPUS so it revises (or drops), same as the rubric self-critique.
+                // Both gates share one bounded revision pass to cap cost.
                 neuroRevisions += 1
                 sse(controller, {
                   type: 'step',
-                  text: `NEURO flagged ${weak.length} concept(s) for weak scroll-stop / hook — OPUS revising…`,
+                  text: `${
+                    weak.length
+                      ? `NEURO flagged ${weak.length} concept(s) for weak scroll-stop / hook`
+                      : ''
+                  }${weak.length && compliance.failingIndices.length ? ' · ' : ''}${
+                    compliance.failingIndices.length
+                      ? `${compliance.failingIndices.length} ad unit(s) non-compliant`
+                      : ''
+                  } — OPUS revising…`,
                 })
+                const feedbackParts: string[] = []
+                if (weak.length > 0) feedbackParts.push(neuroFeedback(concepts, scores, weak))
+                if (compliance.failingIndices.length > 0) feedbackParts.push(compliance.feedback)
                 results.push({
                   type: 'tool_result',
                   tool_use_id: tu.id,
-                  content: neuroFeedback(concepts, scores, weak),
+                  content: feedbackParts.join('\n\n'),
                 })
               } else {
                 // Passed the pre-test (or revision budget spent) — attach the
@@ -963,6 +1102,32 @@ export async function POST(request: NextRequest) {
       } catch (err) {
         console.error('Campaign Reactor error:', err)
         const status = (err as { status?: number })?.status
+        const rawMessage = err instanceof Error ? err.message : ''
+
+        // A key is configured but the account is out of credit (or otherwise
+        // can't bill) — the live run can't proceed. Rather than hard-faulting,
+        // honour the platform's "always works end to end" rule and fall back to
+        // the curated demo intelligence so the canvas still fills. Matches the
+        // missing-key fallback at the top of the handler.
+        const isBilling =
+          status === 402 ||
+          /credit balance is too low|billing|insufficient (?:quota|funds|credit)|exceeded your (?:current )?quota|payment required/i.test(
+            rawMessage,
+          )
+        if (isBilling) {
+          try {
+            sse(controller, {
+              type: 'step',
+              text: 'Live Anthropic credit unavailable — switching to demo intelligence so the run completes. Add credit in Plans & Billing for the live OPUS network.',
+            })
+            await runDemo(controller, body)
+            controller.close()
+            return
+          } catch (demoErr) {
+            console.error('Campaign Reactor demo fallback error:', demoErr)
+          }
+        }
+
         const message =
           status === 529 || status === 503
             ? 'Claude is temporarily overloaded. Please fire the reactor again in a moment.'

@@ -2,6 +2,7 @@
 
 import { createContext, useCallback, useContext, useRef, useState, type ReactNode } from 'react'
 import { briefToPrompt, type ProductionBrief, type ReactorInputs, type NeuroScore } from '@/lib/reactor-inputs'
+import type { MetaAdPackage } from '@/lib/meta-ads'
 import type { Verdict, OutcomeAttributes } from '@/lib/outcomes'
 import {
   idleWorkflow,
@@ -24,6 +25,8 @@ export interface Concept {
   imageUrl?: string
   productionBrief?: ProductionBrief
   neuro?: NeuroScore
+  /** The complete, launch-ready Meta ad unit for this concept. */
+  adPackage?: MetaAdPackage
 }
 
 export interface TelemetryLine {
@@ -64,9 +67,12 @@ type RunPhase = 'idle' | 'firing' | 'done'
 interface CreativeOpts {
   imageModel?: string
   videoModel?: string
+  /** Output dimensions for the render. Defaults to 1:1 (image) / 9:16 (video). */
+  aspectRatio?: string
 }
 interface VideoOpts {
   videoModel?: string
+  aspectRatio?: string
 }
 interface UgcOpts {
   videoModel?: string
@@ -299,7 +305,7 @@ export function ReactorRunProvider({ children }: { children: ReactNode }) {
 
   // Render a video ad straight from the concept's brief (text-to-video).
   const generateVideoCreative = useCallback(
-    async (c: Concept, videoModel?: string) => {
+    async (c: Concept, videoModel?: string, aspectRatio?: string) => {
       setManualVideos((p) => ({ ...p, [c.text]: { status: 'rendering' } }))
       try {
         const res = await fetch('/api/generate-video', {
@@ -309,7 +315,7 @@ export function ReactorRunProvider({ children }: { children: ReactNode }) {
             prompt: c.productionBrief ? briefToPrompt(c.productionBrief, c.text) : c.text,
             mode: 'text-to-video',
             model: videoModel,
-            aspectRatio: '9:16',
+            aspectRatio: aspectRatio ?? '9:16',
           }),
         }).then((r) => r.json())
 
@@ -345,7 +351,7 @@ export function ReactorRunProvider({ children }: { children: ReactNode }) {
   // Turn a concept's design brief into the right creative — image or video.
   const generateCreative = useCallback(
     async (c: Concept, opts: CreativeOpts) => {
-      if (isVideoConcept(c)) return generateVideoCreative(c, opts.videoModel)
+      if (isVideoConcept(c)) return generateVideoCreative(c, opts.videoModel, opts.aspectRatio)
 
       setCreatives((p) => ({ ...p, [c.text]: { status: 'working' } }))
       try {
@@ -357,7 +363,7 @@ export function ReactorRunProvider({ children }: { children: ReactNode }) {
               c.productionBrief,
               `${c.text}\n\nRender as a premium Meta ad creative for The Professional Builder — photographic, on-site builder context, high contrast, leave room for text overlay.`,
             ),
-            aspectRatio: '1:1',
+            aspectRatio: opts.aspectRatio ?? '1:1',
             model: opts.imageModel,
           }),
         }).then((r) => r.json())
@@ -399,6 +405,7 @@ export function ReactorRunProvider({ children }: { children: ReactNode }) {
             imageUrl,
             mode: 'image-to-video',
             model: opts.videoModel,
+            aspectRatio: opts.aspectRatio,
             prompt: `Cinematic motion for a builder ad: ${c.text}`,
           }),
         }).then((r) => r.json())

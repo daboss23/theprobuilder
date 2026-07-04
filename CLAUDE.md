@@ -43,7 +43,7 @@ Tagline: **Engineered For Performance.**
 | Styling | Tailwind CSS |
 | Components | shadcn/ui exclusively |
 | Database | Supabase |
-| Copy AI | Anthropic Claude API — orchestrator `claude-opus-4-8`, bulk `claude-sonnet-5` (see `lib/models.ts`) |
+| Copy AI | Anthropic Claude API — orchestrator `claude-fable-5` (Opus 4.8 fallback), bulk `claude-sonnet-5` (see `lib/models.ts`) |
 | Embeddings | Voyage AI `voyage-3` (RAG retrieval) |
 | Vector store | Supabase `pgvector` (`knowledge_chunks`) |
 | Image AI | fal.ai (FLUX) + Higgsfield Soul — direct Gemini/OpenAI image removed (fal + Kie only) |
@@ -96,6 +96,10 @@ GEMINI_API_KEY               # Nano Banana 2 image model (Gemini) — or GOOGLE_
 HF_CREDENTIALS               # Higgsfield image + video ("KEY_ID:KEY_SECRET")
 FAL_KEY                      # fal.ai gateway → Seedance/Kling/Veo/Wan video models
 PIPEBOARD_API_TOKEN          # Meta Ads MCP (live ad performance) — optional
+META_ACCESS_TOKEN            # Meta Marketing API (System User token) — /meta dashboard + performance ingest
+META_APP_SECRET              # Optional — adds appsecret_proof request signing
+META_INGEST_MIN_SPEND        # Optional — spend floor to grade an ad (default 50)
+META_INGEST_DATE_PRESET      # Optional — Graph date_preset for the sync (default last_30d)
 NEXT_PUBLIC_SUPABASE_URL
 NEXT_PUBLIC_SUPABASE_ANON_KEY
 SUPABASE_SERVICE_ROLE_KEY
@@ -111,7 +115,8 @@ end. For destructive writes (Supabase inserts), surface errors clearly.
 ## API CONVENTIONS
 
 ### Claude API calls
-- **Orchestrator / strategy (Campaign Reactor agent): `claude-opus-4-8`** — multi-step reasoning over retrieved evidence. Defined once as `ORCHESTRATOR_MODEL` in `lib/models.ts`.
+- **Orchestrator (Campaign Reactor tool-use loop): `claude-fable-5`** — long-horizon multi-step reasoning over retrieved evidence. Defined once as `ORCHESTRATOR_MODEL` in `lib/models.ts`. Fable 5 rules: never send `thinking` or sampling params (`temperature`/`top_p`/`top_k`) — both 400; safety classifiers can decline with `stop_reason: "refusal"`, so the reactor opts into the server-side fallback (`SERVER_SIDE_FALLBACK_BETA` + `fallbacks: [{model: ORCHESTRATOR_FALLBACK_MODEL}]`) and also falls back client-side when the org can't run Fable 5 at all (30-day data-retention requirement → 400 on every request).
+- **Single-shot strategy calls (suggest / intelligence): `ORCHESTRATOR_FALLBACK_MODEL` (Opus 4.8)** — latency-sensitive picks fired while the user types; Fable's always-on thinking isn't worth the wait there.
 - **High-volume / single-shot copy + intelligence layers: `claude-sonnet-5`** — cheaper and faster for bulk drafting, the NEURO pre-test, and the legacy generate-copy route. Defined once as `INTELLIGENCE_MODEL` in `lib/models.ts` (same list price as the prior `claude-sonnet-4-6`, higher quality).
 - Max tokens: 2000–4000 for copy/concept generation
 - Always wrap in try/catch
@@ -145,6 +150,14 @@ end. For destructive writes (Supabase inserts), surface errors clearly.
 ### Meta Ads (MCP connector)
 - Attach Pipeboard's hosted Meta Ads MCP to the orchestrator with Anthropic's **MCP connector** (`mcp_servers` + `mcp_toolset` on `anthropic.beta.messages.create`, beta header `mcp-client-2025-11-20`). Token auth via `PIPEBOARD_API_TOKEN` (`?token=` on the server URL).
 - Only attached when configured; the agent runs normally without it. MCP tool calls execute server-side and surface in the telemetry feed.
+
+### Meta ad units (launch-ready output)
+- Every Reactor concept ships with an **`adPackage`** — a complete Meta ad unit (primary text with the hook inside the 125-char "See more" fold, ≤40-char headline, ≤30-char description, CTA button type). The contract lives in `lib/meta-ads.ts` — the type, Meta's limits, the validator (including the hard compliance phrases), the Ads-Manager clipboard format, the orchestrator prompt block, and the `submit_concepts` schema fragment all come from that one module. Never re-declare these limits elsewhere.
+- On submit, packages are validated server-side; compliance errors share the single bounded revision pass with the NEURO pre-test. The concept card renders the ad unit with the fold made visible, live char counts, and a "Copy for Ads Manager" action.
+
+### Meta performance ingest (learning loop)
+- `POST /api/meta/ingest` (engine: `lib/meta-ingest.ts`) pulls ad-level CTR/CPL/ROAS from the Marketing API, grades each ad **against its account cohort medians** (absolute benchmarks under 3 eligible ads), and writes verdicts into `campaign_outcomes` — ORACLE memory. Winners auto re-ingest into the Vault via `recordOutcome`.
+- Idempotent by `attributes.metaAdId`: re-syncs update changed verdicts, skip unchanged ones. Never throws — returns a summary. Trigger from the /meta dashboard ("Sync Meta → ORACLE").
 
 ### Supabase calls
 - Use `supabaseAdmin` (service role) for all write operations
@@ -281,9 +294,14 @@ To run the *real* agent end to end: set `ANTHROPIC_API_KEY` (agent),
 - [x] Performance Intelligence (ORACLE): expanded outcome verdicts, strategic attributes, pattern confidence, strategic memory page
 - [x] Agent Network page (`/network`) — living visibility dashboard grounded in live vault + outcome data
 
+**Meta-native output + closed loop**
+- [x] Launch-ready Meta ad units on every concept (`lib/meta-ads.ts`): primary text with 125-char fold discipline, headline/description limits, CTA button types, compliance validator wired into the submit gate + concept cards ("Copy for Ads Manager")
+- [x] Meta craft block injected into every orchestrator run (fold/hook rules, placement ratios, safe zones, CTA-to-temperature mapping)
+- [x] Performance ingest (Meta API) → `campaign_outcomes` auto-ingest of live CTR/CPL/ROAS with cohort-median grading; winners auto re-ingest into the Vault (`lib/meta-ingest.ts`, `/api/meta/ingest`, /meta sync control)
+
 **Still open**
 - [ ] SPARK URL-only ingestion for JS-rendered sources (Meta Ad Library / TikTok via oEmbed/transcript APIs; pasted script works today)
-- [ ] Performance ingest (Meta API) → `campaign_outcomes` auto-ingest of live CTR/CPL/ROAS (manual verdicts done; metric columns ready)
+- [ ] Scheduled auto-sync for the Meta performance ingest (manual one-click sync done; cron/Vercel scheduled function pending)
 - [ ] More dashboards reading live `knowledge_chunks` counts (Agent Network does; Research/Copy/Pattern still curated)
 - [ ] Deployed + tested end to end with real keys
 

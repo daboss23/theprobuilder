@@ -2,37 +2,43 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
+  Activity,
+  ArrowRight,
   Atom,
-  Brain,
   Check,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  CircleOff,
   Clapperboard,
-  Gauge,
+  GalleryHorizontalEnd,
+  Globe,
   ImageIcon,
   Loader2,
+  Radio,
+  ShieldCheck,
+  SlidersHorizontal,
+  Smartphone,
   Sparkles,
+  Tag,
   X,
+  Zap,
 } from 'lucide-react'
 import { FaceLibrary } from '@/components/reactor/FaceLibrary'
-import type { AngleEvidence, DirectiveOption, StrategicIntelligence } from '@/lib/reactor-inputs'
-import type { ModelAvailability } from '@/lib/video/types'
-import type { ImageModelAvailability } from '@/lib/image/types'
+import { CREATIVE_SIZES, type AngleEvidence, type CreativeSize } from '@/lib/reactor-inputs'
 
-const STEP_LABELS = [
-  'Campaign Brief',
-  'Audience + Offer',
-  'Intelligence + Models',
-  'On Brand',
-  'Ready To Fire',
+// The launch sequence — six bold steps, each a moment, not a form field. `orb`
+// is the short label under the stepper node; `label` titles the step.
+const STEPS = [
+  { orb: 'Brief', label: 'The Brief', sub: 'Name it, set the direction, and pick what to build.' },
+  { orb: 'Formats', label: 'Formats & Sizes', sub: 'Choose the dimensions for each creative you selected.' },
+  { orb: 'Audience', label: 'Audience & Offer', sub: 'Who you are speaking to — and what you are selling.' },
+  { orb: 'Feed', label: 'Performance Feed', sub: 'Plug live Meta ad performance into this run.' },
+  { orb: 'Brand', label: 'On Brand', sub: 'Apply your brand voice, tone, and compliance.' },
+  { orb: 'Ignition', label: 'Ignition', sub: 'Review the configuration and fire the reactor.' },
 ] as const
 
-interface ModelRec {
-  modelId: string
-  reason: string
-  configured: boolean
-}
+const LAST_STEP = STEPS.length
 
 /**
  * A strategic input field. The platform recommends, the recommendation is
@@ -67,54 +73,46 @@ export interface StrategicField {
 
 // Everything the modal needs to render the full input set lives in Workbench
 // state and is threaded through here so the manual controls keep their existing
-// recommendation / reference-library wiring.
+// recommendation wiring.
 export interface ReactorForm {
-  // Slide 1 — brief, angle, outputs
+  // Step 1 — campaign name, brief, deliverables
+  campaignName: string
+  setCampaignName: (v: string) => void
   brief: string
   setBrief: (v: string) => void
+  // Angle is inferred by the agents — kept for the Quick Launch read + payload,
+  // no longer an editable field in the guided flow.
   angleField: StrategicField
-  // Creative Deliverables — OPUS recommends a subset from the brief; the user
-  // approves or overrides.
+  // Creative Deliverables — Static / Video / UGC / Carousel. OPUS recommends
+  // from the brief; the user picks one or all.
   outputTypeList: string[]
   outputs: string[]
   toggleOutput: (v: string) => void
   recommendedDeliverables: string[]
   deliverablesReason: string
-  // Slide 2 — awareness, audience, offer
+  // Step 2 — formats & sizes: selected aspect ratios per deliverable.
+  dimensions: Record<string, string[]>
+  toggleDimension: (deliverable: string, ratio: string) => void
+  // Reference images/videos for consistent-character UGC (shown when UGC is picked).
+  onFaceChange: (images: string[], videos: string[]) => void
+  refCount: number
+  // Step 3 — awareness, audience, offer
   awarenessField: StrategicField
   audienceField: StrategicField
   offerField: StrategicField
   offerName: string
   setOfferName: (v: string) => void
-  // Slide 3 — intelligence sources (agent-mapped) + models + reference library
-  intelSources: { id: string; label: string; agent: string }[]
-  activeInputs: string[]
-  toggleInput: (v: string) => void
-  intelSourceMeta: Record<string, { recommended: boolean; reason: string }>
-  imageModels: ImageModelAvailability[]
-  imageModel: string
-  setImageModel: (v: string) => void
-  imageRecommendation: ModelRec | null
-  showImagePicker: boolean
-  videoModels: ModelAvailability[]
-  videoModel: string
-  setVideoModel: (v: string) => void
-  videoRecommendation: ModelRec | null
-  showVideoPicker: boolean
-  // Meta Ads performance feed for this run: 'off' (standalone), 'pipeboard', or 'meta'.
+  // Step 4 — Meta Ads performance feed: 'off' (standalone), 'pipeboard', 'meta'.
   metaProvider: string
   setMetaProvider: (v: string) => void
-  onFaceChange: (images: string[], videos: string[]) => void
-  refCount: number
-  // Slide 4 — on brand
+  // Step 5 — on brand
   onBrand: boolean
   setOnBrand: (v: boolean) => void
   // Whether the system is currently analyzing the brief.
   suggesting: boolean
-  // Strategic Intelligence — the read OPUS presents to explain the recommendations.
-  intelligence: StrategicIntelligence | null
-  intelligenceLoading: boolean
-  loadIntelligence: () => void
+  // Quick Launch — extract offer/audience/positioning from a website into the
+  // brief. Resolves with the domain on success, or an error message.
+  extractSite: (url: string) => Promise<{ ok: boolean; domain?: string; error?: string }>
 }
 
 interface ReactorModalProps {
@@ -124,17 +122,8 @@ interface ReactorModalProps {
   form: ReactorForm
 }
 
-function FieldLabel({ children }: { children: React.ReactNode }) {
-  return (
-    <p className="mb-1.5 text-[11px] font-medium uppercase tracking-[0.08em] text-white/40">
-      {children}
-    </p>
-  )
-}
-
-// Label for an intelligence-assisted field — shows that the system is still
-// analyzing the brief. The recommendation itself is shown inside the control.
-function AgentFieldLabel({
+// Section label — brighter and larger than the old dull micro-caps.
+function SectionLabel({
   children,
   thinking,
 }: {
@@ -142,19 +131,16 @@ function AgentFieldLabel({
   thinking?: boolean
 }) {
   return (
-    <div className="mb-1.5 flex items-center gap-2">
-      <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-white/40">{children}</p>
+    <div className="mb-2.5 flex items-center gap-2">
+      <p className="sec-label">{children}</p>
       {thinking ? (
-        <span className="inline-flex items-center gap-1 text-[9px] uppercase tracking-wide text-white/35">
-          <Loader2 size={9} className="animate-spin" /> analyzing…
+        <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wide text-[#FF9D4D]/80">
+          <Loader2 size={10} className="animate-spin" /> analyzing…
         </span>
       ) : null}
     </div>
   )
 }
-
-const selectClass =
-  'w-full rounded-lg border border-border bg-surface/60 px-3 py-2.5 text-sm text-white outline-none focus:border-[#FF5E3A]/60'
 
 const CUSTOM_SENTINEL = '__custom__'
 const NO_PREF_LABEL = 'No Preference'
@@ -181,9 +167,7 @@ function StrategicSelect({ field }: { field: StrategicField }) {
   const { value, recommended, noPreference, custom } = field
   const isRecommendedSelected = !custom.active && !noPreference && !!value && value === recommended
 
-  // Ordered menu: recommended first (if any), then the rest, deduped. The
-  // recommendation is surfaced even when it isn't a base category — the strategy
-  // defines the dropdown, not the other way around.
+  // Ordered menu: recommended first (if any), then the rest, deduped.
   const ordered = useMemo(() => {
     if (!recommended) return field.options
     return [recommended, ...field.options.filter((o) => o !== recommended)]
@@ -201,24 +185,24 @@ function StrategicSelect({ field }: { field: StrategicField }) {
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className={`flex w-full items-center justify-between gap-2 rounded-lg border px-3 py-2.5 text-left text-sm outline-none transition-colors ${
+        className={`flex w-full items-center justify-between gap-2 rounded-xl border px-4 py-3.5 text-left text-[15px] outline-none transition-all ${
           isRecommendedSelected
-            ? 'border-[#FF5E3A]/50 bg-[#FF5E3A]/[0.06] text-white shadow-[0_0_0_1px_rgba(255,94,58,0.15),0_0_22px_-6px_rgba(255,94,58,0.45)]'
-            : 'border-border bg-surface/60 text-white hover:border-white/20'
+            ? 'border-[#FF7C54]/55 bg-[#FF5E3A]/[0.08] text-white shadow-[0_0_0_1px_rgba(255,94,58,0.16),0_0_26px_-6px_rgba(255,94,58,0.5)]'
+            : 'border-white/12 bg-black/40 text-white hover:border-[#FF9D4D]/40'
         }`}
       >
-        <span className="flex min-w-0 items-center gap-2">
-          {isRecommendedSelected && <Sparkles size={13} className="shrink-0 text-[#FF5E3A]" />}
+        <span className="flex min-w-0 items-center gap-2.5">
+          {isRecommendedSelected && <Sparkles size={15} className="shrink-0 text-[#FF9D4D]" />}
           <span className="truncate">
             {custom.active ? (
               custom.value || 'Custom…'
             ) : noPreference ? (
-              <span className="text-white/55">No Preference</span>
+              <span className="text-white/50">No Preference</span>
             ) : value ? (
               <>
                 {value}
                 {isRecommendedSelected && (
-                  <span className="ml-1.5 text-[#FF5E3A]">• Recommended</span>
+                  <span className="ml-2 text-[13px] text-[#FF9D4D]">• Recommended</span>
                 )}
               </>
             ) : (
@@ -227,13 +211,13 @@ function StrategicSelect({ field }: { field: StrategicField }) {
           </span>
         </span>
         <ChevronDown
-          size={15}
+          size={17}
           className={`shrink-0 text-white/40 transition-transform ${open ? 'rotate-180' : ''}`}
         />
       </button>
 
       {open && (
-        <div className="absolute z-[60] mt-1.5 max-h-64 w-full overflow-y-auto rounded-lg border border-border bg-card p-1 shadow-2xl">
+        <div className="absolute z-[70] mt-2 max-h-64 w-full overflow-y-auto rounded-xl border border-white/12 bg-[#0B0B12] p-1.5 shadow-2xl">
           {ordered.map((opt) => {
             const isRec = opt === recommended
             const isSel = !custom.active && !noPreference && opt === value
@@ -242,45 +226,45 @@ function StrategicSelect({ field }: { field: StrategicField }) {
                 key={opt}
                 type="button"
                 onClick={() => choose(opt)}
-                className={`flex w-full items-center justify-between gap-2 rounded-md px-2.5 py-2 text-left text-sm transition-colors ${
+                className={`flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2.5 text-left text-sm transition-colors ${
                   isRec
-                    ? 'bg-[#FF5E3A]/[0.08] text-white hover:bg-[#FF5E3A]/15'
+                    ? 'bg-[#FF5E3A]/[0.09] text-white hover:bg-[#FF5E3A]/15'
                     : 'text-white/80 hover:bg-white/[0.06]'
                 }`}
               >
                 <span className="flex min-w-0 items-center gap-2">
                   {isRec ? (
-                    <Check size={13} className="shrink-0 text-[#FF5E3A]" />
+                    <Check size={14} className="shrink-0 text-[#FF9D4D]" />
                   ) : isSel ? (
-                    <Check size={13} className="shrink-0 text-white/60" />
+                    <Check size={14} className="shrink-0 text-white/60" />
                   ) : (
-                    <span className="w-[13px] shrink-0" />
+                    <span className="w-[14px] shrink-0" />
                   )}
                   <span className={`truncate ${isRec ? 'font-semibold' : ''}`}>{opt}</span>
                 </span>
                 {isRec && (
-                  <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-[#FF5E3A]/40 bg-[#FF5E3A]/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-[#FF5E3A]">
-                    <Sparkles size={8} /> Recommended
+                  <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-[#FF7C54]/40 bg-[#FF5E3A]/10 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-[#FF9D4D]">
+                    <Sparkles size={9} /> Recommended
                   </span>
                 )}
               </button>
             )
           })}
 
-          <div className="my-1 h-px bg-border" />
+          <div className="my-1.5 h-px bg-white/10" />
 
           {custom.allowed && (
             <button
               type="button"
               onClick={() => choose(CUSTOM_SENTINEL)}
-              className={`flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-sm transition-colors ${
+              className={`flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left text-sm transition-colors ${
                 custom.active ? 'bg-white/[0.06] text-white' : 'text-white/70 hover:bg-white/[0.06]'
               }`}
             >
               {custom.active ? (
-                <Check size={13} className="shrink-0 text-white/60" />
+                <Check size={14} className="shrink-0 text-white/60" />
               ) : (
-                <span className="w-[13px] shrink-0" />
+                <span className="w-[14px] shrink-0" />
               )}
               <span>Custom…</span>
             </button>
@@ -289,14 +273,14 @@ function StrategicSelect({ field }: { field: StrategicField }) {
           <button
             type="button"
             onClick={() => choose(NO_PREF_LABEL)}
-            className={`flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-sm transition-colors ${
+            className={`flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left text-sm transition-colors ${
               noPreference ? 'bg-white/[0.06] text-white' : 'text-white/55 hover:bg-white/[0.06]'
             }`}
           >
             {noPreference ? (
-              <Check size={13} className="shrink-0 text-white/60" />
+              <Check size={14} className="shrink-0 text-white/60" />
             ) : (
-              <span className="w-[13px] shrink-0" />
+              <span className="w-[14px] shrink-0" />
             )}
             <span>No Preference</span>
           </button>
@@ -304,18 +288,16 @@ function StrategicSelect({ field }: { field: StrategicField }) {
       )}
 
       {custom.active && (
-        <div className="mt-2">
+        <div className="mt-2.5">
           <input
             value={custom.value}
             onChange={(e) => field.onCustomChange(e.target.value)}
             placeholder={custom.placeholder}
             autoFocus
-            className={selectClass}
+            className="launch-input px-4 py-3 text-[15px]"
           />
           {custom.examples.length > 0 && (
-            <p className="mt-1.5 text-[11px] text-white/35">
-              e.g. {custom.examples.join(' · ')}
-            </p>
+            <p className="mt-2 text-xs text-white/35">e.g. {custom.examples.join(' · ')}</p>
           )}
         </div>
       )}
@@ -323,43 +305,53 @@ function StrategicSelect({ field }: { field: StrategicField }) {
   )
 }
 
-// Strategic reasoning behind the recommended angle — confidence, the why, and
-// ORACLE memory evidence. Makes the dropdown feel like a strategist, not a form.
-function AngleRecommendation({ field }: { field: StrategicField }) {
-  const rec = field.recommendation
-  if (!rec?.reason || field.custom.active || field.noPreference) return null
-  const ev = rec.evidence
+// Icon + one-line blurb for each creative deliverable.
+function deliverableMeta(label: string) {
+  const l = label.toLowerCase()
+  if (l.includes('ugc'))
+    return { Icon: Smartphone, blurb: 'Creator-style, phone-shot talking-head ads that feel native.' }
+  if (l.includes('carousel'))
+    return { Icon: GalleryHorizontalEnd, blurb: 'Multi-card swipe ads — proof, steps, or a story arc.' }
+  if (l.includes('video'))
+    return { Icon: Clapperboard, blurb: 'Founder VSLs, testimonials & cinematic on-site B-roll.' }
+  return { Icon: ImageIcon, blurb: 'Proof statics, founder photos & concept stills.' }
+}
+
+// A tiny aspect-ratio preview box for the Formats step.
+function RatioPreview({ ratio }: { ratio: string }) {
+  const box =
+    ratio === '9:16' ? 'h-7 w-4' : ratio === '16:9' ? 'h-4 w-7' : 'h-5 w-5'
   return (
-    <div className="mt-2 rounded-lg border border-[#FF5E3A]/20 bg-[#FF5E3A]/[0.05] px-3 py-2.5 text-[11px]">
-      <div className="mb-1 flex items-center gap-2">
-        <span className="font-semibold text-white/80">{field.value || field.recommended}</span>
-        {typeof rec.confidence === 'number' && (
-          <span className="inline-flex items-center gap-1 rounded-full bg-[#FF5E3A]/15 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-[#FF5E3A]">
-            <Gauge size={9} /> {rec.confidence}% confidence
-          </span>
-        )}
-      </div>
-      <p className="leading-relaxed text-white/55">{rec.reason}</p>
-      {ev && ev.similar > 0 && (
-        <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 border-t border-white/10 pt-2 text-[10px] text-white/45">
-          <span>
-            <span className="text-white/65">{ev.similar}</span> similar stored campaign
-            {ev.similar === 1 ? '' : 's'}
-          </span>
-          <span>
-            <span className="text-success">{ev.winners}</span> historical winner
-            {ev.winners === 1 ? '' : 's'}
-          </span>
-          {ev.avgWinScore !== null && (
-            <span>
-              avg win score <span className="text-white/65">{ev.avgWinScore}</span>
-            </span>
-          )}
-        </div>
-      )}
-    </div>
+    <span className="grid h-8 w-8 shrink-0 place-items-center">
+      <span className={`${box} rounded-[3px] border border-current`} />
+    </span>
   )
 }
+
+// The three Meta performance feed options, rendered as bold selectable cards.
+const FEED_OPTIONS = [
+  {
+    id: 'off',
+    Icon: CircleOff,
+    title: 'Standalone',
+    tag: 'No Meta data',
+    desc: 'Fire on your intelligence vault alone. No live ad performance is read.',
+  },
+  {
+    id: 'pipeboard',
+    Icon: Activity,
+    title: 'Pipeboard',
+    tag: 'Hosted Meta Ads MCP',
+    desc: 'OPUS reads live Meta ad performance through Pipeboard’s hosted connector.',
+  },
+  {
+    id: 'meta',
+    Icon: Radio,
+    title: 'Meta Direct',
+    tag: 'First-party Ads MCP',
+    desc: 'Connect straight to Meta’s first-party Ads MCP at mcp.facebook.com.',
+  },
+] as const
 
 // What a strategic field shows in the final review summary.
 function fieldSummary(field: StrategicField): string {
@@ -368,11 +360,28 @@ function fieldSummary(field: StrategicField): string {
   return field.value || 'No Preference — Reactor decides'
 }
 
+// Compact "Static 1:1, 9:16 · Video 9:16" formats line for the review step.
+function formatsSummary(form: ReactorForm): string {
+  const parts = form.outputs
+    .map((o) => {
+      const r = form.dimensions[o] ?? []
+      return r.length ? `${o.replace(/ Creatives?$/, '')} ${r.join('/')}` : ''
+    })
+    .filter(Boolean)
+  return parts.length ? parts.join(' · ') : 'Reactor decides'
+}
+
 export function ReactorModal({ open, onClose, onFire, form }: ReactorModalProps) {
   const [step, setStep] = useState(1)
+  // Two ways in: Quick Launch (one input → fire, everything auto-decided) and
+  // the guided five-step flow. New sessions land on Quick Launch.
+  const [mode, setMode] = useState<'quick' | 'guided'>('quick')
 
   useEffect(() => {
-    if (open) setStep(1)
+    if (open) {
+      setStep(1)
+      setMode('quick')
+    }
   }, [open])
 
   const dirty = useMemo(
@@ -401,14 +410,6 @@ export function ReactorModal({ open, onClose, onFire, form }: ReactorModalProps)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, dirty])
 
-  // Load the Strategic Intelligence read as soon as the user reaches the
-  // strategic step (so the recommendations have visible reasoning), and again at
-  // the final review.
-  useEffect(() => {
-    if (open && (step === 2 || step === 5)) form.loadIntelligence()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, step])
-
   if (!open) return null
 
   const fire = () => {
@@ -416,128 +417,174 @@ export function ReactorModal({ open, onClose, onFire, form }: ReactorModalProps)
     onFire()
   }
 
-  const imageLabelFor = (id?: string | null) =>
-    form.imageModels.find((m) => m.id === id)?.label ?? id ?? ''
-  const videoLabelFor = (id?: string | null) =>
-    form.videoModels.find((m) => m.id === id)?.label ?? id ?? ''
-
-  const progress = (step / 5) * 100
+  const meta = STEPS[step - 1]
+  const progress = (step / LAST_STEP) * 100
+  const feedTitle = FEED_OPTIONS.find((f) => f.id === form.metaProvider)?.title ?? 'Standalone'
 
   return (
     <div
-      className="fixed inset-0 z-50 grid place-items-center bg-black/65 px-4 backdrop-blur-[6px]"
+      className="launch-overlay fixed inset-0 z-50 grid place-items-center px-4 py-6"
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) requestClose()
       }}
     >
-      <div className="relative w-[640px] max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl border border-border bg-card">
-        {/* Progress bar */}
-        <div className="h-[3px] w-full bg-white/5">
-          <div
-            className="h-full bg-[#FF5E3A] transition-[width] duration-300 ease-out"
-            style={{ width: `${progress}%` }}
+      <div className="launch-panel flex max-h-[92vh] w-[760px] max-w-[calc(100vw-2rem)] flex-col rounded-[1.75rem]">
+        {mode === 'quick' ? (
+          <QuickLaunch
+            form={form}
+            onFire={fire}
+            onGuided={() => setMode('guided')}
+            onClose={requestClose}
           />
+        ) : (
+          <>
+        {/* Ignition progress */}
+        <div className="launch-progress">
+          <i style={{ width: `${progress}%` }} />
         </div>
 
-        {/* Header */}
-        <div className="flex items-center justify-between gap-3 border-b border-border px-5 py-4">
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-1.5">
-              {[1, 2, 3, 4, 5].map((n) => {
-                const state = n === step ? 'active' : n < step ? 'done' : 'upcoming'
-                return (
-                  <button
-                    key={n}
-                    type="button"
-                    disabled={state === 'upcoming'}
-                    onClick={() => state === 'done' && setStep(n)}
-                    className={`grid h-6 w-6 place-items-center rounded-full border text-[11px] font-bold transition-colors ${
-                      state === 'active'
-                        ? 'border-[#FF5E3A] bg-[#FF5E3A] text-white'
-                        : state === 'done'
-                          ? 'border-[#FF5E3A]/40 bg-[#FF5E3A]/15 text-[#FF5E3A] hover:bg-[#FF5E3A]/25'
-                          : 'border-border bg-surface/60 text-white/30'
-                    } ${state === 'upcoming' ? 'cursor-default' : 'cursor-pointer'}`}
-                  >
-                    {n}
-                  </button>
-                )
-              })}
-            </div>
-            <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-white/70">
-              {STEP_LABELS[step - 1]}
+        {/* Header — eyebrow, stepper, title */}
+        <div className="border-b border-white/10 px-7 pb-5 pt-5">
+          <div className="mb-5 flex items-center justify-between gap-3">
+            <span className="launch-eyebrow">
+              <Atom size={14} className="text-[#FF9D4D]" />
+              New Creative Campaign
             </span>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setMode('quick')}
+                className="launch-nav !px-3 !py-1.5 !text-[11px]"
+              >
+                <Zap size={13} className="text-[#FF9D4D]" /> Quick Launch
+              </button>
+              <button
+                type="button"
+                onClick={requestClose}
+                className="grid h-8 w-8 place-items-center rounded-full text-white/40 transition-colors hover:bg-white/5 hover:text-white"
+                aria-label="Close"
+              >
+                <X size={18} />
+              </button>
+            </div>
           </div>
-          <button
-            type="button"
-            onClick={requestClose}
-            className="text-white/40 transition-colors hover:text-white"
-            aria-label="Close"
-          >
-            <X size={18} />
-          </button>
+
+          {/* Stepper */}
+          <div className="flex items-center gap-1.5">
+            {STEPS.map((s, i) => {
+              const n = i + 1
+              const state = n === step ? 'active' : n < step ? 'done' : 'upcoming'
+              return (
+                <div key={s.label} className="flex flex-1 items-center gap-1.5 last:flex-none">
+                  <div className="flex flex-col items-center gap-2">
+                    <button
+                      type="button"
+                      disabled={state === 'upcoming'}
+                      onClick={() => state === 'done' && setStep(n)}
+                      data-state={state}
+                      className={`launch-orb ${state === 'done' ? 'cursor-pointer' : 'cursor-default'}`}
+                    >
+                      {state === 'done' ? <Check size={14} /> : n}
+                    </button>
+                    <span
+                      className={`hidden whitespace-nowrap text-[10px] font-semibold uppercase tracking-[0.1em] sm:block ${
+                        state === 'active'
+                          ? 'text-[#FF9D4D]'
+                          : state === 'done'
+                            ? 'text-white/55'
+                            : 'text-white/25'
+                      }`}
+                    >
+                      {s.label}
+                    </span>
+                  </div>
+                  {n < STEPS.length && (
+                    <div className="launch-orb-line -mt-6" data-done={n < step} />
+                  )}
+                </div>
+              )
+            })}
+          </div>
+
+          <div className="mt-6">
+            <h2 className="font-display text-2xl font-bold tracking-tight text-white">{meta.label}</h2>
+            <p className="mt-1 text-sm text-white/45">{meta.sub}</p>
+          </div>
         </div>
 
         {/* Body */}
-        <div className="max-h-[62vh] overflow-y-auto px-5 py-5">
+        <div className="min-h-0 flex-1 overflow-y-auto px-7 py-6">
           {step === 1 && (
-            <div className="animate-fade-up space-y-4">
+            <div className="animate-fade-up space-y-6">
               <div>
-                <FieldLabel>Campaign Brief</FieldLabel>
-                <p className="mb-2 text-xs text-white/40">
+                <SectionLabel>
+                  <span className="inline-flex items-center gap-1.5">
+                    <Tag size={12} /> Campaign Name
+                  </span>
+                </SectionLabel>
+                <input
+                  value={form.campaignName}
+                  onChange={(e) => form.setCampaignName(e.target.value)}
+                  placeholder={`e.g. "Profit Leak — Q3 Prospecting"`}
+                  className="launch-input px-4 py-3.5 text-[15px]"
+                />
+              </div>
+
+              <div>
+                <SectionLabel thinking={form.suggesting}>Campaign Brief</SectionLabel>
+                <p className="-mt-1 mb-2.5 text-sm text-white/40">
                   Optional but high-leverage. Direction, tone, proof asset, creative constraints —
-                  the agent reads this first.
+                  the agents read this first and infer the angle for you.
                 </p>
                 <textarea
                   value={form.brief}
                   onChange={(e) => form.setBrief(e.target.value)}
                   placeholder={`e.g. "Targeting operators $1.5M–$3M still on the tools. Lead with Jason — 14 months, off tools, margin up. Want identity shift, not another hustle ad."`}
-                  className="h-[90px] w-full resize-none rounded-lg border border-border bg-surface/60 px-3 py-2.5 text-sm text-white outline-none focus:border-[#FF5E3A]/60"
+                  className="launch-input h-28 resize-none px-4 py-3.5 text-[15px] leading-relaxed"
                 />
               </div>
 
               <div>
-                <AgentFieldLabel thinking={form.suggesting}>Campaign Angle</AgentFieldLabel>
-                <StrategicSelect field={form.angleField} />
-                <AngleRecommendation field={form.angleField} />
-              </div>
-
-              <div>
-                <FieldLabel>Creative Deliverables</FieldLabel>
-                <p className="mb-2 text-xs text-white/40">
-                  The platform recommends what to create from your brief. Approve or override —
-                  leave none for OPUS to decide at fire time.
+                <SectionLabel thinking={form.suggesting}>Creative Deliverables</SectionLabel>
+                <p className="-mt-1 mb-3 text-sm text-white/40">
+                  Pick one or all — you’ll set sizes for each next. Copy is written into every
+                  concept.
                 </p>
-                <div className="flex flex-wrap gap-1.5">
+                <div className="grid grid-cols-2 gap-3">
                   {form.outputTypeList.map((o) => {
                     const on = form.outputs.includes(o)
                     const rec = form.recommendedDeliverables.includes(o)
+                    const { Icon, blurb } = deliverableMeta(o)
                     return (
                       <button
                         key={o}
                         type="button"
                         onClick={() => form.toggleOutput(o)}
-                        className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] transition-colors ${
-                          on
-                            ? 'border-[#FF5E3A] bg-[#FF5E3A]/10 text-[#FF5E3A]'
-                            : rec
-                              ? 'border-[#FF5E3A]/30 text-white/55 hover:text-white/75'
-                              : 'border-border text-white/40 hover:text-white/60'
-                        }`}
+                        className={`pick-card p-4 text-left ${on ? 'is-on' : ''}`}
                       >
-                        {(on || rec) && rec && <Sparkles size={9} className="text-[#FF5E3A]" />}
-                        {o}
+                        <div className="mb-3 flex items-start justify-between">
+                          <span className="pick-ic">
+                            <Icon size={20} />
+                          </span>
+                          <span className="pick-check">
+                            <Check size={13} strokeWidth={3} />
+                          </span>
+                        </div>
+                        <p className="font-display text-base font-semibold text-white">{o}</p>
+                        <p className="mt-1 text-xs leading-relaxed text-white/45">{blurb}</p>
+                        {rec && (
+                          <span className="mt-2.5 inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-[#FF9D4D]">
+                            <Sparkles size={10} /> Recommended
+                          </span>
+                        )}
                       </button>
                     )
                   })}
                 </div>
                 {form.deliverablesReason && form.recommendedDeliverables.length > 0 && (
-                  <p className="mt-2 flex items-start gap-1.5 text-[11px] text-white/45">
-                    <Sparkles size={11} className="mt-0.5 shrink-0 text-[#FF5E3A]" />
-                    <span>
-                      <span className="text-white/60">Recommended:</span>{' '}
-                      {form.recommendedDeliverables.join(', ')} — {form.deliverablesReason}
-                    </span>
+                  <p className="mt-3 flex items-start gap-1.5 text-xs text-white/45">
+                    <Sparkles size={12} className="mt-0.5 shrink-0 text-[#FF9D4D]" />
+                    <span>{form.deliverablesReason}</span>
                   </p>
                 )}
               </div>
@@ -546,228 +593,164 @@ export function ReactorModal({ open, onClose, onFire, form }: ReactorModalProps)
 
           {step === 2 && (
             <div className="animate-fade-up space-y-4">
-              <p className="rounded-lg border border-[#FF5E3A]/25 bg-[#FF5E3A]/[0.06] px-3 py-2 text-[11px] leading-relaxed text-white/60">
-                Strategic Intelligence analysed your brief and pre-selected the highest-confidence
-                options. Override any recommendation if desired.
-              </p>
+              {form.outputs.length === 0 ? (
+                <div className="rounded-2xl border border-white/10 bg-white/[0.02] px-5 py-10 text-center">
+                  <GalleryHorizontalEnd size={30} className="mx-auto mb-3 text-white/20" />
+                  <p className="text-sm text-white/45">
+                    Pick at least one creative on the previous step to choose its sizes.
+                  </p>
+                </div>
+              ) : (
+                <>
+                  <p className="text-sm text-white/40">
+                    Each format renders at your selected ratio. Choose one or several per creative.
+                  </p>
+                  {form.outputs.map((o) => {
+                    const sizes: CreativeSize[] = CREATIVE_SIZES[o] ?? []
+                    const chosen = form.dimensions[o] ?? []
+                    const { Icon } = deliverableMeta(o)
+                    return (
+                      <div key={o}>
+                        <SectionLabel>
+                          <span className="inline-flex items-center gap-1.5">
+                            <Icon size={12} /> {o}
+                          </span>
+                        </SectionLabel>
+                        <div className="grid grid-cols-3 gap-2.5">
+                          {sizes.map((s) => {
+                            const on = chosen.includes(s.ratio)
+                            return (
+                              <button
+                                key={s.ratio}
+                                type="button"
+                                onClick={() => form.toggleDimension(o, s.ratio)}
+                                className={`pick-card flex items-center gap-2.5 p-3 text-left ${on ? 'is-on' : ''}`}
+                              >
+                                <RatioPreview ratio={s.ratio} />
+                                <span className="min-w-0">
+                                  <span className="block truncate text-sm font-semibold text-white">
+                                    {s.label}
+                                  </span>
+                                  <span className="block text-[11px] text-white/45">
+                                    {s.ratio} · {s.use}
+                                  </span>
+                                </span>
+                              </button>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    )
+                  })}
 
-              <StrategicIntelligencePanel
-                intelligence={form.intelligence}
-                loading={form.intelligenceLoading}
-              />
+                  {form.outputs.some((o) => /ugc/i.test(o)) && (
+                    <div className="border-t border-white/10 pt-4">
+                      <FaceLibrary onChange={form.onFaceChange} />
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          )}
 
+          {step === 3 && (
+            <div className="animate-fade-up space-y-6">
               <div>
-                <AgentFieldLabel thinking={form.suggesting}>Awareness Stage</AgentFieldLabel>
+                <SectionLabel thinking={form.suggesting}>Awareness Stage</SectionLabel>
                 <StrategicSelect field={form.awarenessField} />
               </div>
 
               <div>
-                <AgentFieldLabel thinking={form.suggesting}>Audience Type</AgentFieldLabel>
+                <SectionLabel thinking={form.suggesting}>Audience Type</SectionLabel>
                 <StrategicSelect field={form.audienceField} />
               </div>
 
               <div>
-                <AgentFieldLabel thinking={form.suggesting}>Offer Type</AgentFieldLabel>
+                <SectionLabel thinking={form.suggesting}>Offer Type</SectionLabel>
                 <StrategicSelect field={form.offerField} />
               </div>
 
               <div>
-                <FieldLabel>Offer Name</FieldLabel>
+                <SectionLabel>Offer Name</SectionLabel>
                 <input
                   value={form.offerName}
                   onChange={(e) => form.setOfferName(e.target.value)}
                   placeholder={`e.g. "The Owner Freedom Roadmap"`}
-                  className={selectClass}
+                  className="launch-input px-4 py-3.5 text-[15px]"
                 />
               </div>
             </div>
           )}
 
-          {step === 3 && (
-            <div className="animate-fade-up space-y-4">
-              <div>
-                <FieldLabel>Intelligence Sources</FieldLabel>
-                <p className="mb-2 text-xs text-white/40">
-                  The agents pick which intelligence matters for your brief. Approve or override.
-                </p>
-                <div className="space-y-1.5">
-                  {form.intelSources.map((s) => {
-                    const on = form.activeInputs.includes(s.id)
-                    const meta = form.intelSourceMeta[s.id]
-                    return (
-                      <button
-                        key={s.id}
-                        type="button"
-                        onClick={() => form.toggleInput(s.id)}
-                        className={`flex w-full items-center justify-between gap-3 rounded-lg border px-3 py-2 text-left transition-all ${
-                          on
-                            ? 'border-[#FF5E3A]/30 bg-[#FF5E3A]/[0.07] text-white'
-                            : 'border-border bg-surface/30 text-white/45'
-                        }`}
-                      >
-                        <span className="min-w-0">
-                          <span className="flex items-center gap-2 text-sm">
-                            {s.label}
-                            <span className="rounded-full border border-white/10 bg-white/[0.04] px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-white/45">
-                              {s.agent}
-                            </span>
+          {step === 4 && (
+            <div className="animate-fade-up space-y-3">
+              <SectionLabel>Meta Performance Feed</SectionLabel>
+              <p className="-mt-1 text-sm text-white/40">
+                Controls whether OPUS reads live Meta ad performance during this run. Unconfigured
+                sources fall back automatically.
+              </p>
+              <div className="space-y-2.5 pt-1">
+                {FEED_OPTIONS.map(({ id, Icon, title, tag, desc }) => {
+                  const on = form.metaProvider === id
+                  return (
+                    <button
+                      key={id}
+                      type="button"
+                      onClick={() => form.setMetaProvider(id)}
+                      className={`pick-card flex w-full items-center gap-4 p-4 text-left ${on ? 'is-on' : ''}`}
+                    >
+                      <span className="pick-ic shrink-0">
+                        <Icon size={20} />
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="flex flex-wrap items-center gap-2">
+                          <span className="font-display text-base font-semibold text-white">{title}</span>
+                          <span className="rounded-full border border-white/12 bg-white/[0.04] px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-white/50">
+                            {tag}
                           </span>
-                          {meta?.recommended ? (
-                            <span className="mt-0.5 flex items-center gap-1 text-[10px] text-[#FF5E3A]">
-                              <Sparkles size={9} /> Selected by {s.agent}
-                              {meta.reason && <span className="text-white/40">· {meta.reason}</span>}
-                            </span>
-                          ) : meta?.reason ? (
-                            <span className="mt-0.5 block text-[10px] text-white/35">{meta.reason}</span>
-                          ) : null}
                         </span>
-                        <span
-                          className={`grid h-4 w-4 shrink-0 place-items-center rounded ${
-                            on ? 'bg-[#FF5E3A] text-white' : 'border border-border'
-                          }`}
-                        >
-                          {on && <Check size={11} />}
-                        </span>
-                      </button>
-                    )
-                  })}
-                </div>
-              </div>
-
-              {form.showImagePicker && (
-                <div>
-                  <p className="mb-1.5 flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-[0.08em] text-white/40">
-                    <ImageIcon size={12} /> Image Model
-                  </p>
-                  <select
-                    value={form.imageModel}
-                    onChange={(e) => form.setImageModel(e.target.value)}
-                    className={selectClass}
-                  >
-                    <option value="auto" className="bg-card">
-                      Auto — recommended
-                      {form.imageRecommendation
-                        ? ` (${imageLabelFor(form.imageRecommendation.modelId)})`
-                        : ''}
-                    </option>
-                    {form.imageModels.map((m) => (
-                      <option key={m.id} value={m.id} className="bg-card" disabled={!m.configured}>
-                        {m.label}
-                        {m.configured ? '' : ' — needs key'}
-                      </option>
-                    ))}
-                  </select>
-                  {form.imageRecommendation && (
-                    <div className="mt-2 flex items-start gap-1.5 rounded-lg border border-primary/20 bg-primary/[0.06] px-2.5 py-2 text-[11px] text-white/60">
-                      <Sparkles size={12} className="mt-0.5 shrink-0 text-glow" />
-                      <span>
-                        <span className="text-glow/80">Recommended:</span>{' '}
-                        {imageLabelFor(form.imageRecommendation.modelId)} —{' '}
-                        {form.imageRecommendation.reason}.
-                        {!form.imageRecommendation.configured && (
-                          <span className="text-warning"> Add its API key to enable.</span>
-                        )}
+                        <span className="mt-1 block text-xs leading-relaxed text-white/45">{desc}</span>
                       </span>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {form.showVideoPicker && (
-                <div>
-                  <p className="mb-1.5 flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-[0.08em] text-white/40">
-                    <Clapperboard size={12} /> Video Model
-                  </p>
-                  <select
-                    value={form.videoModel}
-                    onChange={(e) => form.setVideoModel(e.target.value)}
-                    className={selectClass}
-                  >
-                    <option value="auto" className="bg-card">
-                      Auto — recommended
-                      {form.videoRecommendation
-                        ? ` (${videoLabelFor(form.videoRecommendation.modelId)})`
-                        : ''}
-                    </option>
-                    {form.videoModels.map((m) => (
-                      <option key={m.id} value={m.id} className="bg-card" disabled={!m.configured}>
-                        {m.label}
-                        {m.audio ? ' · audio' : ''}
-                        {m.configured ? '' : ' — needs key'}
-                      </option>
-                    ))}
-                  </select>
-                  {form.videoRecommendation && (
-                    <div className="mt-2 flex items-start gap-1.5 rounded-lg border border-primary/20 bg-primary/[0.06] px-2.5 py-2 text-[11px] text-white/60">
-                      <Sparkles size={12} className="mt-0.5 shrink-0 text-glow" />
-                      <span>
-                        <span className="text-glow/80">Recommended:</span>{' '}
-                        {videoLabelFor(form.videoRecommendation.modelId)} —{' '}
-                        {form.videoRecommendation.reason}.
-                        {!form.videoRecommendation.configured && (
-                          <span className="text-warning"> Add its API key to enable.</span>
-                        )}
+                      <span className="pick-check shrink-0">
+                        <Check size={13} strokeWidth={3} />
                       </span>
-                    </div>
-                  )}
-                  <FaceLibrary onChange={form.onFaceChange} />
-                </div>
-              )}
-
-              <div>
-                <p className="mb-1.5 flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-[0.08em] text-white/40">
-                  <Gauge size={12} /> Meta Performance Feed
-                </p>
-                <select
-                  value={form.metaProvider}
-                  onChange={(e) => form.setMetaProvider(e.target.value)}
-                  className={selectClass}
-                >
-                  <option value="off" className="bg-card">
-                    Off — fire the reactor standalone (no Meta data)
-                  </option>
-                  <option value="pipeboard" className="bg-card">
-                    Pipeboard — hosted Meta Ads MCP
-                  </option>
-                  <option value="meta" className="bg-card">
-                    Meta — first-party Ads MCP (mcp.facebook.com)
-                  </option>
-                </select>
-                <p className="mt-1.5 text-[11px] text-white/40">
-                  Controls whether OPUS reads live Meta ad performance during this run. Unconfigured
-                  sources fall back automatically; choose Off to run without any Meta data.
-                </p>
+                    </button>
+                  )
+                })}
               </div>
             </div>
           )}
 
-          {step === 4 && (
+          {step === 5 && (
             <div className="animate-fade-up space-y-4">
               <button
                 type="button"
                 onClick={() => form.setOnBrand(!form.onBrand)}
-                className="flex w-full items-start justify-between gap-4 rounded-lg border border-border bg-surface/40 p-4 text-left"
+                className={`pick-card flex w-full items-start gap-4 p-5 text-left ${form.onBrand ? 'is-on' : ''}`}
               >
-                <div>
-                  <p className="text-sm font-semibold text-white">On Brand</p>
-                  <p className="mt-1 text-xs text-white/45">
-                    Brand voice, compliance, and intelligence pulled from Settings. Agent selects
-                    relevant knowledge systems.
+                <span className="pick-ic shrink-0">
+                  <ShieldCheck size={20} />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="font-display text-lg font-semibold text-white">On Brand</p>
+                  <p className="mt-1 text-sm leading-relaxed text-white/45">
+                    Brand voice, tone, and compliance are pulled from Settings and applied across
+                    every concept the reactor writes.
                   </p>
                 </div>
                 <span
-                  className={`mt-0.5 flex h-6 w-11 shrink-0 items-center rounded-full p-0.5 transition-colors ${
+                  className={`mt-1 flex h-7 w-12 shrink-0 items-center rounded-full p-0.5 transition-colors ${
                     form.onBrand ? 'bg-[#FF5E3A]' : 'bg-white/15'
                   }`}
                 >
                   <span
-                    className={`h-5 w-5 rounded-full bg-white transition-transform ${
+                    className={`h-6 w-6 rounded-full bg-white shadow transition-transform ${
                       form.onBrand ? 'translate-x-5' : 'translate-x-0'
                     }`}
                   />
                 </span>
               </button>
-              <p className="text-xs leading-relaxed text-white/40">
+              <p className="px-1 text-sm leading-relaxed text-white/40">
                 {form.onBrand
                   ? 'The agent applies your brand voice, tone, and compliance rules throughout every concept.'
                   : 'Concepts will be generated without brand anchoring — the brief and inputs only.'}
@@ -775,60 +758,33 @@ export function ReactorModal({ open, onClose, onFire, form }: ReactorModalProps)
             </div>
           )}
 
-          {step === 5 && (
-            <div className="animate-fade-up space-y-4">
-              <StrategicIntelligencePanel
-                intelligence={form.intelligence}
-                loading={form.intelligenceLoading}
-              />
-
-              <div className="space-y-1.5 rounded-lg border border-border bg-background/60 p-4 text-sm">
-                <SummaryRow label="Angle" value={fieldSummary(form.angleField)} />
+          {step === 6 && (
+            <div className="animate-fade-up space-y-5">
+              <div className="space-y-2 rounded-2xl border border-white/10 bg-black/30 p-5">
+                <SummaryRow label="Campaign" value={form.campaignName.trim() || 'Untitled campaign'} />
                 <SummaryRow label="Audience" value={fieldSummary(form.audienceField)} />
                 <SummaryRow label="Awareness" value={fieldSummary(form.awarenessField)} />
                 <SummaryRow label="Offer" value={fieldSummary(form.offerField)} />
                 <SummaryRow label="CTA name" value={form.offerName.trim() || '—'} />
+                <SummaryRow
+                  label="Deliverables"
+                  value={form.outputs.length ? form.outputs.join(' · ') : 'Reactor decides'}
+                />
+                <SummaryRow label="Formats" value={formatsSummary(form)} />
+                {form.refCount > 0 && (
+                  <SummaryRow
+                    label="References"
+                    value={`${form.refCount} reference${form.refCount === 1 ? '' : 's'} locked for UGC`}
+                  />
+                )}
+                <SummaryRow label="Perf. feed" value={feedTitle} />
                 <SummaryRow label="On Brand" value={form.onBrand ? 'On' : 'Off'} />
-                <SummaryRow
-                  label="Outputs"
-                  value={form.outputs.length ? form.outputs.join(', ') : 'Agent decides'}
-                />
-                <SummaryRow
-                  label="Intelligence"
-                  value={
-                    form.activeInputs.length === form.intelSources.length
-                      ? 'All sources'
-                      : form.activeInputs
-                          .map((id) => form.intelSources.find((s) => s.id === id)?.label ?? id)
-                          .join(', ') || 'None'
-                  }
-                />
-                {form.showImagePicker && (
-                  <SummaryRow
-                    label="Image model"
-                    value={
-                      form.imageModel === 'auto'
-                        ? `Auto${form.imageRecommendation ? ` (${imageLabelFor(form.imageRecommendation.modelId)})` : ''}`
-                        : imageLabelFor(form.imageModel)
-                    }
-                  />
-                )}
-                {form.showVideoPicker && (
-                  <SummaryRow
-                    label="Video model"
-                    value={
-                      form.videoModel === 'auto'
-                        ? `Auto${form.videoRecommendation ? ` (${videoLabelFor(form.videoRecommendation.modelId)})` : ''}`
-                        : videoLabelFor(form.videoModel)
-                    }
-                  />
-                )}
                 {form.brief.trim() && (
-                  <div className="flex gap-3 border-t border-border pt-1.5">
+                  <div className="flex gap-3 border-t border-white/10 pt-2.5">
                     <span className="w-24 shrink-0 text-[11px] uppercase tracking-[0.08em] text-white/35">
                       Brief
                     </span>
-                    <span className="truncate text-white/70">{form.brief.trim()}</span>
+                    <span className="line-clamp-2 text-white/70">{form.brief.trim()}</span>
                   </div>
                 )}
               </div>
@@ -837,11 +793,11 @@ export function ReactorModal({ open, onClose, onFire, form }: ReactorModalProps)
                 <button
                   type="button"
                   onClick={fire}
-                  className="fire-btn flex w-full items-center justify-center gap-2 rounded-full px-4 py-4 font-display text-base font-bold uppercase tracking-wide text-white"
+                  className="fire-btn flex w-full items-center justify-center gap-2 rounded-full px-4 py-4 font-display text-lg font-bold uppercase tracking-wide text-white"
                 >
-                  <Atom size={16} /> ⚡ Fire Reactor
+                  <Atom size={18} /> ⚡ Fire Reactor
                 </button>
-                <p className="mt-2 text-center text-[11px] text-white/35">
+                <p className="mt-2.5 text-center text-[11px] uppercase tracking-[0.14em] text-white/35">
                   OPUS · Strategic synthesis · Self-critique scoring
                 </p>
               </div>
@@ -850,152 +806,240 @@ export function ReactorModal({ open, onClose, onFire, form }: ReactorModalProps)
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between gap-3 border-t border-border px-5 py-3.5">
+        <div className="flex items-center justify-between gap-3 border-t border-white/10 px-7 py-4">
           {step > 1 ? (
-            <button
-              type="button"
-              onClick={() => setStep((s) => s - 1)}
-              className="flex items-center gap-1 rounded-lg border border-border bg-surface/40 px-3 py-1.5 text-xs font-medium text-white/70 transition-colors hover:text-white"
-            >
-              <ChevronLeft size={14} /> Back
+            <button type="button" onClick={() => setStep((s) => s - 1)} className="launch-nav">
+              <ChevronLeft size={16} /> Back
             </button>
           ) : (
             <span />
           )}
 
-          <span className="text-[11px] uppercase tracking-[0.14em] text-white/35">
-            Step {step} of 5
+          <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/30">
+            Step {step} of {LAST_STEP}
           </span>
 
-          {step < 5 ? (
+          {step < LAST_STEP ? (
             <button
               type="button"
               onClick={() => setStep((s) => s + 1)}
-              className="flex items-center gap-1 rounded-lg border border-[#FF5E3A]/40 bg-[#FF5E3A]/10 px-3 py-1.5 text-xs font-semibold text-[#FF5E3A] transition-colors hover:bg-[#FF5E3A]/20"
+              className="launch-nav launch-nav--primary"
             >
-              Next <ChevronRight size={14} />
+              Next <ChevronRight size={16} />
             </button>
           ) : (
             <span />
           )}
         </div>
+          </>
+        )}
       </div>
     </div>
   )
 }
 
-// The Strategic Intelligence read OPUS presents to explain the recommendations.
-// This is intelligence — pains, desires, patterns, recommended structures —
-// never exposed agent machinery.
-function StrategicIntelligencePanel({
-  intelligence,
-  loading,
+// Quick Launch — one bold input, an optional website extract, a live read of
+// what the agents inferred, and a single Fire button. Everything not set here is
+// decided by the reactor. The escape hatch drops into the full guided flow.
+function QuickLaunch({
+  form,
+  onFire,
+  onGuided,
+  onClose,
 }: {
-  intelligence: StrategicIntelligence | null
-  loading: boolean
+  form: ReactorForm
+  onFire: () => void
+  onGuided: () => void
+  onClose: () => void
 }) {
-  const confTone =
-    intelligence?.confidence === 'High'
-      ? 'bg-success/15 text-success'
-      : intelligence?.confidence === 'Medium'
-        ? 'bg-warning/15 text-warning'
-        : 'bg-white/10 text-white/55'
+  const [url, setUrl] = useState('')
+  const [extracting, setExtracting] = useState(false)
+  const [extractMsg, setExtractMsg] = useState<{ ok: boolean; text: string } | null>(null)
+
+  const handleExtract = async () => {
+    if (!url.trim() || extracting) return
+    setExtracting(true)
+    setExtractMsg(null)
+    const res = await form.extractSite(url.trim())
+    setExtracting(false)
+    if (res.ok) {
+      setExtractMsg({ ok: true, text: `Pulled intel from ${res.domain} into your brief.` })
+      setUrl('')
+    } else {
+      setExtractMsg({ ok: false, text: res.error ?? 'Could not read that site.' })
+    }
+  }
+
+  const reads: { label: string; value: string }[] = [
+    { label: 'Angle', value: form.angleField.recommended ?? '' },
+    { label: 'Audience', value: form.audienceField.recommended ?? '' },
+    { label: 'Offer', value: form.offerField.recommended ?? '' },
+  ].filter((r) => r.value)
+  const hasBrief = form.brief.trim().length >= 12
+  const showReads = hasBrief && (reads.length > 0 || form.recommendedDeliverables.length > 0)
 
   return (
-    <div className="rounded-xl border border-[#FF5E3A]/25 bg-[#FF5E3A]/[0.05] p-4">
-      <div className="mb-3 flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <Brain size={15} className="text-[#FF5E3A]" />
-          <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-white/80">
-            Strategic Intelligence
-          </span>
-        </div>
-        {loading ? (
-          <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wide text-white/40">
-            <Loader2 size={11} className="animate-spin" /> analyzing…
-          </span>
-        ) : intelligence ? (
-          <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${confTone}`}>
-            <Gauge size={10} /> {intelligence.confidence} · {intelligence.confidenceScore}%
-          </span>
-        ) : null}
+    <>
+      <div className="launch-progress">
+        <i style={{ width: '100%' }} />
       </div>
 
-      {loading && !intelligence ? (
-        <div className="space-y-2">
-          {[0, 1, 2, 3].map((i) => (
-            <div key={i} className="h-3 w-full animate-pulse rounded bg-white/5" />
-          ))}
-        </div>
-      ) : intelligence ? (
-        <div className="space-y-2 text-sm">
-          <IntelRow label="Awareness" value={intelligence.awareness} />
-          <IntelRow label="Primary Pain" value={intelligence.primaryPain} />
-          <IntelRow label="Primary Desire" value={intelligence.primaryDesire} />
-          <IntelRow label="Primary Pattern" value={intelligence.primaryPattern} accent />
-          <IntelRow label="Creative Structure" value={intelligence.recommendedCreativeStructure} />
-          <IntelRow label="Copy Structure" value={intelligence.recommendedCopyStructure} />
-          <IntelRow label="Offer Positioning" value={intelligence.recommendedOfferPositioning} />
+      <div className="flex items-center justify-between gap-3 px-7 pb-4 pt-5">
+        <span className="launch-eyebrow">
+          <Zap size={14} className="text-[#FF9D4D]" />
+          Quick Launch
+        </span>
+        <button
+          type="button"
+          onClick={onClose}
+          className="grid h-8 w-8 place-items-center rounded-full text-white/40 transition-colors hover:bg-white/5 hover:text-white"
+          aria-label="Close"
+        >
+          <X size={18} />
+        </button>
+      </div>
 
-          {(intelligence.knowledgeAssetsConsulted.length > 0 ||
-            intelligence.researchSourcesConsulted.length > 0) && (
-            <div className="space-y-2 border-t border-white/10 pt-2.5">
-              {intelligence.knowledgeAssetsConsulted.length > 0 && (
-                <ConsultedRow label="Knowledge Assets" items={intelligence.knowledgeAssetsConsulted} />
-              )}
-              {intelligence.researchSourcesConsulted.length > 0 && (
-                <ConsultedRow label="Research Sources" items={intelligence.researchSourcesConsulted} />
-              )}
+      <div className="min-h-0 flex-1 overflow-y-auto px-7 pb-7">
+        <div className="animate-fade-up space-y-6">
+          <div>
+            <h2 className="font-display text-3xl font-bold tracking-tight text-white">
+              Fire a campaign in one line.
+            </h2>
+            <p className="mt-1.5 text-sm text-white/45">
+              Describe what you want — the reactor infers the angle, audience, offer, and creative,
+              then builds it. Nothing else required.
+            </p>
+          </div>
+
+          <div>
+            <SectionLabel thinking={form.suggesting}>Your Campaign</SectionLabel>
+            <textarea
+              value={form.brief}
+              onChange={(e) => form.setBrief(e.target.value)}
+              placeholder={`e.g. "A founder video for builders doing $2M–$3M who are still on the tools. Lead with a member who got off the tools in 14 months. Drive strategy-call applications."`}
+              className="launch-input h-32 resize-none px-4 py-3.5 text-[15px] leading-relaxed"
+            />
+          </div>
+
+          <div>
+            <SectionLabel>
+              <span className="inline-flex items-center gap-1.5">
+                <Globe size={12} /> Add your website
+              </span>
+            </SectionLabel>
+            <p className="-mt-1 mb-2.5 text-sm text-white/40">
+              Optional. ATLAS reads your site and folds your offer, audience, and positioning into
+              the brief.
+            </p>
+            <div className="flex gap-2">
+              <input
+                value={url}
+                onChange={(e) => setUrl(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleExtract()}
+                placeholder="https://yourbusiness.com"
+                className="launch-input flex-1 px-4 py-3 text-[15px]"
+              />
+              <button
+                type="button"
+                onClick={handleExtract}
+                disabled={extracting || !url.trim()}
+                className="launch-nav launch-nav--primary shrink-0 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                {extracting ? (
+                  <>
+                    <Loader2 size={15} className="animate-spin" /> Reading…
+                  </>
+                ) : (
+                  <>
+                    <Globe size={15} /> Extract
+                  </>
+                )}
+              </button>
             </div>
-          )}
-        </div>
-      ) : (
-        <p className="text-xs text-white/40">
-          Add a brief on Step 1 and the platform will present its strategic read here.
-        </p>
-      )}
-    </div>
-  )
-}
+            {extractMsg && (
+              <p
+                className={`mt-2 flex items-center gap-1.5 text-xs ${
+                  extractMsg.ok ? 'text-success' : 'text-danger'
+                }`}
+              >
+                {extractMsg.ok ? <Check size={13} /> : null}
+                {extractMsg.text}
+              </p>
+            )}
+          </div>
 
-function IntelRow({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
-  return (
-    <div className="flex gap-3">
-      <span className="w-28 shrink-0 text-[11px] uppercase tracking-[0.08em] text-white/35">
-        {label}
-      </span>
-      <span className={accent ? 'font-medium text-[#FF5E3A]' : 'text-white/75'}>{value}</span>
-    </div>
-  )
-}
+          {/* Live read of what the reactor inferred from the brief */}
+          <div className="rounded-xl border border-[#FF7C54]/20 bg-[#FF5E3A]/[0.05] px-4 py-3">
+            {form.suggesting ? (
+              <p className="flex items-center gap-2 text-xs text-white/55">
+                <Loader2 size={13} className="animate-spin text-[#FF9D4D]" /> Reading your brief…
+              </p>
+            ) : showReads ? (
+              <div className="space-y-2">
+                <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-[#FF9D4D]">
+                  <Sparkles size={11} /> Reactor read
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  {reads.map((r) => (
+                    <span
+                      key={r.label}
+                      className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[11px] text-white/70"
+                    >
+                      <span className="text-white/40">{r.label}</span> {r.value}
+                    </span>
+                  ))}
+                  {form.recommendedDeliverables.map((d) => (
+                    <span
+                      key={d}
+                      className="inline-flex items-center gap-1 rounded-full border border-[#FF7C54]/30 bg-[#FF5E3A]/10 px-2.5 py-1 text-[11px] text-[#FF9D4D]"
+                    >
+                      {d}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <p className="text-xs leading-relaxed text-white/45">
+                Angle, audience, offer, and creative are all decided for you. Add a line above and
+                the reactor’s read appears here.
+              </p>
+            )}
+          </div>
 
-function ConsultedRow({ label, items }: { label: string; items: string[] }) {
-  return (
-    <div className="flex gap-3">
-      <span className="w-28 shrink-0 text-[11px] uppercase tracking-[0.08em] text-white/35">
-        {label}
-      </span>
-      <div className="flex flex-wrap gap-1.5">
-        {items.map((it) => (
-          <span
-            key={it}
-            className="rounded-full border border-white/10 bg-white/[0.03] px-2 py-0.5 text-[10px] text-white/55"
+          <div>
+            <button
+              type="button"
+              onClick={onFire}
+              className="fire-btn flex w-full items-center justify-center gap-2 rounded-full px-4 py-4 font-display text-lg font-bold uppercase tracking-wide text-white"
+            >
+              <Atom size={18} /> ⚡ Fire Reactor
+            </button>
+            <p className="mt-2.5 text-center text-[11px] uppercase tracking-[0.14em] text-white/35">
+              OPUS · Strategic synthesis · Self-critique scoring
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={onGuided}
+            className="group flex w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.02] px-4 py-3 text-sm font-medium text-white/60 transition-colors hover:border-white/20 hover:text-white"
           >
-            {it}
-          </span>
-        ))}
+            <SlidersHorizontal size={15} /> Prefer full control? Set it up step-by-step
+            <ArrowRight size={15} className="transition-transform group-hover:translate-x-0.5" />
+          </button>
+        </div>
       </div>
-    </div>
+    </>
   )
 }
 
 function SummaryRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex gap-3">
+    <div className="flex gap-3 text-sm">
       <span className="w-24 shrink-0 text-[11px] uppercase tracking-[0.08em] text-white/35">
         {label}
       </span>
-      <span className="text-white/80">{value}</span>
+      <span className="text-white/85">{value}</span>
     </div>
   )
 }

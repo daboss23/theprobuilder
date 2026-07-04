@@ -8,6 +8,7 @@ import {
   type ReactorSuggestion,
 } from '@/lib/reactor-inputs'
 import { reactorOutputTypes } from '@/lib/reactor-data'
+import { ORCHESTRATOR_FALLBACK_MODEL } from '@/lib/models'
 import { INTEL_SOURCES, recommendIntelSources } from '@/lib/intelligence-sources'
 import { angleEvidence } from '@/lib/outcomes'
 import { vaultStats } from '@/lib/knowledge'
@@ -15,10 +16,12 @@ import { parseModelJson } from '@/lib/parse'
 
 export const runtime = 'nodejs'
 
-// The Dynamic Strategy Engine — the same coordinator brain as the reactor making
-// its strategic call up front. The angle is NOT constrained to the base
+// The Dynamic Strategy Engine — the coordinator's strategic call made up front.
+// Runs on the Opus tier (not Fable 5): this is a single-shot ~500-token pick
+// fired while the user types, where Fable's always-on thinking would add
+// latency for no strategic gain. The angle is NOT constrained to the base
 // categories: NOVA/ORACLE/OPUS can surface a sharper angle the dropdown adopts.
-const MODEL = 'claude-opus-4-8'
+const MODEL = ORCHESTRATOR_FALLBACK_MODEL
 
 // Base strategic categories — a starting vocabulary, not a hard limit.
 const angleCategories = ['Profit', 'Systems', 'Time Freedom', 'Leadership', 'Cashflow', 'Growth', 'Team Accountability']
@@ -73,13 +76,17 @@ function fallback(brief: string, angle: string): RawSuggestion {
         : 'Strategy Call / Application'
 
   // Deliverables follow the medium implied by the brief.
-  const wantsVideo = /video|vsl|ugc|reel|tiktok|spokesperson/.test(t)
-  const wantsImage = /image|static|photo|carousel|banner/.test(t)
-  const deliverables = wantsVideo && !wantsImage
-    ? ['Video Concepts', 'Hooks', 'VSL Openers']
-    : wantsImage && !wantsVideo
-      ? ['Static Concepts', 'Hooks', 'Headlines', 'Primary Text']
-      : ['Hooks', 'Headlines', 'Static Concepts', 'Primary Text']
+  const wantsUgc = /ugc|testimonial|talking head|spokesperson|creator|selfie/.test(t)
+  const wantsVideo = /video|vsl|reel|tiktok|founder video|motion/.test(t)
+  const wantsCarousel = /carousel|swipe|multi-?image|slides?/.test(t)
+  const wantsImage = /image|static|photo|proof ad|banner/.test(t)
+  const set = new Set<string>()
+  if (wantsUgc) set.add('UGC Creative')
+  if (wantsVideo) set.add('Video Creative')
+  if (wantsCarousel) set.add('Carousel Creatives')
+  if (wantsImage) set.add('Static Creative')
+  // Sensible default when the brief doesn't signal a medium.
+  const deliverables = set.size ? Array.from(set) : ['Static Creative', 'Video Creative']
 
   return {
     angle: pickAngle,
@@ -89,11 +96,9 @@ function fallback(brief: string, angle: string): RawSuggestion {
     audience,
     offer,
     deliverables,
-    deliverablesReason: wantsVideo
-      ? 'Brief implies motion creative — leading with video deliverables.'
-      : wantsImage
-        ? 'Brief implies static creative — leading with image deliverables.'
-        : 'Balanced starter set across hooks, headlines and static concepts.',
+    deliverablesReason: set.size
+      ? `Brief signals ${deliverables.join(' + ')} — leading with those.`
+      : 'Balanced starter set across static and video creative.',
   }
 }
 

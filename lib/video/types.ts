@@ -7,7 +7,7 @@
  * which model rendered a clip — only what it can do.
  */
 
-export type AspectRatio = '1:1' | '9:16' | '16:9'
+export type AspectRatio = '1:1' | '9:16' | '16:9' | '4:3' | '3:4'
 
 export type VideoProvider = 'fal' | 'higgsfield'
 

@@ -541,15 +541,13 @@ export const reactorInputs = [
   'Patterns',
 ]
 
+// The creative deliverables a new campaign can produce. Kept deliberately
+// simple for onboarding — the user picks one or all, and copy is generated as
+// part of every concept. The richer internal concept taxonomy (Founder /
+// Testimonial / Campaign …) is expanded from these by the reactor route.
 export const reactorOutputTypes = [
-  'Hooks',
-  'Headlines',
-  'Primary Text',
-  'VSL Openers',
-  'Static Concepts',
-  'Video Concepts',
-  'Founder Concepts',
-  'Testimonial Concepts',
-  'Event Concepts',
-  'Campaign Concepts',
+  'Static Creative',
+  'Video Creative',
+  'UGC Creative',
+  'Carousel Creatives',
 ]

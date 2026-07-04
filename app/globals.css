@@ -1153,6 +1153,35 @@ body {
 /* Discrete energy particles riding each active channel (SVG animateMotion) */
 .nrg-particle { filter: drop-shadow(0 0 3px rgba(255, 244, 232, 0.95)); }
 
+/* ============================================================================
+   CREATIVE FLOW — React Flow production graph, themed to the command center
+   ========================================================================== */
+
+.tpb-flow .react-flow__attribution { display: none; }
+.tpb-flow .react-flow__edge-path { filter: drop-shadow(0 0 6px rgb(94 168 255 / 0.35)); }
+
+/* Controls + minimap chrome — dark glass to match every panel */
+.tpb-flow .react-flow__controls {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 12px 26px -20px rgba(0, 0, 0, 0.95);
+}
+.tpb-flow .react-flow__controls-button {
+  background: rgba(11, 15, 23, 0.92);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.6);
+}
+.tpb-flow .react-flow__controls-button:hover { background: rgba(30, 41, 59, 0.92); color: #fff; }
+.tpb-flow .react-flow__controls-button svg { fill: currentColor; }
+.tpb-flow .react-flow__minimap {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.tpb-flow .react-flow__handle { transition: box-shadow 0.2s ease; }
+.tpb-flow .react-flow__handle:hover { box-shadow: 0 0 0 4px rgb(94 168 255 / 0.2); }
+
 /* Convergence flare where channels meet the core */
 .conv-bloom { opacity: 0.18; transition: opacity 0.5s ease; }
 .conv-bloom--on { opacity: 0.85; animation: conv-bloom 2.4s ease-in-out infinite; }
@@ -1709,4 +1738,250 @@ body {
   .heat-l4,
   .draw-line { animation: none; }
   .draw-line { stroke-dashoffset: 0; }
+}
+
+/* ============================================================================
+   CAMPAIGN LAUNCH SEQUENCE — the "New Creative Campaign" onboarding modal.
+   A reactor-ignition aesthetic: near-black glass, ember-orange energy, a live
+   progress rail and glowing step orbs. Bold, warm, premium — a launch, not a
+   form. Rendered as a fixed overlay outside .command-surface, so it owns its
+   own control styling.
+   ========================================================================== */
+.launch-overlay {
+  background:
+    radial-gradient(1100px 720px at 50% -14%, rgba(255, 94, 58, 0.12), transparent 60%),
+    rgba(3, 4, 9, 0.74);
+  backdrop-filter: blur(14px) saturate(120%);
+  -webkit-backdrop-filter: blur(14px) saturate(120%);
+  animation: launch-overlay-in 0.28s ease-out;
+}
+@keyframes launch-overlay-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.launch-panel {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  border: 1px solid rgba(255, 124, 84, 0.26);
+  background:
+    radial-gradient(780px 320px at 50% -10%, rgba(255, 94, 58, 0.17), transparent 64%),
+    radial-gradient(560px 260px at 6% 2%, rgba(59, 130, 246, 0.08), transparent 70%),
+    linear-gradient(180deg, rgba(20, 15, 18, 0.97), rgba(8, 8, 13, 0.985));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 214, 186, 0.16),
+    0 50px 140px -50px #000,
+    0 0 110px -55px rgba(255, 94, 58, 0.72);
+  animation: launch-panel-in 0.34s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+@keyframes launch-panel-in {
+  from { opacity: 0; transform: translateY(14px) scale(0.985); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+/* Faint ember engineering grid behind the content */
+.launch-panel::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(rgba(255, 150, 110, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 150, 110, 0.05) 1px, transparent 1px);
+  background-size: 30px 30px;
+  -webkit-mask-image: radial-gradient(130% 80% at 50% 0%, #000, transparent 74%);
+  mask-image: radial-gradient(130% 80% at 50% 0%, #000, transparent 74%);
+}
+.launch-panel > * { position: relative; z-index: 1; }
+
+/* Live ignition progress rail */
+.launch-progress {
+  height: 3px;
+  width: 100%;
+  background: rgba(255, 255, 255, 0.06);
+}
+.launch-progress > i {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, #ff9d4d, #ff5e3a 58%, #e11d2a);
+  box-shadow: 0 0 18px rgba(255, 94, 58, 0.8);
+  transition: width 0.45s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+.launch-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-family: var(--font-space-grotesk);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: rgba(255, 200, 170, 0.85);
+}
+
+/* Step orbs */
+.launch-orb {
+  position: relative;
+  display: grid;
+  place-items: center;
+  height: 2.1rem;
+  width: 2.1rem;
+  flex-shrink: 0;
+  border-radius: 9999px;
+  font-size: 12px;
+  font-weight: 700;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: linear-gradient(180deg, rgba(30, 26, 32, 0.9), rgba(14, 12, 18, 0.9));
+  color: rgba(255, 255, 255, 0.4);
+  transition: transform 0.3s cubic-bezier(0.2, 0.7, 0.2, 1), background 0.3s ease,
+    border-color 0.3s ease, color 0.3s ease, box-shadow 0.3s ease;
+}
+.launch-orb[data-state='done'] {
+  border-color: rgba(255, 124, 84, 0.5);
+  background: linear-gradient(180deg, rgba(255, 120, 80, 0.22), rgba(120, 40, 24, 0.3));
+  color: #ffb98f;
+}
+.launch-orb[data-state='done']:hover {
+  border-color: rgba(255, 150, 110, 0.75);
+  box-shadow: 0 0 18px -6px rgba(255, 94, 58, 0.8);
+}
+.launch-orb[data-state='active'] {
+  border-color: rgba(255, 160, 120, 0.9);
+  background: linear-gradient(180deg, #ff9d4d, #ff5e3a 72%);
+  color: #fff;
+  transform: scale(1.14);
+  box-shadow:
+    0 0 0 4px rgba(255, 94, 58, 0.14),
+    0 0 26px -4px rgba(255, 94, 58, 0.9);
+}
+.launch-orb-line {
+  height: 2px;
+  flex: 1;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.08);
+  transition: background 0.4s ease, box-shadow 0.4s ease;
+}
+.launch-orb-line[data-done='true'] {
+  background: linear-gradient(90deg, rgba(255, 124, 84, 0.7), rgba(255, 94, 58, 0.45));
+  box-shadow: 0 0 12px -2px rgba(255, 94, 58, 0.6);
+}
+
+.sec-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+/* Big selectable cards — deliverables, performance feed, on-brand */
+.pick-card {
+  position: relative;
+  overflow: hidden;
+  border-radius: 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: linear-gradient(180deg, rgba(24, 22, 28, 0.7), rgba(12, 11, 16, 0.72));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  transition: border-color 0.22s ease, box-shadow 0.22s ease, transform 0.18s ease,
+    background 0.22s ease;
+}
+.pick-card:hover {
+  border-color: rgba(255, 150, 110, 0.42);
+  transform: translateY(-2px);
+}
+.pick-card.is-on {
+  border-color: rgba(255, 124, 84, 0.7);
+  background: linear-gradient(180deg, rgba(255, 94, 58, 0.12), rgba(40, 18, 14, 0.5));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 210, 180, 0.14),
+    0 0 30px -8px rgba(255, 94, 58, 0.6);
+}
+.pick-ic {
+  display: grid;
+  place-items: center;
+  height: 2.6rem;
+  width: 2.6rem;
+  border-radius: 0.8rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: radial-gradient(circle at 50% 30%, rgba(255, 120, 80, 0.18), rgba(10, 10, 16, 0.85));
+  color: rgba(255, 180, 150, 0.9);
+  transition: border-color 0.22s ease, background 0.22s ease, box-shadow 0.22s ease, color 0.22s ease;
+}
+.pick-card.is-on .pick-ic {
+  border-color: rgba(255, 150, 110, 0.6);
+  background: radial-gradient(circle at 50% 30%, rgba(255, 120, 80, 0.4), rgba(30, 14, 12, 0.85));
+  color: #ffd9c4;
+  box-shadow: 0 0 18px -4px rgba(255, 94, 58, 0.8);
+}
+.pick-check {
+  display: grid;
+  place-items: center;
+  height: 1.35rem;
+  width: 1.35rem;
+  border-radius: 9999px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: transparent;
+  transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
+}
+.pick-card.is-on .pick-check {
+  border-color: transparent;
+  background: #ff5e3a;
+  color: #fff;
+  box-shadow: 0 0 14px -2px rgba(255, 94, 58, 0.9);
+}
+
+/* Footer navigation buttons */
+.launch-nav {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  border-radius: 0.75rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.03);
+  padding: 0.6rem 1.05rem;
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.7);
+  transition: color 0.18s ease, border-color 0.18s ease, background 0.18s ease, box-shadow 0.18s ease;
+}
+.launch-nav:hover {
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.26);
+}
+.launch-nav--primary {
+  border-color: rgba(255, 124, 84, 0.5);
+  color: #ffb98f;
+  background: rgba(255, 94, 58, 0.1);
+}
+.launch-nav--primary:hover {
+  color: #fff;
+  background: rgba(255, 94, 58, 0.2);
+  border-color: rgba(255, 150, 110, 0.7);
+  box-shadow: 0 0 22px -8px rgba(255, 94, 58, 0.85);
+}
+
+/* Text inputs inside the launch modal */
+.launch-input {
+  width: 100%;
+  border-radius: 0.85rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(10, 10, 16, 0.7);
+  color: #fff;
+  outline: none;
+  box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.45);
+  transition: border-color 0.18s ease, box-shadow 0.18s ease;
+}
+.launch-input:focus {
+  border-color: rgba(255, 124, 84, 0.6);
+  box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.45), 0 0 0 3px rgba(255, 94, 58, 0.1);
+}
+.launch-input::placeholder { color: rgba(255, 255, 255, 0.3); }
+
+@media (prefers-reduced-motion: reduce) {
+  .launch-overlay,
+  .launch-panel { animation: none; }
+  .launch-orb[data-state='active'] { transform: none; }
+  .pick-card:hover { transform: none; }
 }
