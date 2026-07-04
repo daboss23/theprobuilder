@@ -147,17 +147,25 @@ export function Workbench() {
       .catch(() => {})
   }, [])
 
-  // Dashboard's "New Creative Campaign" CTA links here with ?modal=open — open
-  // the guided modal on arrival, then strip the param so refresh doesn't reopen.
+  // The brief wizard IS the entry point — it opens automatically when the user
+  // arrives with no run in flight (there is no separate CTA button). A dismissed
+  // wizard stays closed; the topbar button re-raises it via the event below.
+  const autoOpened = useRef(false)
   useEffect(() => {
-    if (typeof window === 'undefined') return
-    const params = new URLSearchParams(window.location.search)
-    if (params.get('modal') === 'open') {
-      setModalOpen(true)
-      params.delete('modal')
-      const qs = params.toString()
-      window.history.replaceState(null, '', window.location.pathname + (qs ? `?${qs}` : ''))
+    if (autoOpened.current) return
+    autoOpened.current = true
+    if (typeof window !== 'undefined') {
+      // Strip the legacy ?modal=open param so refresh/share URLs stay clean.
+      const params = new URLSearchParams(window.location.search)
+      if (params.get('modal') === 'open') {
+        params.delete('modal')
+        const qs = params.toString()
+        window.history.replaceState(null, '', window.location.pathname + (qs ? `?${qs}` : ''))
+      }
     }
+    if (phase === 'idle') setModalOpen(true)
+    // Mount-time decision only — phase changes after arrival must not re-open.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // Topbar "New Creative Campaign" button signals this when already on the page.
@@ -614,49 +622,38 @@ export function Workbench() {
 
   return (
     <div className="space-y-6">
-      {/* Trigger — the modal is the single input induction for the reactor */}
+      {/* The brief wizard opens itself on arrival — the header only carries the
+          run status and the output-surface toggle. */}
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h2 className="font-display text-lg font-semibold text-white">Configure your campaign</h2>
           <p className="mt-0.5 text-sm text-white/45">
-            Brief, audience, offer, performance feed, and brand — collected across five quick steps,
-            then fire the reactor.
+            {phase === 'firing' ? (
+              <span className="inline-flex items-center gap-1.5 text-glow/80">
+                <Loader2 size={13} className="animate-spin" /> Reactor firing — agents are working
+                through your brief.
+              </span>
+            ) : (
+              'Brief, audience, offer, performance feed, and brand — collected across five quick steps, then fire the reactor.'
+            )}
           </p>
         </div>
-        <div className="flex items-center gap-3">
-          {/* Output surface toggle — watch the reactor work, remix in the
-              Studio, or wire the production graph in the Flow. */}
-          <div className="inline-flex rounded-full border border-white/10 bg-white/[0.03] p-1">
-            {(['reactor', 'studio', 'flow'] as const).map((v) => (
-              <button
-                key={v}
-                type="button"
-                onClick={() => setView(v)}
-                aria-pressed={view === v}
-                className={`rounded-full px-3.5 py-1.5 text-xs font-semibold capitalize transition-colors ${
-                  view === v ? 'bg-glow/15 text-glow' : 'text-white/45 hover:text-white/70'
-                }`}
-              >
-                {v}
-              </button>
-            ))}
-          </div>
-          <button
-            type="button"
-            onClick={() => setModalOpen(true)}
-            disabled={phase === 'firing'}
-            className="fire-btn inline-flex items-center gap-2 rounded-full px-6 py-3.5 font-display text-base font-bold uppercase tracking-wide text-white"
-          >
-            {phase === 'firing' ? (
-              <>
-                <Loader2 size={16} className="animate-spin" /> Firing Reactor…
-              </>
-            ) : (
-              <>
-                <Atom size={16} /> New Creative Campaign
-              </>
-            )}
-          </button>
+        {/* Output surface toggle — watch the reactor work, remix in the
+            Studio, or wire the production graph in the Flow. */}
+        <div className="inline-flex rounded-full border border-white/10 bg-white/[0.03] p-1">
+          {(['reactor', 'studio', 'flow'] as const).map((v) => (
+            <button
+              key={v}
+              type="button"
+              onClick={() => setView(v)}
+              aria-pressed={view === v}
+              className={`rounded-full px-3.5 py-1.5 text-xs font-semibold capitalize transition-colors ${
+                view === v ? 'bg-glow/15 text-glow' : 'text-white/45 hover:text-white/70'
+              }`}
+            >
+              {v}
+            </button>
+          ))}
         </div>
       </div>
 
@@ -682,9 +679,16 @@ export function Workbench() {
           <div className="grid place-items-center px-6 py-24 text-center">
             <Atom size={40} className="mb-4 text-white/15" />
             <p className="max-w-sm text-sm text-white/40">
-              Select your intelligence inputs and angle, then fire the reactor. The agent walks
-              your frameworks, retrieves what has already worked, and drafts grounded concepts.
+              Answer the campaign brief, then fire the reactor. The agent walks your frameworks,
+              retrieves what has already worked, and drafts grounded concepts.
             </p>
+            <button
+              type="button"
+              onClick={() => setModalOpen(true)}
+              className="mt-5 inline-flex items-center gap-2 rounded-full border border-glow/30 bg-glow/10 px-5 py-2.5 text-sm font-semibold text-glow transition-colors hover:bg-glow/20"
+            >
+              <Atom size={14} /> Open the campaign brief
+            </button>
           </div>
         </Panel>
       ) : (
