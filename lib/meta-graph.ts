@@ -58,7 +58,9 @@ function appSecretProof(token: string): string | null {
   return crypto.createHmac('sha256', secret).update(token).digest('hex')
 }
 
-async function graphGet(path: string, params: Record<string, string>): Promise<unknown> {
+// Exported so the performance-ingest layer (lib/meta-ingest.ts) reuses the same
+// signed, timeout-guarded Graph plumbing instead of duplicating it.
+export async function graphGet(path: string, params: Record<string, string>): Promise<unknown> {
   const token = process.env.META_ACCESS_TOKEN
   if (!token) throw new Error('META_ACCESS_TOKEN not configured')
 
@@ -84,7 +86,7 @@ async function graphGet(path: string, params: Record<string, string>): Promise<u
 
 /* ------------------------------- parsing ---------------------------------- */
 
-type InsightRow = {
+export type InsightRow = {
   spend?: string
   impressions?: string
   clicks?: string
@@ -93,7 +95,9 @@ type InsightRow = {
   cpm?: string
   reach?: string
   frequency?: string
+  ad_id?: string
   ad_name?: string
+  campaign_name?: string
   date_start?: string
   date_stop?: string
   actions?: { action_type: string; value: string }[]
@@ -108,18 +112,18 @@ const CONVERSION_ACTIONS = new Set([
   'onsite_conversion.lead_grouped',
 ])
 
-function num(v: unknown): number {
+export function num(v: unknown): number {
   const n = parseFloat(String(v ?? '').replace(/[^0-9.\-]/g, ''))
   return Number.isFinite(n) ? n : 0
 }
 
-function conversions(row: InsightRow): number {
+export function conversions(row: InsightRow): number {
   return (row.actions ?? [])
     .filter((a) => CONVERSION_ACTIONS.has(a.action_type))
     .reduce((sum, a) => sum + num(a.value), 0)
 }
 
-function roas(row: InsightRow): number {
+export function roas(row: InsightRow): number {
   return num(row.purchase_roas?.[0]?.value)
 }
 
@@ -129,7 +133,7 @@ function money(n: number): string {
 
 /* ------------------------------ live pulls -------------------------------- */
 
-async function listAccountIds(): Promise<string[]> {
+export async function listAccountIds(): Promise<string[]> {
   const json = (await graphGet('me/adaccounts', { fields: 'account_id', limit: '50' })) as {
     data?: { account_id?: string }[]
   }

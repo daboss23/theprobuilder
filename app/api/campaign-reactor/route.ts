@@ -26,6 +26,13 @@ import {
   neuroFeedback,
   demoNeuroScore,
 } from '@/lib/neuro'
+import {
+  META_CRAFT_BLOCK,
+  adPackageSchema,
+  adPackageFeedback,
+  demoAdPackage,
+  type MetaAdPackage,
+} from '@/lib/meta-ads'
 
 // ORACLE strategic memory injected into OPUS at fire time — past winning
 // configurations matching the brief, so generation reuses what worked.
@@ -101,6 +108,7 @@ interface Concept {
   imageUrl?: string
   productionBrief?: ProductionBrief
   neuro?: NeuroScore
+  adPackage?: MetaAdPackage
 }
 
 /* ------------------------------ Meta Ads MCP ------------------------------ */
@@ -280,7 +288,7 @@ function buildTools(
   tools.push({
     name: 'submit_concepts',
     description:
-      'Submit the final campaign concepts once your intelligence network has reported AND you have self-scored each concept against the Creative Learnings rubric. Each concept must cite its evidence and pass the rubric. Include imageUrl for any concept you generated a creative for.',
+      'Submit the final campaign concepts once your intelligence network has reported AND you have self-scored each concept against the Creative Learnings rubric. Each concept must cite its evidence, pass the rubric, and carry a complete launch-ready Meta ad unit (adPackage). Include imageUrl for any concept you generated a creative for.',
     input_schema: {
       type: 'object',
       properties: {
@@ -295,6 +303,7 @@ function buildTools(
               learningCheck: { type: 'string', description: 'How it satisfies the rubric' },
               score: { type: 'integer', description: 'Self-assessed 1-10. Only submit 7+.' },
               imageUrl: { type: 'string', description: 'The Higgsfield image URL for this concept, if one was generated.' },
+              adPackage: adPackageSchema,
               productionBrief: {
                 type: 'object',
                 description:
@@ -377,9 +386,11 @@ Your intelligence network:
 Process:
 1. Consult your network with consult_intelligence. Always consult NOVA and ORACLE, plus at least one of SPARK/ECHO. Use their findings as evidence — don't guess.${metaAdsLine}
 2. Call get_learnings and self-score every concept against that rubric. Revise or drop anything below 7.${imageLine}${videoLine}
-3. Call submit_concepts with concepts ONLY for these requested output types: ${outputs.join(', ')}. Each concept cites which intelligence layer its evidence came from.
+3. Call submit_concepts with concepts ONLY for these requested output types: ${outputs.join(', ')}. Each concept cites which intelligence layer its evidence came from, and each concept carries a complete adPackage — the launch-ready Meta ad unit.
 
-On submit, every concept is run through NEURO — a neural pre-test that scores its PREDICTED RESPONSE (attention, emotion, memorability, first-3-seconds hook) against neuromarketing principles. Concepts with a weak scroll-stop or hook are returned to you to revise or drop. So lead with a concrete, specific pattern-interrupt in the opening beat of every concept — don't open on the offer or a generic claim.
+${META_CRAFT_BLOCK}
+
+On submit, every concept is run through NEURO — a neural pre-test that scores its PREDICTED RESPONSE (attention, emotion, memorability, first-3-seconds hook) against neuromarketing principles — and its adPackage is validated against Meta's placement limits and the compliance constraints. Concepts with a weak scroll-stop or hook, or a non-compliant ad unit, are returned to you to revise or drop. So lead with a concrete, specific pattern-interrupt in the opening beat of every concept — don't open on the offer or a generic claim.
 
 Voice: confident, specific, builder-native. Engineered for performance.`
 }
@@ -641,10 +652,12 @@ async function runDemo(controller: ReadableStreamDefaultController, body: Reacto
     { type: 'Campaign Concept', text: `The ${a} Reactor: founder video + static proof ad + member testimonial, sequenced cold → warm → apply.`, basis: 'OPUS (stacks highest-win formats)', learningCheck: 'Stacks the three highest-win formats', score: 9 },
   ]
   // Visual concepts carry a production brief — the platform plans before it renders.
+  // Every concept carries a launch-ready Meta ad unit, same as the live agent.
   for (const c of pool) {
     if (/static|video|founder|testimonial|event|campaign/i.test(c.type) && /concept/i.test(c.type)) {
       c.productionBrief = demoBrief(c.type, a)
     }
+    c.adPackage = demoAdPackage(c.type, a)
   }
   sse(controller, {
     type: 'step',
@@ -1004,6 +1017,18 @@ export async function POST(request: NextRequest) {
             } else if (tu.name === 'submit_concepts') {
               const concepts = (tu.input as { concepts?: Concept[] }).concepts ?? []
 
+              // Meta ad-unit compliance gate — Meta's placement limits + TPB's
+              // hard compliance phrases, enforced in code before anything ships.
+              const compliance = adPackageFeedback(concepts)
+              sse(controller, {
+                type: 'step',
+                text: `Validating Meta ad units · ${concepts.length} package(s)${
+                  compliance.failingIndices.length
+                    ? ` · ${compliance.failingIndices.length} non-compliant`
+                    : ' · all launch-ready'
+                }`,
+              })
+
               // NEURO — neural pre-test: estimate the predicted response of each
               // concept before it ships. Grounded in neuromarketing principles
               // (retrieved once, reused across any revision).
@@ -1027,18 +1052,31 @@ export async function POST(request: NextRequest) {
                 }`,
               })
 
-              if (weak.length > 0 && neuroRevisions < MAX_NEURO_REVISIONS) {
-                // Step 5 — hand the weak scores back to OPUS so it revises the
-                // openings (or drops the concept), same as the rubric self-critique.
+              const needsRevision = weak.length > 0 || compliance.failingIndices.length > 0
+              if (needsRevision && neuroRevisions < MAX_NEURO_REVISIONS) {
+                // Step 5 — hand the weak scores / compliance failures back to
+                // OPUS so it revises (or drops), same as the rubric self-critique.
+                // Both gates share one bounded revision pass to cap cost.
                 neuroRevisions += 1
                 sse(controller, {
                   type: 'step',
-                  text: `NEURO flagged ${weak.length} concept(s) for weak scroll-stop / hook — OPUS revising…`,
+                  text: `${
+                    weak.length
+                      ? `NEURO flagged ${weak.length} concept(s) for weak scroll-stop / hook`
+                      : ''
+                  }${weak.length && compliance.failingIndices.length ? ' · ' : ''}${
+                    compliance.failingIndices.length
+                      ? `${compliance.failingIndices.length} ad unit(s) non-compliant`
+                      : ''
+                  } — OPUS revising…`,
                 })
+                const feedbackParts: string[] = []
+                if (weak.length > 0) feedbackParts.push(neuroFeedback(concepts, scores, weak))
+                if (compliance.failingIndices.length > 0) feedbackParts.push(compliance.feedback)
                 results.push({
                   type: 'tool_result',
                   tool_use_id: tu.id,
-                  content: neuroFeedback(concepts, scores, weak),
+                  content: feedbackParts.join('\n\n'),
                 })
               } else {
                 // Passed the pre-test (or revision budget spent) — attach the

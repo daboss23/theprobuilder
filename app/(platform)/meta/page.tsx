@@ -30,6 +30,7 @@ import {
 } from '@/lib/meta-data'
 import { resolveMetaDashboard } from '@/lib/meta-graph'
 import { cn } from '@/lib/utils'
+import { MetaSyncButton } from './MetaSyncButton'
 
 export const dynamic = 'force-dynamic'
 
@@ -267,12 +268,10 @@ export default async function MetaIntelligencePage() {
             icon={<Brain size={16} />}
             accent="amber"
             title="Reactor Learning Loop"
-            subtitle="What the agent extracts from Meta to brief the next campaign"
+            subtitle="Live ad grades flow into ORACLE memory — winners re-ingest into the Vault"
             accessory={
               <div className="hidden items-center gap-2 sm:flex">
-                <Pill tone="success">
-                  <Sparkles size={12} /> Connected
-                </Pill>
+                <MetaSyncButton />
               </div>
             }
           />

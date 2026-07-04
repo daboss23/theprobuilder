@@ -26,6 +26,8 @@ interface ScorableConcept {
   type: string
   text: string
   productionBrief?: { frames?: { label: string; description: string }[] }
+  /** The launch-ready Meta ad unit — its opening is what the feed actually shows. */
+  adPackage?: { primaryText?: string; headline?: string }
 }
 
 /** Concept fails the pre-test when its scroll-stop or hook is weak. */
@@ -106,7 +108,12 @@ function conceptLine(c: ScorableConcept, i: number): string {
   const frames = c.productionBrief?.frames?.length
     ? ` | First beat: ${c.productionBrief.frames[0].description}`
     : ''
-  return `${i}. [${c.type}] ${c.text}${frames}`
+  // The ad's real opening — the first ~125 chars a scroller actually sees
+  // before Meta's "See more" fold. Grade what ships, not just the concept.
+  const opening = c.adPackage?.primaryText
+    ? ` | Ad opening (pre-fold): ${c.adPackage.primaryText.slice(0, 125)}`
+    : ''
+  return `${i}. [${c.type}] ${c.text}${opening}${frames}`
 }
 
 /**
