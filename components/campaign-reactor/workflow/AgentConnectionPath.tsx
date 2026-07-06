@@ -149,7 +149,7 @@ export function AgentConnectionPath({
   to,
   color,
   toColor,
-  tipColor = '#FFF1E6',
+  tipColor = '#EAF6FF',
   active,
   complete,
   dim,
@@ -273,8 +273,8 @@ export function AgentConnectionPath({
   }, [paused])
 
   const coreOpacity = dim ? 0.12 : active ? 0.95 : complete ? 0.55 : 0.32
-  const atmosOpacity = dim ? 0.04 : active ? 0.3 : complete ? 0.12 : 0.07
-  const atmosWidth = active ? 20 : complete ? 9 : 6
+  const atmosOpacity = dim ? 0.04 : active ? 0.34 : complete ? 0.12 : 0.07
+  const atmosWidth = active ? 24 : complete ? 9 : 6
 
   return (
     <g ref={groupRef}>
@@ -316,6 +316,19 @@ export function AgentConnectionPath({
         opacity={coreOpacity * 0.7}
         className={cn(active && 'nrg-body')}
       />
+
+      {/* Layer 2b — white-hot inner core of the beam (live exchange only) */}
+      {active && (
+        <path
+          d={baseD}
+          fill="none"
+          stroke={tipColor}
+          strokeWidth={0.8}
+          strokeLinecap="round"
+          opacity={0.8}
+          className="nrg-hotcore"
+        />
+      )}
 
       {/* Layer 3 — the filament braid */}
       {filaments.map((f, i) => (

@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import dynamic from 'next/dynamic'
 import { AnimatePresence, motion } from 'motion/react'
 import { cn } from '@/lib/utils'
@@ -78,6 +78,18 @@ const TICKS = Array.from({ length: 48 }, (_, i) => {
   }
 })
 
+/* ---- Awakening burst geometry — frequency motes radiating from the core ---- */
+const BURST_MOTES = Array.from({ length: 14 }, (_, i) => {
+  const a = (i / 14) * Math.PI * 2
+  const dist = 92 + (i % 3) * 22
+  return {
+    key: i,
+    x: Math.cos(a) * dist,
+    y: Math.sin(a) * dist,
+    dur: 0.85 + (i % 3) * 0.14,
+  }
+})
+
 export function OpusReactorCore({
   phase,
   activeCodename,
@@ -105,6 +117,23 @@ export function OpusReactorCore({
   const [webglOk, setWebglOk] = useState(true)
   const handleUnavailable = useCallback(() => setWebglOk(false), [])
 
+  /* One-time awakening burst — fires once per run, on reactor ignition.
+     Tracks the previous phase so re-renders never replay it; a new run
+     re-entering `initialising` arms it again. */
+  const [burst, setBurst] = useState(0)
+  const prevPhaseRef = useRef<OpusPhase>(phase)
+  useEffect(() => {
+    const prev = prevPhaseRef.current
+    prevPhaseRef.current = phase
+    if (reduced) return
+    if (phase === 'initialising' && prev !== 'initialising') setBurst((b) => b + 1)
+  }, [phase, reduced])
+  useEffect(() => {
+    if (burst === 0) return
+    const t = window.setTimeout(() => setBurst(0), 1500)
+    return () => window.clearTimeout(t)
+  }, [burst])
+
   return (
     <div className="flex flex-col items-center text-center">
       <div
@@ -120,6 +149,11 @@ export function OpusReactorCore({
           reduced && 'opus-core--static',
         )}
       >
+        {/* ---- Chamber stage — holo-platform + volumetric light column ---- */}
+        <span aria-hidden className="opus-beam" />
+        <span aria-hidden className="opus-platform" />
+        <span aria-hidden className="opus-platform-ring" />
+
         {/* ---- Concentric ring system (SVG) ---- */}
         <svg className="opus-rings" viewBox="0 0 200 200" aria-hidden="true">
           {/* Outer intelligence field + slow rotating highlight */}
@@ -217,6 +251,36 @@ export function OpusReactorCore({
           )}
         </AnimatePresence>
 
+        {/* Awakening — one elegant burst of energy + frequency motes as the
+            reactor ignites. Happens once per run, then settles into the network. */}
+        <AnimatePresence>
+          {burst > 0 && (
+            <motion.span key={`burst-${burst}`} aria-hidden className="opus-awaken" exit={{ opacity: 0 }}>
+              <motion.span
+                className="opus-awaken__wave"
+                initial={{ opacity: 0.9, scale: 0.3 }}
+                animate={{ opacity: 0, scale: 2.1 }}
+                transition={{ duration: 1.05, ease: [0.16, 1, 0.3, 1] }}
+              />
+              <motion.span
+                className="opus-awaken__wave opus-awaken__wave--soft"
+                initial={{ opacity: 0.55, scale: 0.4 }}
+                animate={{ opacity: 0, scale: 2.5 }}
+                transition={{ duration: 1.3, ease: 'easeOut', delay: 0.08 }}
+              />
+              {BURST_MOTES.map((m) => (
+                <motion.span
+                  key={m.key}
+                  className="opus-awaken__mote"
+                  initial={{ x: 0, y: 0, opacity: 1, scale: 1 }}
+                  animate={{ x: m.x, y: m.y, opacity: 0, scale: 0.35 }}
+                  transition={{ duration: m.dur, ease: 'easeOut' }}
+                />
+              ))}
+            </motion.span>
+          )}
+        </AnimatePresence>
+
         <div className="opus-label">
           <p className="font-display text-xl font-black tracking-[0.18em] text-white drop-shadow-[0_1px_8px_rgba(0,0,0,0.6)]">
             OPUS
@@ -235,7 +299,7 @@ export function OpusReactorCore({
           transition={{ duration: 0.4 }}
           className={cn(
             'font-display text-xs font-bold uppercase tracking-[0.16em]',
-            error ? 'text-danger' : ready ? 'text-success' : 'text-[#FFB68A]',
+            error ? 'text-danger' : ready ? 'text-success' : 'text-[#9CD8FF]',
           )}
         >
           {OPUS_PHASE_LABEL[phase]}

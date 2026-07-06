@@ -7,13 +7,14 @@ import type { OpusPhase } from '@/lib/campaign-reactor/workflow'
 /**
  * The OPUS reactor heart, rendered as a real-time WebGL scene:
  *
- *   · A faceted energy crystal (fresnel rim + flat facet shading, additive)
- *   · A molten inner core that breathes with the run's energy level
- *   · An orbiting charge-particle field
+ *   · A faceted holographic ice crystal (fresnel rim + flat facet shading)
+ *   · A warm amber intelligence heart that breathes with the run's energy —
+ *     the only warm light in the chamber, per the holographic-chamber palette
+ *   · An orbiting charge-particle field of cool ions
  *   · Layered glow sprites standing in for bloom (cheap, no postprocessing)
  *
  * Everything is phase-reactive: the live OpusPhase drives a single `energy`
- * level plus a rim/halo tint (electric blue while working, emerald on ready,
+ * level plus a rim/halo tint (electric cyan while working, emerald on ready,
  * red on fault), lerped in the render loop so state changes feel physical
  * rather than switched. Honest-state rule: the crystal only rages when the
  * reactor is actually synthesising.
@@ -31,24 +32,24 @@ interface PhaseVisual {
   tint: THREE.Color
 }
 
-const TINT_BLUE = new THREE.Color('#5EA8FF')
+const TINT_ICE = new THREE.Color('#67D9FF')
 const TINT_EMERALD = new THREE.Color('#34D399')
 const TINT_RED = new THREE.Color('#FB7185')
 
 function phaseVisual(phase: OpusPhase): PhaseVisual {
   switch (phase) {
     case 'idle':
-      return { energy: 0.38, tint: TINT_BLUE }
+      return { energy: 0.38, tint: TINT_ICE }
     case 'initialising':
-      return { energy: 0.55, tint: TINT_BLUE }
+      return { energy: 0.55, tint: TINT_ICE }
     case 'delegating':
-      return { energy: 0.7, tint: TINT_BLUE }
+      return { energy: 0.7, tint: TINT_ICE }
     case 'receiving':
-      return { energy: 0.85, tint: TINT_BLUE }
+      return { energy: 0.85, tint: TINT_ICE }
     case 'synthesising':
     case 'evaluating':
     case 'generating':
-      return { energy: 1, tint: TINT_BLUE }
+      return { energy: 1, tint: TINT_ICE }
     case 'ready':
       return { energy: 0.62, tint: TINT_EMERALD }
     case 'error':
@@ -91,12 +92,14 @@ const CRYSTAL_FRAG = /* glsl */ `
     // Internal energy shimmer drifting through the lattice.
     float shimmer = 0.5 + 0.5 * sin(vWorldPos.y * 6.0 - uTime * (1.2 + uEnergy * 2.2));
 
-    vec3 molten = vec3(1.0, 0.42, 0.24);          // blood-orange heart
-    vec3 hot = vec3(1.0, 0.86, 0.66);             // hot cream highlight
-    vec3 body = mix(molten, hot, facet * 0.75 + shimmer * 0.2);
+    vec3 ice = vec3(0.32, 0.74, 1.0);             // holographic ice body
+    vec3 frost = vec3(0.88, 0.97, 1.0);           // ice-white facet highlight
+    vec3 violetRim = vec3(0.62, 0.52, 0.98);      // violet refraction accent
+    vec3 body = mix(ice, frost, facet * 0.75 + shimmer * 0.2);
 
     vec3 col = body * (0.14 + 0.5 * uEnergy + uFlare * 0.5);
     col += uTint * fresnel * (0.38 + uEnergy * 0.62 + uFlare * 0.5);
+    col += violetRim * pow(fresnel, 3.0) * (0.25 + uEnergy * 0.3);
 
     gl_FragColor = vec4(col, 1.0);
   }
@@ -121,7 +124,8 @@ const CORE_FRAG = /* glsl */ `
   void main() {
     float facing = clamp(dot(normalize(vNormal), normalize(vViewDir)), 0.0, 1.0);
     float hot = pow(facing, 2.6);
-    vec3 col = mix(vec3(1.0, 0.32, 0.16), vec3(1.0, 0.96, 0.88), hot);
+    // Warm amber intelligence heart — the only warm light in the chamber.
+    vec3 col = mix(vec3(1.0, 0.52, 0.2), vec3(1.0, 0.96, 0.86), hot);
     float amp = 0.26 + uEnergy * 0.8 + uFlare * 0.9;
     gl_FragColor = vec4(col * amp, 1.0);
   }
@@ -162,7 +166,7 @@ export default function ReactorCoreCanvas({
   const mountRef = useRef<HTMLDivElement | null>(null)
 
   // Live drive state read by the render loop without re-creating the scene.
-  const driveRef = useRef({ energy: 0.38, tint: new THREE.Color('#5EA8FF'), flare: 0 })
+  const driveRef = useRef({ energy: 0.38, tint: new THREE.Color('#67D9FF'), flare: 0 })
   const reducedRef = useRef(reduced)
   reducedRef.current = reduced
   // Set by the scene effect so phase changes can repaint the static frame
@@ -211,7 +215,7 @@ export default function ReactorCoreCanvas({
       uniforms: {
         uEnergy: { value: 0.38 },
         uFlare: { value: 0 },
-        uTint: { value: new THREE.Color('#5EA8FF') },
+        uTint: { value: new THREE.Color('#67D9FF') },
         uTime: { value: 0 },
       },
       blending: THREE.AdditiveBlending,
@@ -249,11 +253,12 @@ export default function ReactorCoreCanvas({
     const core = new THREE.Mesh(coreGeo, coreMat)
     scene.add(core)
 
-    /* Glow halos — cheap bloom */
+    /* Glow halos — cheap bloom. The warm halo hugs the heart tightly so amber
+       never bleeds past the crystal into the cool chamber. */
     const warmTex = radialTexture([
-      [0, 'rgba(255, 214, 170, 0.9)'],
-      [0.35, 'rgba(255, 122, 64, 0.42)'],
-      [1, 'rgba(255, 106, 61, 0)'],
+      [0, 'rgba(255, 216, 168, 0.85)'],
+      [0.35, 'rgba(255, 158, 92, 0.34)'],
+      [1, 'rgba(255, 140, 80, 0)'],
     ])
     const warmHalo = new THREE.Sprite(
       new THREE.SpriteMaterial({
@@ -263,7 +268,7 @@ export default function ReactorCoreCanvas({
         depthWrite: false,
       }),
     )
-    warmHalo.scale.setScalar(3.6)
+    warmHalo.scale.setScalar(2.4)
     scene.add(warmHalo)
 
     const tintTex = radialTexture([
@@ -273,7 +278,7 @@ export default function ReactorCoreCanvas({
     ])
     const tintHaloMat = new THREE.SpriteMaterial({
       map: tintTex,
-      color: new THREE.Color('#5EA8FF'),
+      color: new THREE.Color('#67D9FF'),
       blending: THREE.AdditiveBlending,
       transparent: true,
       depthWrite: false,
@@ -296,9 +301,9 @@ export default function ReactorCoreCanvas({
     const particleGeo = new THREE.BufferGeometry()
     particleGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3))
     const dotTex = radialTexture([
-      [0, 'rgba(255, 236, 214, 1)'],
-      [0.4, 'rgba(255, 178, 122, 0.5)'],
-      [1, 'rgba(255, 140, 80, 0)'],
+      [0, 'rgba(220, 244, 255, 1)'],
+      [0.4, 'rgba(125, 200, 255, 0.5)'],
+      [1, 'rgba(90, 168, 255, 0)'],
     ])
     const particleMat = new THREE.PointsMaterial({
       map: dotTex,

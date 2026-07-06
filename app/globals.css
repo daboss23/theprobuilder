@@ -852,14 +852,22 @@ body {
   position: relative;
   overflow: hidden;
   border-radius: 0.9rem;
-  border: 1px solid rgb(var(--acc) / 0.14);
+  border: 1px solid rgb(var(--acc) / 0.18);
+  /* Floating holo-glass terminal: translucent projection surface with the
+     agent's accent washing in from its leading edge. */
   background:
-    radial-gradient(140px 90px at 0% 0%, rgb(var(--acc) / 0.1), transparent 70%),
-    linear-gradient(180deg, rgba(14, 23, 40, 0.92), rgba(6, 10, 20, 0.96));
+    linear-gradient(115deg, rgba(255, 255, 255, 0.05), transparent 30%),
+    radial-gradient(160px 100px at 0% 0%, rgb(var(--acc) / 0.14), transparent 70%),
+    radial-gradient(180px 120px at 100% 120%, rgb(var(--acc) / 0.05), transparent 72%),
+    linear-gradient(180deg, rgba(13, 24, 44, 0.78), rgba(5, 10, 22, 0.88));
+  backdrop-filter: blur(18px) saturate(140%);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
   padding: 0.8rem 0.9rem;
   box-shadow:
-    inset 0 1px 0 rgba(170, 210, 255, 0.06),
-    0 12px 26px -20px rgba(0, 0, 0, 0.95);
+    inset 0 1px 0 rgba(190, 230, 255, 0.1),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.02),
+    0 0 24px -18px rgb(var(--acc) / 0.7),
+    0 14px 30px -20px rgba(0, 0, 6, 0.95);
   transition: border-color 0.4s ease, box-shadow 0.4s ease, opacity 0.4s ease, transform 0.3s ease;
 }
 .intel-card--dim { opacity: 0.5; }
@@ -1054,13 +1062,13 @@ body {
 }
 .opus-ring--outer {
   inset: 0;
-  border: 1px solid rgba(94, 168, 255, 0.35);
-  box-shadow: 0 0 40px -10px rgba(56, 145, 255, 0.6), inset 0 0 30px -12px rgba(56, 145, 255, 0.5);
+  border: 1px solid rgba(103, 217, 255, 0.35);
+  box-shadow: 0 0 40px -10px rgba(64, 190, 255, 0.6), inset 0 0 30px -12px rgba(64, 190, 255, 0.5);
   animation: opus-ring-pulse 4s ease-in-out infinite;
 }
 .opus-ring--mid {
   inset: 1.4rem;
-  border: 1px solid rgba(94, 168, 255, 0.22);
+  border: 1px solid rgba(103, 217, 255, 0.22);
   animation: opus-ring-pulse 4s ease-in-out infinite reverse;
 }
 @keyframes opus-ring-pulse {
@@ -1072,28 +1080,35 @@ body {
   inset: 2.4rem;
   z-index: 1;
   border-radius: 9999px;
+  /* Containment vessel: cool holographic glass with the warm heart glowing
+     through its centre — amber stays inside, the rim light stays cyan. */
   background: radial-gradient(
-    circle at 50% 44%,
-    rgba(255, 150, 90, 0.55),
-    rgba(190, 40, 24, 0.45) 52%,
-    rgba(70, 10, 12, 0.66) 86%,
-    rgba(18, 6, 10, 0.82) 100%
+    circle at 50% 46%,
+    rgba(255, 172, 106, 0.4),
+    rgba(120, 70, 40, 0.28) 34%,
+    rgba(16, 42, 74, 0.55) 68%,
+    rgba(6, 14, 28, 0.85) 100%
   );
-  box-shadow: inset 0 0 42px -6px rgba(0, 0, 0, 0.78), 0 0 64px -18px rgba(255, 90, 50, 0.55);
+  box-shadow:
+    inset 0 0 42px -6px rgba(0, 0, 6, 0.8),
+    inset 0 0 22px -8px rgba(103, 217, 255, 0.35),
+    0 0 64px -18px rgba(64, 190, 255, 0.5);
 }
 .opus-heart {
   position: absolute;
   inset: 3.4rem;
   z-index: 2;
   border-radius: 9999px;
+  /* Warm intelligence heart — the only warm light in the chamber. Its glow is
+     kept tight so amber never spills into the cool scene. */
   background: radial-gradient(
     circle at 50% 45%,
-    rgba(255, 196, 140, 0.98),
-    rgba(255, 104, 64, 0.9) 42%,
-    rgba(200, 36, 22, 0.62) 72%,
-    rgba(120, 14, 14, 0.34) 100%
+    rgba(255, 214, 160, 0.98),
+    rgba(255, 150, 84, 0.9) 42%,
+    rgba(214, 92, 40, 0.6) 72%,
+    rgba(110, 44, 20, 0.32) 100%
   );
-  box-shadow: 0 0 50px -6px rgba(255, 100, 56, 0.82), inset 0 0 26px -6px rgba(120, 8, 8, 0.55);
+  box-shadow: 0 0 34px -8px rgba(255, 156, 84, 0.75), inset 0 0 26px -6px rgba(120, 40, 10, 0.55);
   animation: opus-breathe 3.6s ease-in-out infinite;
 }
 .opus-heart-core {
@@ -1123,29 +1138,39 @@ body {
   50% { opacity: 1; transform: scale(1.08); }
 }
 .opus-label { position: relative; z-index: 6; }
+/* Soft dark scrim so the wordmark stays legible over the white-hot crystal */
+.opus-label::before {
+  content: '';
+  position: absolute;
+  inset: -0.55rem -1.3rem;
+  z-index: -1;
+  border-radius: 9999px;
+  background: radial-gradient(closest-side, rgba(3, 9, 20, 0.62), transparent 82%);
+  filter: blur(3px);
+}
 .opus-flare {
   position: absolute;
   inset: 1.2rem;
   z-index: 4;
   border-radius: 9999px;
   pointer-events: none;
-  border: 2px solid rgba(255, 200, 150, 0.85);
-  box-shadow: 0 0 30px 4px rgba(255, 140, 80, 0.6);
+  border: 2px solid rgba(178, 232, 255, 0.85);
+  box-shadow: 0 0 30px 4px rgba(94, 212, 255, 0.55);
 }
 /* Stronger, faster pulse while OPUS is synthesising / generating */
 .opus-core--synth .opus-heart {
   animation-duration: 1.9s;
-  box-shadow: 0 0 72px -2px rgba(255, 90, 50, 0.95), inset 0 0 34px -4px rgba(150, 10, 10, 0.7);
+  box-shadow: 0 0 48px -4px rgba(255, 160, 90, 0.9), inset 0 0 34px -4px rgba(140, 50, 14, 0.7);
 }
 .opus-core--synth .opus-ring--outer {
   animation-duration: 2.4s;
-  border-color: rgba(120, 190, 255, 0.55);
+  border-color: rgba(125, 227, 255, 0.55);
 }
 /* Stable bright state on completion (rings settle to a confirmed emerald) */
 .opus-core--ready .opus-heart {
   animation: none;
   opacity: 1;
-  box-shadow: 0 0 60px -4px rgba(255, 110, 60, 0.85), inset 0 0 30px -6px rgba(120, 8, 8, 0.5);
+  box-shadow: 0 0 40px -6px rgba(255, 170, 100, 0.8), inset 0 0 30px -6px rgba(120, 44, 14, 0.5);
 }
 .opus-core--ready .opus-ring--outer {
   animation: none;
@@ -1166,17 +1191,116 @@ body {
 .opus-core--static .opus-hotspot,
 .opus-core--static .opus-field-rot,
 .opus-core--static .opus-emit,
+.opus-core--static .opus-beam,
+.opus-core--static .opus-platform-ring,
 .opus-core--static .opus-segs { animation: none; }
 /* WebGL heart active — the chamber becomes a dark containment vessel so the
    crystal supplies all the light instead of fighting the CSS gradient. */
 .opus-core--webgl .opus-chamber {
   background: radial-gradient(
     circle at 50% 44%,
-    rgba(58, 22, 16, 0.5),
-    rgba(20, 10, 14, 0.72) 62%,
-    rgba(8, 5, 10, 0.88) 100%
+    rgba(14, 34, 58, 0.5),
+    rgba(8, 16, 32, 0.72) 62%,
+    rgba(4, 8, 18, 0.88) 100%
   );
-  box-shadow: inset 0 0 46px -6px rgba(0, 0, 0, 0.88), 0 0 70px -16px rgba(255, 100, 56, 0.45);
+  box-shadow: inset 0 0 46px -6px rgba(0, 0, 6, 0.88), 0 0 70px -16px rgba(64, 190, 255, 0.42);
+}
+
+/* Chamber stage — holographic platform + volumetric light column ------------- */
+/* A polished holo-platform sits beneath the core: a lit elliptical disc, an
+   etched outer ring, and a soft volumetric beam rising up into the crystal. */
+.opus-platform {
+  position: absolute;
+  left: 50%;
+  bottom: -2.9rem;
+  z-index: 0;
+  height: 3.4rem;
+  width: 15.5rem;
+  transform: translateX(-50%);
+  border-radius: 50%;
+  pointer-events: none;
+  background:
+    radial-gradient(50% 50% at 50% 50%, rgba(125, 227, 255, 0.22), rgba(64, 156, 255, 0.08) 55%, transparent 74%),
+    radial-gradient(50% 50% at 50% 50%, rgba(10, 26, 48, 0.85), rgba(6, 14, 28, 0.4) 70%, transparent 78%);
+  box-shadow:
+    inset 0 1px 0 rgba(178, 232, 255, 0.18),
+    inset 0 0 26px -6px rgba(94, 212, 255, 0.4),
+    0 10px 40px -12px rgba(64, 190, 255, 0.45);
+}
+.opus-platform-ring {
+  position: absolute;
+  left: 50%;
+  bottom: -3.5rem;
+  z-index: 0;
+  height: 4.6rem;
+  width: 19rem;
+  transform: translateX(-50%);
+  border-radius: 50%;
+  pointer-events: none;
+  border: 1px solid rgba(103, 217, 255, 0.28);
+  box-shadow:
+    0 0 24px -8px rgba(94, 212, 255, 0.5),
+    inset 0 0 22px -10px rgba(94, 212, 255, 0.4);
+  animation: opus-ring-pulse 5s ease-in-out infinite;
+}
+.opus-beam {
+  position: absolute;
+  left: 50%;
+  bottom: -2rem;
+  z-index: 0;
+  height: 78%;
+  width: 6.5rem;
+  transform: translateX(-50%);
+  pointer-events: none;
+  background: linear-gradient(
+    180deg,
+    transparent,
+    rgba(103, 217, 255, 0.05) 34%,
+    rgba(125, 227, 255, 0.12) 78%,
+    rgba(178, 232, 255, 0.2)
+  );
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 28%, #000 72%, transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 28%, #000 72%, transparent);
+  filter: blur(6px);
+  animation: opus-beam-flux 6s ease-in-out infinite;
+}
+@keyframes opus-beam-flux {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 0.95; }
+}
+
+/* Awakening burst — one elegant ignition per run, fired from the component ---- */
+.opus-awaken {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: grid;
+  place-items: center;
+  border-radius: 9999px;
+  pointer-events: none;
+}
+.opus-awaken__wave {
+  position: absolute;
+  height: 62%;
+  width: 62%;
+  border-radius: 9999px;
+  border: 1.5px solid rgba(196, 240, 255, 0.9);
+  box-shadow:
+    0 0 34px 6px rgba(94, 212, 255, 0.5),
+    inset 0 0 22px -6px rgba(178, 232, 255, 0.7);
+}
+.opus-awaken__wave--soft {
+  border-width: 1px;
+  border-color: rgba(167, 139, 250, 0.55);
+  box-shadow: 0 0 28px 4px rgba(167, 139, 250, 0.35);
+}
+.opus-awaken__mote {
+  position: absolute;
+  height: 4px;
+  width: 4px;
+  border-radius: 9999px;
+  background: #eaf6ff;
+  box-shadow: 0 0 10px 2px rgba(125, 227, 255, 0.85);
 }
 
 /* OPUS ring system (SVG concentric layers) -----------------------------------*/
@@ -1235,8 +1359,8 @@ body {
   z-index: 4;
   border-radius: 9999px;
   pointer-events: none;
-  border: 2px solid rgba(255, 210, 160, 0.9);
-  box-shadow: 0 0 40px 8px rgba(255, 150, 90, 0.6);
+  border: 2px solid rgba(190, 250, 226, 0.9);
+  box-shadow: 0 0 40px 8px rgba(52, 211, 153, 0.5);
 }
 
 /* OPUS state responses -------------------------------------------------------*/
@@ -1253,8 +1377,10 @@ body {
 .opus-core--error .opus-chamber { filter: saturate(0.6) brightness(0.7); }
 
 /* Energy connections (layered channels) --------------------------------------*/
-.nrg-atmos { filter: blur(7px); }
+.nrg-atmos { filter: blur(9px); }
 .nrg-body { filter: blur(1.6px); }
+/* White-hot inner core riding the centre of an active beam */
+.nrg-hotcore { filter: drop-shadow(0 0 3px rgba(178, 232, 255, 0.9)); }
 /* Tendril filaments — GSAP drives the breathing + current; CSS keeps state
    changes (active ↔ complete ↔ dormant) settling smoothly. */
 .nrg-strand { transition: opacity 0.5s ease, stroke-width 0.5s ease; }
@@ -1331,13 +1457,13 @@ body {
   box-shadow: 0 0 8px 1px rgb(var(--acc) / 0.85);
 }
 .packet-chip--opus {
-  border-color: rgba(255, 140, 90, 0.65);
-  color: #ffd0b0;
-  box-shadow: 0 0 18px -4px rgba(255, 120, 70, 0.7), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  border-color: rgba(125, 227, 255, 0.65);
+  color: #d2f1ff;
+  box-shadow: 0 0 18px -4px rgba(94, 212, 255, 0.7), inset 0 1px 0 rgba(255, 255, 255, 0.1);
 }
 .packet-chip--opus .packet-dot {
-  background: #ffd9bf;
-  box-shadow: 0 0 8px 1px rgba(255, 140, 90, 0.85);
+  background: #eaf6ff;
+  box-shadow: 0 0 8px 1px rgba(125, 227, 255, 0.85);
 }
 .phase-node--active { box-shadow: 0 0 14px -4px rgba(94, 168, 255, 0.7); }
 
@@ -1356,6 +1482,58 @@ body {
   to { background-position: -200% 0; }
 }
 
+/* Synthesis chamber — the resolved output console on the right ---------------*/
+.synth-panel {
+  transition: border-color 0.7s ease, box-shadow 0.7s ease;
+}
+.synth-rail {
+  position: absolute;
+  right: 0;
+  top: 16%;
+  bottom: 16%;
+  width: 2px;
+  pointer-events: none;
+  border-radius: 9999px;
+  background: linear-gradient(180deg, transparent, rgba(125, 227, 255, 0.85), transparent);
+  opacity: 0.2;
+  transition: opacity 0.6s ease, box-shadow 0.6s ease;
+}
+.synth-panel[data-state='working'] .synth-rail {
+  opacity: 0.7;
+  animation: synth-rail-pulse 2.6s ease-in-out infinite;
+}
+@keyframes synth-rail-pulse {
+  0%, 100% { opacity: 0.35; box-shadow: 0 0 8px rgba(94, 212, 255, 0.2); }
+  50% { opacity: 0.9; box-shadow: 0 0 16px rgba(94, 212, 255, 0.6); }
+}
+/* Campaign locked in — the chamber illuminates once, then holds a settled glow */
+.synth-panel[data-state='ready'] {
+  border-color: rgba(52, 211, 153, 0.34);
+  box-shadow:
+    inset 0 1px 0 rgba(190, 255, 226, 0.12),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.02),
+    0 0 46px -20px rgba(52, 211, 153, 0.55),
+    0 28px 64px -38px rgba(0, 0, 0, 0.92);
+  animation: synth-lock 1.1s ease-out 1;
+}
+.synth-panel[data-state='ready'] .synth-rail {
+  opacity: 0.9;
+  background: linear-gradient(180deg, transparent, rgba(110, 231, 183, 0.9), transparent);
+  box-shadow: 0 0 14px rgba(52, 211, 153, 0.55);
+}
+@keyframes synth-lock {
+  0% { box-shadow: 0 0 0 0 rgba(52, 211, 153, 0); }
+  40% { box-shadow: 0 0 60px -8px rgba(52, 211, 153, 0.65), inset 0 0 40px -22px rgba(110, 231, 183, 0.7); }
+  100% { box-shadow: 0 0 46px -20px rgba(52, 211, 153, 0.55); }
+}
+.synth-panel[data-state='error'] {
+  border-color: rgba(251, 113, 133, 0.3);
+}
+.synth-panel[data-state='error'] .synth-rail {
+  background: linear-gradient(180deg, transparent, rgba(251, 113, 133, 0.8), transparent);
+  opacity: 0.6;
+}
+
 /* Emerging-strategy intelligence read (colour-coded accent) ------------------*/
 .intel-read {
   position: relative;
@@ -1372,7 +1550,10 @@ body {
   100% { box-shadow: inset 2px 0 0 rgb(var(--acc) / 0); }
 }
 
-/* Reactor stage background depth (agent-workflow stage only) ------------------*/
+/* Reactor stage — the holographic intelligence chamber (agent workflow only).
+   Cool volumetric atmosphere: cyan energy field around the core, violet depth
+   in the corners, a faint horizon light low in the chamber and a heavy
+   vignette so the whole stage reads as deep space with a lit centre. -------- */
 .reactor-stage { isolation: isolate; }
 .reactor-stage-bg {
   position: absolute;
@@ -1380,11 +1561,12 @@ body {
   z-index: 0;
   pointer-events: none;
   background:
-    radial-gradient(closest-side at 50% 50%, rgba(255, 106, 61, 0.06), transparent 62%),
-    radial-gradient(60% 50% at 24% 20%, rgba(40, 120, 230, 0.07), transparent 70%),
-    radial-gradient(55% 45% at 78% 78%, rgba(167, 139, 250, 0.05), transparent 72%),
-    radial-gradient(closest-side at 50% 50%, rgba(40, 120, 230, 0.06), transparent 70%),
-    radial-gradient(125% 95% at 50% 50%, transparent 50%, rgba(0, 0, 0, 0.42));
+    radial-gradient(closest-side at 50% 50%, rgba(94, 212, 255, 0.08), transparent 60%),
+    radial-gradient(60% 50% at 24% 20%, rgba(56, 130, 246, 0.08), transparent 70%),
+    radial-gradient(55% 45% at 78% 22%, rgba(167, 139, 250, 0.07), transparent 72%),
+    radial-gradient(50% 42% at 80% 82%, rgba(192, 88, 246, 0.05), transparent 74%),
+    linear-gradient(180deg, transparent 58%, rgba(64, 190, 255, 0.05) 76%, transparent 92%),
+    radial-gradient(125% 95% at 50% 50%, transparent 46%, rgba(0, 0, 6, 0.55));
 }
 .reactor-stage-bg::before {
   content: '';
@@ -1392,24 +1574,24 @@ body {
   inset: 0;
   opacity: 0.5;
   background-image:
-    linear-gradient(rgba(120, 160, 220, 0.05) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(120, 160, 220, 0.05) 1px, transparent 1px);
+    linear-gradient(rgba(120, 170, 230, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(120, 170, 230, 0.05) 1px, transparent 1px);
   background-size: 34px 34px;
   -webkit-mask-image: radial-gradient(closest-side at 50% 50%, #000, transparent 82%);
   mask-image: radial-gradient(closest-side at 50% 50%, #000, transparent 82%);
 }
-/* Drifting charge dust — sparse ember/ion specks floating through the stage */
+/* Drifting intelligence dust — sparse cool ion motes floating through the fog */
 .reactor-stage-bg::after {
   content: '';
   position: absolute;
   inset: -12%;
-  opacity: 0.5;
+  opacity: 0.55;
   background-image:
-    radial-gradient(1.6px 1.6px at 22% 32%, rgba(255, 178, 122, 0.55), transparent 100%),
+    radial-gradient(1.6px 1.6px at 22% 32%, rgba(140, 224, 255, 0.55), transparent 100%),
     radial-gradient(1.2px 1.2px at 68% 18%, rgba(150, 200, 255, 0.5), transparent 100%),
-    radial-gradient(1.4px 1.4px at 84% 62%, rgba(255, 178, 122, 0.4), transparent 100%),
+    radial-gradient(1.4px 1.4px at 84% 62%, rgba(186, 164, 255, 0.42), transparent 100%),
     radial-gradient(1px 1px at 38% 78%, rgba(150, 200, 255, 0.45), transparent 100%),
-    radial-gradient(1.2px 1.2px at 54% 46%, rgba(255, 214, 170, 0.4), transparent 100%);
+    radial-gradient(1.2px 1.2px at 54% 46%, rgba(214, 244, 255, 0.4), transparent 100%);
   background-size: 380px 380px, 460px 460px, 320px 320px, 420px 420px, 500px 500px;
   -webkit-mask-image: radial-gradient(closest-side at 50% 50%, #000, transparent 85%);
   mask-image: radial-gradient(closest-side at 50% 50%, #000, transparent 85%);
@@ -1472,6 +1654,10 @@ body {
   .opus-segs,
   .opus-flare,
   .opus-ignition,
+  .opus-beam,
+  .opus-platform-ring,
+  .synth-panel[data-state='working'] .synth-rail,
+  .synth-panel[data-state='ready'],
   .holo-sweep,
   .reactor-stage-bg::after { animation: none; }
   .intel-card { transition: none; animation: none; }
@@ -1492,6 +1678,9 @@ body {
 .reactor-paused .opus-field-rot,
 .reactor-paused .opus-emit,
 .reactor-paused .opus-segs,
+.reactor-paused .opus-beam,
+.reactor-paused .opus-platform-ring,
+.reactor-paused .synth-rail,
 .reactor-paused .holo-sweep,
 .reactor-paused .reactor-stage-bg::after {
   animation-play-state: paused !important;

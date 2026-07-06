@@ -59,7 +59,11 @@ export function EmergingStrategyPanel({
   const uniqueAssets = Array.from(new Set(retrievals.map((r) => r.title).filter(Boolean)))
 
   return (
-    <div className="reactor-panel glass p-4">
+    <div
+      className="reactor-panel glass synth-panel p-4"
+      data-state={error ? 'error' : ready ? 'ready' : 'working'}
+    >
+      <span aria-hidden className="synth-rail" />
       <div className="mb-3 flex items-center gap-2 border-b border-white/5 pb-3">
         <Target size={15} className={cn('text-glow', !finished && opusPhase !== 'idle' && 'animate-pulse-glow')} />
         <h3 className="font-display text-[13px] font-bold uppercase tracking-[0.18em] text-white">{heading}</h3>
