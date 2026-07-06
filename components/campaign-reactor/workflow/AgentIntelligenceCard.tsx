@@ -95,6 +95,11 @@ export function AgentIntelligenceCard({
       data-state={active ? 'active' : complete ? 'complete' : agent.status === 'error' ? 'error' : 'idle'}
       className={cn('intel-card', accentClass[visual.accent], dim && 'intel-card--dim')}
     >
+      {/* Holographic projection layers — HUD frame, scanline texture, sweep */}
+      <span aria-hidden className="holo-frame" />
+      <span aria-hidden className="holo-scanlines" />
+      <span aria-hidden className="holo-rail" />
+      {active && !reduced && <span aria-hidden className="holo-sweep" />}
       {active && !reduced && <span aria-hidden className="intel-scan" />}
       {active && !reduced && <span aria-hidden className="intel-emitter" />}
 

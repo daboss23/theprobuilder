@@ -414,6 +414,7 @@ export function LiveAgentWorkflow(controls: WorkflowControls) {
                       dim={cs.dim}
                       direction={cs.direction}
                       reduced={reduced}
+                      paused={docHidden}
                     />
                   )
                 })}
@@ -428,6 +429,7 @@ export function LiveAgentWorkflow(controls: WorkflowControls) {
                   complete={workflow.opusPhase === 'ready'}
                   dim={!workflow.generationStarted && workflow.opusPhase !== 'ready'}
                   reduced={reduced}
+                  paused={docHidden}
                 />
 
                 {/* Convergence flare where every channel meets the core */}

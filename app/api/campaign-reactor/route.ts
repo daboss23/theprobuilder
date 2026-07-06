@@ -609,9 +609,20 @@ function demoBrief(creativeType: string, angle: string): ProductionBrief {
   }
 }
 
+/**
+ * Demo pacing — the curated run streams at the cadence of a real delegation
+ * (retrieve → analyse → report per agent) instead of dumping every event in
+ * one burst, so the live workflow animation gets its full choreography.
+ * Jitter keeps the rhythm organic rather than metronomic.
+ */
+function pace(ms: number): Promise<void> {
+  return new Promise((r) => setTimeout(r, ms + Math.random() * ms * 0.4))
+}
+
 async function runDemo(controller: ReadableStreamDefaultController, body: ReactorRequest) {
   const outputs = body.outputs ?? ['Hook', 'Headline', 'Campaign Concept']
   sse(controller, { type: 'step', text: 'OPUS online (demo mode — set ANTHROPIC_API_KEY for the live network)' })
+  await pace(1100)
 
   const demoSummaries: Partial<Record<IntelligenceId, string>> = {
     nova: 'Builders fear margin erosion despite record revenue; "profit leak" language resonates',
@@ -623,10 +634,16 @@ async function runDemo(controller: ReadableStreamDefaultController, body: Reacto
   for (const id of ['nova', 'spark', 'echo', 'oracle'] as IntelligenceId[]) {
     const agent = INTELLIGENCE[id]
     sse(controller, { type: 'delegate', agent: agent.codename, id: agent.id, label: agent.intelligenceLabel, status: 'start' })
+    await pace(1300)
     const hits = (
       await Promise.all(agent.systems.map((s) => searchKnowledge(body.angle, { system: s, k: 2 })))
     ).flat()
-    for (const h of hits.slice(0, 3)) sse(controller, { type: 'retrieval', system: h.system, title: h.title })
+    for (const h of hits.slice(0, 3)) {
+      sse(controller, { type: 'retrieval', system: h.system, title: h.title })
+      await pace(700)
+    }
+    // Dwell in "analysing" before the finding lands back at the core.
+    await pace(1500)
     sse(controller, {
       type: 'delegate',
       agent: agent.codename,
@@ -636,14 +653,18 @@ async function runDemo(controller: ReadableStreamDefaultController, body: Reacto
       summary: demoSummaries[id],
       confidence: confidenceBand(hits.length || 2),
     })
+    await pace(600)
   }
 
   sse(controller, { type: 'step', text: 'ORACLE — loading the Creative Learnings rubric for self-critique…' })
+  await pace(1400)
   sse(controller, { type: 'step', text: 'OPUS synthesizing strategy + scoring concepts…' })
+  await pace(2600)
   sse(controller, {
     type: 'step',
     text: 'Live Meta Ads performance + Higgsfield image/video creatives activate with API keys.',
   })
+  await pace(900)
 
   const angleIsSentinel = !body.angle || body.angle === 'Agent decides' || body.angle === 'No Preference'
   const a = angleIsSentinel ? 'Profit' : (body.angle as string)
@@ -672,6 +693,7 @@ async function runDemo(controller: ReadableStreamDefaultController, body: Reacto
     type: 'step',
     text: 'NEURO — pre-testing concepts against neuromarketing principles (predicted response)…',
   })
+  await pace(1600)
   const norm = (s: string) => s.toLowerCase().replace(/s$/, '').trim()
   // The onboarding flow offers two deliverables — Static Creative / Video
   // Creative — which fan out into the richer internal concept taxonomy here.
@@ -697,6 +719,7 @@ async function runDemo(controller: ReadableStreamDefaultController, body: Reacto
   for (const c of pool.filter((c) => wanted.includes(norm(c.type)) && (c.score ?? 0) >= 7)) {
     c.neuro = demoNeuroScore(c.score, c.type)
     sse(controller, { type: 'concept', concept: c })
+    await pace(800)
     if (/concept/i.test(c.type) && !/hook|headline|primary|vsl/i.test(c.type)) {
       for (let k = 2; k <= variations; k++) {
         const twist = variantTwists[k - 1] ?? variantTwists[1]
