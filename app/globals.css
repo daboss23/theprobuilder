@@ -865,11 +865,109 @@ body {
 .intel-card--dim { opacity: 0.5; }
 .intel-card[data-state='active'] {
   opacity: 1;
-  border-color: rgb(var(--acc) / 0.5);
+  border-color: rgb(var(--acc) / 0.55);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.06),
-    inset 0 0 28px -16px rgb(var(--acc) / 0.7),
-    0 0 26px -12px rgb(var(--acc) / 0.55);
+    inset 0 0 32px -14px rgb(var(--acc) / 0.75),
+    0 0 34px -10px rgb(var(--acc) / 0.6);
+  animation: holo-flicker 0.5s steps(2, jump-none) 1;
+}
+/* Holographic ignition — a quick projector flicker when a layer activates */
+@keyframes holo-flicker {
+  0% { opacity: 0.35; }
+  25% { opacity: 1; }
+  40% { opacity: 0.6; }
+  60% { opacity: 1; }
+  75% { opacity: 0.82; }
+  100% { opacity: 1; }
+}
+/* HUD corner brackets — brighten with the accent while the layer works */
+.holo-frame {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+}
+.holo-frame::before,
+.holo-frame::after {
+  content: '';
+  position: absolute;
+  height: 13px;
+  width: 13px;
+  opacity: 0.45;
+  transition: opacity 0.4s ease, filter 0.4s ease;
+}
+.holo-frame::before {
+  top: 7px;
+  left: 7px;
+  border-top: 1px solid rgb(var(--acc) / 0.8);
+  border-left: 1px solid rgb(var(--acc) / 0.8);
+}
+.holo-frame::after {
+  bottom: 7px;
+  right: 7px;
+  border-bottom: 1px solid rgb(var(--acc) / 0.8);
+  border-right: 1px solid rgb(var(--acc) / 0.8);
+}
+.intel-card[data-state='active'] .holo-frame::before,
+.intel-card[data-state='active'] .holo-frame::after,
+.intel-card[data-state='complete'] .holo-frame::before,
+.intel-card[data-state='complete'] .holo-frame::after {
+  opacity: 1;
+  filter: drop-shadow(0 0 4px rgb(var(--acc) / 0.8));
+}
+/* Fine projector scanlines across the whole panel */
+.holo-scanlines {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  background: repeating-linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.03) 0 1px,
+    transparent 1px 3px
+  );
+  opacity: 0.5;
+}
+/* Accent energy rail on the panel's leading edge */
+.holo-rail {
+  position: absolute;
+  left: 0;
+  top: 18%;
+  bottom: 18%;
+  width: 2px;
+  pointer-events: none;
+  border-radius: 9999px;
+  background: linear-gradient(180deg, transparent, rgb(var(--acc) / 0.9), transparent);
+  opacity: 0.25;
+  transition: opacity 0.4s ease;
+}
+.intel-card[data-state='active'] .holo-rail {
+  opacity: 1;
+  box-shadow: 0 0 12px 1px rgb(var(--acc) / 0.55);
+}
+.intel-card[data-state='complete'] .holo-rail { opacity: 0.6; }
+/* Light sweep gliding across an active hologram */
+.holo-sweep {
+  position: absolute;
+  top: -30%;
+  bottom: -30%;
+  left: 0;
+  width: 42%;
+  pointer-events: none;
+  background: linear-gradient(
+    100deg,
+    transparent,
+    rgb(var(--acc) / 0.12),
+    rgba(255, 255, 255, 0.07),
+    transparent
+  );
+  transform: translateX(-130%) skewX(-14deg);
+  animation: holo-sweep 3s ease-in-out infinite;
+}
+@keyframes holo-sweep {
+  0% { transform: translateX(-130%) skewX(-14deg); }
+  55%, 100% { transform: translateX(340%) skewX(-14deg); }
 }
 .intel-card[data-state='complete'] {
   opacity: 1;
@@ -1069,6 +1167,17 @@ body {
 .opus-core--static .opus-field-rot,
 .opus-core--static .opus-emit,
 .opus-core--static .opus-segs { animation: none; }
+/* WebGL heart active — the chamber becomes a dark containment vessel so the
+   crystal supplies all the light instead of fighting the CSS gradient. */
+.opus-core--webgl .opus-chamber {
+  background: radial-gradient(
+    circle at 50% 44%,
+    rgba(58, 22, 16, 0.5),
+    rgba(20, 10, 14, 0.72) 62%,
+    rgba(8, 5, 10, 0.88) 100%
+  );
+  box-shadow: inset 0 0 46px -6px rgba(0, 0, 0, 0.88), 0 0 70px -16px rgba(255, 100, 56, 0.45);
+}
 
 /* OPUS ring system (SVG concentric layers) -----------------------------------*/
 .opus-rings {
@@ -1146,6 +1255,9 @@ body {
 /* Energy connections (layered channels) --------------------------------------*/
 .nrg-atmos { filter: blur(7px); }
 .nrg-body { filter: blur(1.6px); }
+/* Tendril filaments — GSAP drives the breathing + current; CSS keeps state
+   changes (active ↔ complete ↔ dormant) settling smoothly. */
+.nrg-strand { transition: opacity 0.5s ease, stroke-width 0.5s ease; }
 .nrg-flow { animation: nrg-flow 1s linear infinite; opacity: 0.85; }
 .nrg-flow-rev { animation: nrg-flow-rev 1s linear infinite; opacity: 0.85; }
 @keyframes nrg-flow { to { stroke-dashoffset: -18; } }
@@ -1268,8 +1380,11 @@ body {
   z-index: 0;
   pointer-events: none;
   background:
-    radial-gradient(closest-side at 50% 50%, rgba(40, 120, 230, 0.08), transparent 70%),
-    radial-gradient(125% 95% at 50% 50%, transparent 52%, rgba(0, 0, 0, 0.38));
+    radial-gradient(closest-side at 50% 50%, rgba(255, 106, 61, 0.06), transparent 62%),
+    radial-gradient(60% 50% at 24% 20%, rgba(40, 120, 230, 0.07), transparent 70%),
+    radial-gradient(55% 45% at 78% 78%, rgba(167, 139, 250, 0.05), transparent 72%),
+    radial-gradient(closest-side at 50% 50%, rgba(40, 120, 230, 0.06), transparent 70%),
+    radial-gradient(125% 95% at 50% 50%, transparent 50%, rgba(0, 0, 0, 0.42));
 }
 .reactor-stage-bg::before {
   content: '';
@@ -1282,6 +1397,26 @@ body {
   background-size: 34px 34px;
   -webkit-mask-image: radial-gradient(closest-side at 50% 50%, #000, transparent 82%);
   mask-image: radial-gradient(closest-side at 50% 50%, #000, transparent 82%);
+}
+/* Drifting charge dust — sparse ember/ion specks floating through the stage */
+.reactor-stage-bg::after {
+  content: '';
+  position: absolute;
+  inset: -12%;
+  opacity: 0.5;
+  background-image:
+    radial-gradient(1.6px 1.6px at 22% 32%, rgba(255, 178, 122, 0.55), transparent 100%),
+    radial-gradient(1.2px 1.2px at 68% 18%, rgba(150, 200, 255, 0.5), transparent 100%),
+    radial-gradient(1.4px 1.4px at 84% 62%, rgba(255, 178, 122, 0.4), transparent 100%),
+    radial-gradient(1px 1px at 38% 78%, rgba(150, 200, 255, 0.45), transparent 100%),
+    radial-gradient(1.2px 1.2px at 54% 46%, rgba(255, 214, 170, 0.4), transparent 100%);
+  background-size: 380px 380px, 460px 460px, 320px 320px, 420px 420px, 500px 500px;
+  -webkit-mask-image: radial-gradient(closest-side at 50% 50%, #000, transparent 85%);
+  mask-image: radial-gradient(closest-side at 50% 50%, #000, transparent 85%);
+  animation: stage-drift 70s linear infinite;
+}
+@keyframes stage-drift {
+  to { transform: translate3d(-52px, -36px, 0); }
 }
 
 /* Reactor fault state --------------------------------------------------------*/
@@ -1336,8 +1471,10 @@ body {
   .opus-emit,
   .opus-segs,
   .opus-flare,
-  .opus-ignition { animation: none; }
-  .intel-card { transition: none; }
+  .opus-ignition,
+  .holo-sweep,
+  .reactor-stage-bg::after { animation: none; }
+  .intel-card { transition: none; animation: none; }
 }
 
 /* Pause ambient motion while the tab is hidden (performance) -----------------*/
@@ -1354,7 +1491,9 @@ body {
 .reactor-paused .opus-hotspot,
 .reactor-paused .opus-field-rot,
 .reactor-paused .opus-emit,
-.reactor-paused .opus-segs {
+.reactor-paused .opus-segs,
+.reactor-paused .holo-sweep,
+.reactor-paused .reactor-stage-bg::after {
   animation-play-state: paused !important;
 }
 

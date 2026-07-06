@@ -1,5 +1,7 @@
 'use client'
 
+import { useCallback, useState } from 'react'
+import dynamic from 'next/dynamic'
 import { AnimatePresence, motion } from 'motion/react'
 import { cn } from '@/lib/utils'
 import { accentClass, type Accent } from '@/components/reactor/ui'
@@ -10,6 +12,27 @@ export interface OpusSegment {
   accent: Accent
   lit: boolean
 }
+
+/**
+ * The CSS energy heart — the pre-WebGL molten core. Kept as the loading state
+ * while the Three.js chunk streams in and as the permanent fallback when a
+ * WebGL context is unavailable, so the reactor never renders an empty chamber.
+ */
+function CssHeart() {
+  return (
+    <>
+      <span aria-hidden className="opus-heart" />
+      <span aria-hidden className="opus-heart-core" />
+      <span aria-hidden className="opus-hotspot" />
+    </>
+  )
+}
+
+// The 3D core ships in its own chunk and only ever runs in the browser.
+const ReactorCoreCanvas = dynamic(() => import('./ReactorCoreCanvas'), {
+  ssr: false,
+  loading: () => <CssHeart />,
+})
 
 /** A deliberate, honest sub-line for the core's current operation. */
 function actionFor(phase: OpusPhase, activeCodename?: string): string {
@@ -78,6 +101,10 @@ export function OpusReactorCore({
   const delegating = phase === 'delegating'
   const receiving = phase === 'receiving'
 
+  // WebGL heart with a permanent CSS fallback if a context can't be created.
+  const [webglOk, setWebglOk] = useState(true)
+  const handleUnavailable = useCallback(() => setWebglOk(false), [])
+
   return (
     <div className="flex flex-col items-center text-center">
       <div
@@ -85,6 +112,7 @@ export function OpusReactorCore({
         data-phase={phase}
         className={cn(
           'opus-core',
+          webglOk && 'opus-core--webgl',
           synthesising && 'opus-core--synth',
           receiving && 'opus-core--recv',
           ready && 'opus-core--ready',
@@ -139,11 +167,18 @@ export function OpusReactorCore({
           </g>
         </svg>
 
-        {/* ---- Energy chamber + central core (CSS layers) ---- */}
+        {/* ---- Containment vessel + energy heart ---- */}
         <span aria-hidden className="opus-chamber" />
-        <span aria-hidden className="opus-heart" />
-        <span aria-hidden className="opus-heart-core" />
-        <span aria-hidden className="opus-hotspot" />
+        {webglOk ? (
+          <ReactorCoreCanvas
+            phase={phase}
+            receiveSignal={receiveSignal}
+            reduced={reduced}
+            onUnavailable={handleUnavailable}
+          />
+        ) : (
+          <CssHeart />
+        )}
 
         {/* Delegating — thin outward pulses toward the agents */}
         {delegating && !reduced && (
