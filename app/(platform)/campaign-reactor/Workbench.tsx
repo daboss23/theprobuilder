@@ -35,7 +35,7 @@ import type { ModelAvailability } from '@/lib/video/types'
 import { recommendImageModel } from '@/lib/image/recommend'
 import type { ImageModelAvailability } from '@/lib/image/types'
 import { useReactorRun, type Concept } from '@/components/campaign-reactor/ReactorRunContext'
-import type { IsolateConfig } from '@/lib/taxonomy'
+import { CLONE_STORAGE_KEY, type CloneReference, type IsolateConfig } from '@/lib/taxonomy'
 
 // The native campaign-angle choices (the No Preference / Custom sentinels are
 // added by the dropdown itself).
@@ -57,6 +57,22 @@ export function Workbench() {
   const [modalOpen, setModalOpen] = useState(false)
   // Optional isolation test ("iterate one thing") — null = free generation.
   const [isolate, setIsolate] = useState<IsolateConfig | null>(null)
+  // A reference handed over from the Ad Library ("Clone & Iterate") to reproduce.
+  const [cloneReference, setCloneReference] = useState<CloneReference | null>(null)
+
+  // Pick up a clone reference stashed by the Ad Library, then clear it so a
+  // refresh doesn't silently re-clone. Opens the modal ready to configure + fire.
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem(CLONE_STORAGE_KEY)
+      if (!raw) return
+      sessionStorage.removeItem(CLONE_STORAGE_KEY)
+      setCloneReference(JSON.parse(raw) as CloneReference)
+      setModalOpen(true)
+    } catch {
+      /* nothing to clone */
+    }
+  }, [])
   // Output surface: the autonomous reactor (default hero), the Studio (remix the
   // run's parts into a finished ad), or the Flow (node-graph production canvas).
   const [view, setView] = useState<'reactor' | 'studio' | 'flow'>('reactor')
@@ -382,6 +398,8 @@ export function Workbench() {
       // Only sent when a valid test is configured — additive, keeps free
       // generation the default (the reactor ignores an absent isolate block).
       ...(isolate && isolate.values.length > 0 ? { isolate } : {}),
+      // Reproduce a cloned reference's structure when one was handed over.
+      ...(cloneReference ? { cloneReference } : {}),
     })
   }
 
@@ -607,6 +625,7 @@ export function Workbench() {
     refCount: faceUrls.length + refVideos.length,
     isolate,
     setIsolate,
+    cloneLabel: cloneReference?.sourceLabel ?? (cloneReference ? 'Cloned reference' : null),
   }
 
   // Everything the live agent workflow needs to keep the production actions

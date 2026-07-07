@@ -179,6 +179,27 @@ export interface IsolateConfig {
   notes?: string
 }
 
+/**
+ * A cloned reference's Creative DNA the reactor reproduces STRUCTURALLY — shared
+ * by the Ad Library UI, the sessionStorage handoff, and the reactor payload so
+ * the shape can't drift. All optional (a winner may only carry a summary + tags).
+ */
+export interface CloneReference {
+  hook?: string
+  opening?: string
+  storyStructure?: string
+  ctaStructure?: string
+  editingStyle?: string
+  offerPresentation?: string
+  visualStyle?: string
+  summary?: string
+  taxonomy?: CreativeTaxonomy
+  sourceLabel?: string
+}
+
+/** sessionStorage key handing a clone reference from the Ad Library to the reactor. */
+export const CLONE_STORAGE_KEY = 'tpb:cloneReference'
+
 /** First canonical value of each axis — the cold-start / demo lock defaults. */
 export function defaultLockedTaxonomy(): CreativeTaxonomy {
   return {
@@ -356,5 +377,8 @@ export function cloneBlock(reference: {
   if (reference.editingStyle) lines.push(`- Editing style: ${reference.editingStyle}`)
   const tax = taxonomyToTags(reference.taxonomy)
   if (tax.length) lines.push(`- Reference taxonomy (keep unless isolation mode overrides an axis): ${tax.join(' · ')}`)
+  lines.push(
+    '- For any video / UGC / founder / testimonial concept, make the production brief SHOOT-READY: timestamped beats mirroring the reference pacing (e.g. HOOK 0-3s, PROBLEM 3-10s, PROOF, CTA), each frame with the exact on-screen action and spoken line, so a creator could shoot it as-is.',
+  )
   return lines.join('\n')
 }

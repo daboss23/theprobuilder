@@ -121,6 +121,8 @@ export interface ReactorForm {
   // Step 6 — optional isolation test ("iterate one thing"). null = free generation.
   isolate: IsolateConfig | null
   setIsolate: (v: IsolateConfig | null) => void
+  // Set when the run was launched from the Ad Library with a clone reference.
+  cloneLabel: string | null
 }
 
 interface ReactorModalProps {
@@ -829,6 +831,7 @@ export function ReactorModal({ open, onClose, onFire, form }: ReactorModalProps)
                     <span className="line-clamp-2 text-white/70">{form.brief.trim()}</span>
                   </div>
                 )}
+                {form.cloneLabel && <SummaryRow label="Cloning" value={form.cloneLabel} />}
                 {form.isolate && form.isolate.values.length > 0 && (
                   <SummaryRow
                     label="Test"

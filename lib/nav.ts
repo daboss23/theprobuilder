@@ -11,6 +11,7 @@ import {
   Target,
   BarChart3,
   Boxes,
+  Copy,
 } from 'lucide-react'
 
 export interface NavItem {
@@ -28,6 +29,7 @@ export const navItems: NavItem[] = [
   { label: 'Copy Intelligence', href: '/copy', icon: Type, system: '04' },
   { label: 'Strategic Memory', href: '/patterns', icon: Network, system: '05' },
   { label: 'Campaign Reactor', href: '/campaign-reactor', icon: Atom, system: '06' },
+  { label: 'Ad Library', href: '/ad-library', icon: Copy },
   { label: 'Performance Intelligence', href: '/learnings', icon: LineChart, system: '07' },
   { label: 'Agent Network', href: '/network', icon: Boxes, system: '08' },
   { label: 'Recommendations', href: '/recommendations', icon: Target, system: '09' },
