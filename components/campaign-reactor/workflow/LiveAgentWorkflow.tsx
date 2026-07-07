@@ -44,6 +44,12 @@ interface Geo {
   opusIn: Point
   opusOut: Point
   out: Point
+  /** Base of the strategy panel — where the output continues toward the concepts. */
+  strategyOut?: Point
+  /** Distribution node between the strategy panel and the generated concepts. */
+  hub?: Point
+  /** Top-centre anchors of the first row of concept cards (the flow fans here). */
+  concepts: Point[]
 }
 
 interface Flying {
@@ -125,6 +131,13 @@ export function LiveAgentWorkflow(controls: WorkflowControls) {
     },
     [],
   )
+  const conceptEls = useRef<(HTMLDivElement | null)[]>([])
+  const setConceptEl = useCallback(
+    (i: number) => (el: HTMLDivElement | null) => {
+      conceptEls.current[i] = el
+    },
+    [],
+  )
   const [geo, setGeo] = useState<Geo | null>(null)
 
   const measure = useCallback(() => {
@@ -159,12 +172,33 @@ export function LiveAgentWorkflow(controls: WorkflowControls) {
       opusOut = { x: r.left + r.width / 2 - sr.left, y: r.bottom - sr.top }
     }
     let out: Point = { x: sr.width / 2, y: sr.height }
+    let strategyOut: Point | undefined
     if (outputRef.current) {
       const r = outputRef.current.getBoundingClientRect()
       out = { x: r.left + r.width / 2 - sr.left, y: r.top - sr.top + 8 }
+      strategyOut = { x: r.left + r.width / 2 - sr.left, y: r.bottom - sr.top }
     }
-    setGeo({ w: sr.width, h: sr.height, agents, opusIn, opusOut, out })
-  }, [isDesktop])
+    // The synthesized output fans from a distribution hub into the top row of
+    // generated concepts, so the flow reads continuously all the way down.
+    let hub: Point | undefined
+    const conceptPts: Point[] = []
+    if (concepts.length > 0) {
+      const tops: Point[] = []
+      for (let i = 0; i < concepts.length; i++) {
+        const el = conceptEls.current[i]
+        if (!el) continue
+        const r = el.getBoundingClientRect()
+        tops.push({ x: r.left + r.width / 2 - sr.left, y: r.top - sr.top })
+      }
+      if (tops.length) {
+        const minTop = Math.min(...tops.map((t) => t.y))
+        for (const t of tops) if (t.y - minTop < 16) conceptPts.push(t)
+        const fromY = strategyOut ? strategyOut.y : minTop - 40
+        hub = { x: sr.width / 2, y: fromY + (minTop - fromY) * 0.5 }
+      }
+    }
+    setGeo({ w: sr.width, h: sr.height, agents, opusIn, opusOut, out, strategyOut, hub, concepts: conceptPts })
+  }, [isDesktop, concepts.length])
 
   // Recompute when layout-affecting state changes (statuses, phase, concept count).
   const layoutSig = useMemo(
@@ -277,10 +311,10 @@ export function LiveAgentWorkflow(controls: WorkflowControls) {
       />
     ))
 
-  const conceptsBlock =
+  const renderConcepts = (withRefs: boolean) =>
     concepts.length > 0 ? (
       <div className="space-y-3">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center justify-center gap-2">
           <h3 className="font-display text-xs font-bold uppercase tracking-[0.18em] text-white">
             Generated Concepts
           </h3>
@@ -290,24 +324,25 @@ export function LiveAgentWorkflow(controls: WorkflowControls) {
         </div>
         <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
           {concepts.map((c, i) => (
-            <ConceptResultCard
-              key={`${c.type}-${i}`}
-              concept={c}
-              index={i}
-              image={imageFor(c)}
-              imageMeta={imageMetaFor(c)}
-              video={videoFor(c)}
-              creativeState={creativeStateFor(c)}
-              wantsVideo={controls.isVideoConcept(c)}
-              hasRefs={controls.hasRefs}
-              faceCount={controls.faceCount}
-              refVideoCount={controls.refVideoCount}
-              copied={controls.copied === c.text}
-              onCopy={() => controls.onCopy(c.text)}
-              onAnimate={(img) => controls.onAnimate(c, img)}
-              onGenerateUGC={() => controls.onGenerateUGC(c)}
-              onConfigureInStudio={() => controls.onConfigureInStudio(c)}
-            />
+            <div key={`${c.type}-${i}`} ref={withRefs ? setConceptEl(i) : undefined}>
+              <ConceptResultCard
+                concept={c}
+                index={i}
+                image={imageFor(c)}
+                imageMeta={imageMetaFor(c)}
+                video={videoFor(c)}
+                creativeState={creativeStateFor(c)}
+                wantsVideo={controls.isVideoConcept(c)}
+                hasRefs={controls.hasRefs}
+                faceCount={controls.faceCount}
+                refVideoCount={controls.refVideoCount}
+                copied={controls.copied === c.text}
+                onCopy={() => controls.onCopy(c.text)}
+                onAnimate={(img) => controls.onAnimate(c, img)}
+                onGenerateUGC={() => controls.onGenerateUGC(c)}
+                onConfigureInStudio={() => controls.onConfigureInStudio(c)}
+              />
+            </div>
           ))}
         </div>
       </div>
@@ -384,7 +419,13 @@ export function LiveAgentWorkflow(controls: WorkflowControls) {
       {/* ------------------------------- Desktop ------------------------------ */}
       {isDesktop ? (
         <div className="reactor-panel glass p-6 xl:p-8">
-          <div ref={stageRef} className="reactor-stage relative flex flex-col justify-center">
+          <div
+            ref={stageRef}
+            className={cn(
+              'reactor-stage relative flex flex-col',
+              concepts.length > 0 ? 'justify-start' : 'justify-center',
+            )}
+          >
             <div className="reactor-stage-bg" aria-hidden="true" />
             {geo && (
               <svg
@@ -440,6 +481,44 @@ export function LiveAgentWorkflow(controls: WorkflowControls) {
                   reduced={reduced}
                   paused={docHidden}
                 />
+
+                {/* Output distribution — the strategy fans into the generated concepts */}
+                {geo.hub && geo.strategyOut && geo.concepts.length > 0 && (
+                  <>
+                    <AgentConnectionPath
+                      gid="conn-hub"
+                      from={geo.strategyOut}
+                      to={geo.hub}
+                      color={OPUS_OUTPUT_STROKE}
+                      toColor={OPUS_OUTPUT_STROKE}
+                      tipColor="#DFF7EC"
+                      active={workflow.opusPhase === 'generating'}
+                      complete={workflow.opusPhase === 'ready'}
+                      dim={false}
+                      reduced={reduced}
+                      paused={docHidden}
+                    />
+                    {geo.concepts.map((p, i) => (
+                      <AgentConnectionPath
+                        key={`concept-${i}`}
+                        gid={`conn-concept-${i}`}
+                        from={geo.hub!}
+                        to={p}
+                        color={OPUS_OUTPUT_STROKE}
+                        toColor="#4ADE9A"
+                        tipColor="#DFFCEF"
+                        active={workflow.opusPhase === 'generating'}
+                        complete={workflow.opusPhase === 'ready'}
+                        dim={false}
+                        reduced={reduced}
+                        paused={docHidden}
+                      />
+                    ))}
+                    {/* The distribution node itself */}
+                    <circle cx={geo.hub.x} cy={geo.hub.y} r={15} fill="url(#conv-bloom)" opacity={0.45} />
+                    <circle cx={geo.hub.x} cy={geo.hub.y} r={4.5} fill="#EAF7FF" opacity={0.95} />
+                  </>
+                )}
 
                 {/* Convergence flare where every channel meets the core */}
                 <g>
@@ -508,6 +587,9 @@ export function LiveAgentWorkflow(controls: WorkflowControls) {
               <div ref={outputRef} className="w-full max-w-2xl">
                 <EmergingStrategyPanel workflow={workflow} conceptCount={concepts.length} />
               </div>
+
+              {/* Tier 4 — the generated concepts the flow distributes into */}
+              {concepts.length > 0 && <div className="w-full pt-2">{renderConcepts(true)}</div>}
             </div>
 
             {/* Flying intelligence packets (desktop, motion enabled) */}
@@ -541,8 +623,9 @@ export function LiveAgentWorkflow(controls: WorkflowControls) {
         </div>
       )}
 
-      {/* Generated concepts (full width, below the network) */}
-      {conceptsBlock}
+      {/* Generated concepts — inside the connected flow on desktop, below the
+          panel on tablet/mobile where there is no node graph to wire into. */}
+      {!isDesktop && renderConcepts(false)}
 
       {/* Execution phases + Run Diagnostics */}
       <ReactorPhaseTimeline phases={phases} reduced={reduced} />
