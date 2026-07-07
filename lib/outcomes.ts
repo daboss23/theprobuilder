@@ -51,6 +51,8 @@ export interface OutcomeAttributes {
   variantId?: string
   /** Which axis the test isolated (hook | persona | painPoint | visualFormat | assetType). */
   isolatedAxis?: string
+  /** Confidence in the winner score, from spend + impression volume (low = thin data). */
+  scoreConfidence?: 'low' | 'high'
 }
 
 /** A past winning strategic configuration retrieved from ORACLE memory. */
