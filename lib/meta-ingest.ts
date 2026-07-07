@@ -29,6 +29,7 @@ import {
 } from '@/lib/meta-graph'
 import { getSupabaseAdmin } from '@/lib/supabase'
 import { ingestKnowledge } from '@/lib/knowledge'
+import { parseTestToken, type TestToken } from '@/lib/meta-ads'
 import {
   recordOutcome,
   VERDICT_LABELS,
@@ -162,10 +163,19 @@ interface ExistingOutcome {
   concept: { type?: string; text?: string; basis?: string; attributes?: OutcomeAttributes } | null
 }
 
-// Outcome rows previously synced from Meta, keyed by the source ad id — the
-// idempotency map for the sync.
-async function existingMetaOutcomes(): Promise<Map<string, ExistingOutcome>> {
-  const map = new Map<string, ExistingOutcome>()
+interface ExistingIndex {
+  /** Rows already carrying a Meta ad id — the idempotency map for re-syncs. */
+  byAdId: Map<string, ExistingOutcome>
+  /** Pending push rows awaiting their live ad, keyed by variantId (RXN-…-B). */
+  byVariant: Map<string, ExistingOutcome>
+}
+
+// Index the outcome rows the sync cares about: those already keyed to a Meta ad
+// id (idempotency), and pending rows pre-seeded at creative-push time (keyed by
+// variantId) that a synced ad's name token can now be matched to.
+async function existingMetaOutcomes(): Promise<ExistingIndex> {
+  const byAdId = new Map<string, ExistingOutcome>()
+  const byVariant = new Map<string, ExistingOutcome>()
   const { data, error } = await getSupabaseAdmin()
     .from('campaign_outcomes')
     .select('id, verdict, concept')
@@ -173,12 +183,17 @@ async function existingMetaOutcomes(): Promise<Map<string, ExistingOutcome>> {
     .limit(1000)
   if (error) throw error
   for (const r of (data ?? []) as { id: string; verdict: string; concept: ExistingOutcome['concept'] }[]) {
-    const adId = r.concept?.attributes?.metaAdId
-    if (adId && !map.has(adId)) {
-      map.set(adId, { id: r.id, verdict: (r.verdict as Verdict) ?? 'pending', concept: r.concept })
+    const at = r.concept?.attributes
+    const row: ExistingOutcome = { id: r.id, verdict: (r.verdict as Verdict) ?? 'pending', concept: r.concept }
+    const adId = at?.metaAdId
+    if (adId) {
+      if (!byAdId.has(adId)) byAdId.set(adId, row)
+    } else if (at?.variantId && !byVariant.has(at.variantId)) {
+      // Only pre-seeded rows that have NOT yet been matched to a live ad.
+      byVariant.set(at.variantId, row)
     }
   }
-  return map
+  return { byAdId, byVariant }
 }
 
 /* -------------------------------- Sync ------------------------------------- */
@@ -195,11 +210,16 @@ function perfNotes(ad: AdPerf): string {
   return parts.join(' · ')
 }
 
-function perfAttributes(ad: AdPerf): OutcomeAttributes {
+function perfAttributes(ad: AdPerf, token?: TestToken | null): OutcomeAttributes {
   return {
     platform: 'meta',
     assetType: 'Live Meta Ad',
     metaAdId: ad.adId,
+    // Attribution recovered from the ad name for ads that weren't pre-seeded at
+    // push time (e.g. named by hand in Ads Manager). Pre-seeded rows already
+    // carry the authoritative testId/variantId + taxonomy — those are preserved
+    // by the merge in the sync and are never overwritten by these.
+    ...(token ? { testId: token.testId, variantId: token.variantId } : {}),
     metrics: {
       spend: Math.round(ad.spend * 100) / 100,
       ctr: Math.round(ad.ctr * 100) / 100,
@@ -247,23 +267,37 @@ export async function syncMetaPerformance(): Promise<MetaIngestSummary> {
       if (WIN_VERDICTS.includes(verdict)) summary.winners += 1
       if (verdict === 'loser') summary.losers += 1
 
-      const prior = existing.get(ad.adId)
+      // Attribution: match a live ad to its test. First by ad id (re-syncs),
+      // then by the RXN token in the ad name → a pending row pre-seeded at
+      // creative-push time. Claiming a pending row removes it so two ads can't
+      // both grab it in one run.
+      const token = parseTestToken(ad.name)
+      let prior = existing.byAdId.get(ad.adId)
+      const enrichingPending = !prior && token?.variantId ? existing.byVariant.get(token.variantId) : undefined
+      if (enrichingPending && token?.variantId) {
+        existing.byVariant.delete(token.variantId)
+        prior = enrichingPending
+      }
+
       try {
         if (!prior) {
           await recordOutcome({
             angle: ad.campaign,
             concept: { type: 'Live Meta Ad', text: ad.name, basis: 'Meta Marketing API' },
-            attributes: perfAttributes(ad),
+            attributes: perfAttributes(ad, token),
             metricName: 'CTR',
             metricValue: ad.ctr,
             verdict,
             notes: perfNotes(ad),
           })
           summary.created += 1
-        } else if (prior.verdict !== verdict) {
+        } else if (prior.verdict !== verdict || enrichingPending) {
+          // Merge order preserves the pre-seeded row's authoritative taxonomy +
+          // test IDs and its concept type/text; perfAttributes only adds the ad
+          // id + measured metrics (and token attribution for un-seeded ads).
           const mergedConcept = {
             ...(prior.concept ?? { type: 'Live Meta Ad', text: ad.name }),
-            attributes: { ...(prior.concept?.attributes ?? {}), ...perfAttributes(ad) },
+            attributes: { ...(prior.concept?.attributes ?? {}), ...perfAttributes(ad, token) },
           }
           const { error } = await supabase
             .from('campaign_outcomes')
@@ -324,7 +358,7 @@ export async function metaIngestStatus(): Promise<{
   if (!base.storageReady) return base
   try {
     const existing = await existingMetaOutcomes()
-    return { ...base, syncedAds: existing.size }
+    return { ...base, syncedAds: existing.byAdId.size }
   } catch {
     return base
   }

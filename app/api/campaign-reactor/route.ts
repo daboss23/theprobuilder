@@ -33,6 +33,16 @@ import {
   demoAdPackage,
   type MetaAdPackage,
 } from '@/lib/meta-ads'
+import {
+  AXIS_TAXONOMY_KEY,
+  axisValues,
+  coerceTaxonomy,
+  describeTaxonomy,
+  isolationBlock,
+  cloneBlock,
+  type IterationAxis,
+  type CreativeTaxonomy,
+} from '@/lib/taxonomy'
 
 // ORACLE strategic memory injected into OPUS at fire time — past winning
 // configurations matching the brief, so generation reuses what worked.
@@ -88,6 +98,35 @@ const META_ADS_MCP_NAME = 'meta_ads'
 //   'meta'      — Meta's first-party Ads MCP at mcp.facebook.com/ads (OAuth bearer)
 type MetaProvider = 'off' | 'pipeboard' | 'meta'
 
+/**
+ * Isolation-mode configuration — test exactly ONE variable. Additive: when
+ * `isolate` is absent the reactor runs today's free-generation path untouched.
+ */
+interface IsolateInput {
+  axis: IterationAxis
+  values: string[]
+  lockedTaxonomy: CreativeTaxonomy
+  notes?: string
+}
+
+/**
+ * A cloned reference's Creative DNA the run should reproduce STRUCTURALLY (never
+ * verbatim). Sourced from a Meta Ad Library ad (extracted) or a past winner
+ * (already stored). Additive — absent = no clone constraint.
+ */
+interface CloneReference {
+  hook?: string
+  opening?: string
+  storyStructure?: string
+  ctaStructure?: string
+  editingStyle?: string
+  offerPresentation?: string
+  visualStyle?: string
+  summary?: string
+  taxonomy?: CreativeTaxonomy
+  sourceLabel?: string
+}
+
 interface ReactorRequest {
   angle: string
   inputs?: string[]
@@ -97,6 +136,10 @@ interface ReactorRequest {
   imageModel?: string | null
   metaProvider?: MetaProvider | null
   reactorInputs?: ReactorInputs
+  /** Isolation mode — vary one taxonomy axis, hold the rest fixed. */
+  isolate?: IsolateInput | null
+  /** Clone mode — reproduce a proven reference's structure. */
+  cloneReference?: CloneReference | null
 }
 
 interface Concept {
@@ -109,6 +152,48 @@ interface Concept {
   productionBrief?: ProductionBrief
   neuro?: NeuroScore
   adPackage?: MetaAdPackage
+  // Clone & Iterate — the fixed taxonomy this concept is tagged with, plus the
+  // test-attribution IDs that thread the hypothesis through to Meta + ingest.
+  taxonomy?: CreativeTaxonomy
+  testId?: string
+  variantId?: string
+  isolatedAxis?: string
+}
+
+/* ------------------------- Test-ID attribution ---------------------------- */
+
+// Test IDs thread a hypothesis through concepts → Meta ad names → performance
+// ingest so a synced outcome auto-attributes to the variable being tested. A
+// test (one isolation run) is RXN-{token}; each concept in it is a variant
+// RXN-{token}-A / -B / -C… so ORACLE can compare variants WITHIN a test.
+function mintTestId(): string {
+  return `RXN-${Date.now().toString(36).slice(-5).toUpperCase()}`
+}
+
+// A, B, … Z, AA, AB… — a spreadsheet-style column label for any test width.
+function variantLabel(i: number): string {
+  let n = i
+  let s = ''
+  do {
+    s = String.fromCharCode(65 + (n % 26)) + s
+    n = Math.floor(n / 26) - 1
+  } while (n >= 0)
+  return s
+}
+
+// Stamp isolation-test attribution + fixed taxonomy onto submitted concepts.
+// The isolated axis takes the model's per-concept value (coerced to canonical
+// vocab), falling back to the requested test values; every other axis inherits
+// the locked config. No-op without an isolate block — free generation untouched.
+function tagIsolatedConcepts(concepts: Concept[], isolate: IsolateInput, testId: string): void {
+  const key = AXIS_TAXONOMY_KEY[isolate.axis]
+  concepts.forEach((c, i) => {
+    const testedValue = c.taxonomy?.[key] || isolate.values[i] || isolate.values[0]
+    c.taxonomy = coerceTaxonomy({ ...isolate.lockedTaxonomy, ...c.taxonomy, [key]: testedValue })
+    c.testId = testId
+    c.variantId = `${testId}-${variantLabel(i)}`
+    c.isolatedAxis = isolate.axis
+  })
 }
 
 /* ------------------------------ Meta Ads MCP ------------------------------ */
@@ -327,6 +412,18 @@ function buildTools(
                   },
                 },
                 required: ['creativeType', 'frames'],
+              },
+              taxonomy: {
+                type: 'object',
+                description:
+                  'Fixed taxonomy tags for this concept. REQUIRED in isolation mode: set the isolated axis to the value THIS concept tests and every other axis to the locked value from the isolation instructions. Each value must come from the allowed vocab lists.',
+                properties: {
+                  hookStyle: { type: 'string' },
+                  visualFormat: { type: 'string' },
+                  assetType: { type: 'string' },
+                  persona: { type: 'string' },
+                  painPoint: { type: 'string' },
+                },
               },
             },
             required: ['type', 'text'],
@@ -623,6 +720,15 @@ async function runDemo(controller: ReadableStreamDefaultController, body: Reacto
   const outputs = body.outputs ?? ['Hook', 'Headline', 'Campaign Concept']
   sse(controller, { type: 'step', text: 'OPUS online (demo mode — set ANTHROPIC_API_KEY for the live network)' })
   await pace(1100)
+  if (body.cloneReference) {
+    sse(controller, {
+      type: 'step',
+      text: `Cloning reference structure${
+        body.cloneReference.sourceLabel ? ` · ${body.cloneReference.sourceLabel}` : ''
+      } — concepts match its DNA (demo).`,
+    })
+    await pace(700)
+  }
 
   const demoSummaries: Partial<Record<IntelligenceId, string>> = {
     nova: 'Builders fear margin erosion despite record revenue; "profit leak" language resonates',
@@ -694,6 +800,39 @@ async function runDemo(controller: ReadableStreamDefaultController, body: Reacto
     text: 'NEURO — pre-testing concepts against neuromarketing principles (predicted response)…',
   })
   await pace(1600)
+
+  // Isolation mode in demo: one concept per tested value, varying ONLY the
+  // isolated axis with every other axis locked — proves the "iterate one thing"
+  // loop end to end with no API keys. Short-circuits the free-generation pool.
+  if (body.isolate) {
+    const iso = body.isolate
+    const key = AXIS_TAXONOMY_KEY[iso.axis]
+    const testId = mintTestId()
+    const values = iso.values.length ? iso.values : axisValues(iso.axis).slice(0, 3)
+    const baseType = iso.axis === 'hook' ? 'Hook' : 'Video Concept'
+    values.forEach((val, i) => {
+      const taxonomy = coerceTaxonomy({ ...iso.lockedTaxonomy, [key]: val })
+      const c: Concept = {
+        type: baseType,
+        text: `${val} take on the ${a} angle — ${describeTaxonomy(taxonomy)}.`,
+        basis: `Isolation test ${testId} · varying ${iso.axis}${
+          iso.notes?.trim() ? ` · notes: ${iso.notes.trim()}` : ''
+        }`,
+        learningCheck: 'Only the isolated axis differs across variants',
+        score: 8,
+        adPackage: demoAdPackage(baseType, a),
+        neuro: demoNeuroScore(8, baseType),
+        taxonomy,
+        testId,
+        variantId: `${testId}-${variantLabel(i)}`,
+        isolatedAxis: iso.axis,
+      }
+      sse(controller, { type: 'concept', concept: c })
+    })
+    sse(controller, { type: 'done' })
+    return
+  }
+
   const norm = (s: string) => s.toLowerCase().replace(/s$/, '').trim()
   // The onboarding flow offers two deliverables — Static Creative / Video
   // Creative — which fan out into the richer internal concept taxonomy here.
@@ -839,6 +978,10 @@ export async function POST(request: NextRequest) {
         // Built once: identical across every turn, so the cached prefix (tools +
         // this system prompt) is reused for the life of the run instead of being
         // re-billed at full input price on each of the up-to-12 turns.
+        // Clone & Isolation clauses — additive prompt blocks. When both are
+        // absent the prompt is byte-for-byte today's free-generation prompt.
+        const cloneClause = body.cloneReference ? BLOCK_SEP + cloneBlock(body.cloneReference) : ''
+        const isolationClause = body.isolate ? BLOCK_SEP + isolationBlock(body.isolate) : ''
         const systemPrompt =
           coordinatorPrompt(outputs, {
             metaAds: Boolean(mcpServer),
@@ -848,7 +991,25 @@ export async function POST(request: NextRequest) {
             imageModels: availableImageModels,
             preferredVideoModel: body.videoModel ?? null,
             preferredImageModel: body.imageModel ?? null,
-          }) + inputBlocks + oracleMemory
+          }) + inputBlocks + oracleMemory + cloneClause + isolationClause
+
+        // One test ID per isolation run — stamped onto every submitted concept so
+        // outcomes attribute back to which single variable was under test.
+        const runTestId = body.isolate ? mintTestId() : ''
+        if (body.cloneReference) {
+          sse(controller, {
+            type: 'step',
+            text: `Cloning reference structure${
+              body.cloneReference.sourceLabel ? ` · ${body.cloneReference.sourceLabel}` : ''
+            } — concepts will match its DNA.`,
+          })
+        }
+        if (body.isolate) {
+          sse(controller, {
+            type: 'step',
+            text: `Isolation test ${runTestId} — varying ${body.isolate.axis} across ${body.isolate.values.length} value(s), all else locked.`,
+          })
+        }
 
         // NEURO (Predicted Response pre-test) run state: the grounding rubric is
         // retrieved once and reused across any revision, and a bounded counter
@@ -1137,6 +1298,9 @@ export async function POST(request: NextRequest) {
                 concepts.forEach((c, i) => {
                   c.neuro = scores[i]
                 })
+                // Isolation mode: stamp taxonomy + test/variant IDs so the
+                // outcome loop can attribute a win to the single varied axis.
+                if (body.isolate) tagIsolatedConcepts(concepts, body.isolate, runTestId)
                 for (const c of concepts) sse(controller, { type: 'concept', concept: c })
                 sse(controller, { type: 'done' })
                 controller.close()
