@@ -295,7 +295,7 @@ function buildTools(
     {
       name: 'consult_intelligence',
       description:
-        'Delegate a focused question to one of your intelligence layers. Each one searches its slice of the knowledge layer and reports findings. Always consult nova (market) and oracle (pattern), plus at least one of spark/echo, before drafting concepts.',
+        'Delegate a focused question to one of your intelligence layers. Each one searches its slice of the knowledge layer and reports findings. Always consult atlas (knowledge vault — the frameworks/SOPs/assets this campaign must be grounded in), nova (market), and oracle (pattern), plus at least one of spark/echo, before drafting concepts.',
       input_schema: {
         type: 'object',
         properties: {
@@ -481,7 +481,7 @@ Your intelligence network:
 - ORACLE — Strategic Memory: the memory of every winning strategic configuration (angle, audience, offer, awareness, creative + copy structure) — which patterns win, which lose, and what is most likely to work next.
 
 Process:
-1. Consult your network with consult_intelligence. Always consult NOVA and ORACLE, plus at least one of SPARK/ECHO. Use their findings as evidence — don't guess.${metaAdsLine}
+1. Consult your network with consult_intelligence. Always consult ATLAS (ground the campaign in TPB's own frameworks, SOPs, and winning assets from the Knowledge Vault), NOVA, and ORACLE, plus at least one of SPARK/ECHO. Use their findings as evidence — don't guess.${metaAdsLine}
 2. Call get_learnings and self-score every concept against that rubric. Revise or drop anything below 7.${imageLine}${videoLine}
 3. Call submit_concepts with concepts ONLY for these requested output types: ${outputs.join(', ')}. Each concept cites which intelligence layer its evidence came from, and each concept carries a complete adPackage — the launch-ready Meta ad unit.
 
@@ -731,13 +731,14 @@ async function runDemo(controller: ReadableStreamDefaultController, body: Reacto
   }
 
   const demoSummaries: Partial<Record<IntelligenceId, string>> = {
+    atlas: 'TPB frameworks + SOPs already map this system — concepts anchored to proven, taught methodology',
     nova: 'Builders fear margin erosion despite record revenue; "profit leak" language resonates',
     spark: 'Founder videos (71% win) + static proof ads outperform; specific figures beat claims',
     echo: 'Top hook: "Most builders don\'t have a revenue problem. They have a profit leak."',
     oracle: 'Dominant winning pattern: Time Freedom — owner-dependency relief beats raw growth claims',
   }
 
-  for (const id of ['nova', 'spark', 'echo', 'oracle'] as IntelligenceId[]) {
+  for (const id of ['atlas', 'nova', 'spark', 'echo', 'oracle'] as IntelligenceId[]) {
     const agent = INTELLIGENCE[id]
     sse(controller, { type: 'delegate', agent: agent.codename, id: agent.id, label: agent.intelligenceLabel, status: 'start' })
     await pace(1300)
