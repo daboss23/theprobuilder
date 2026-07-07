@@ -14,6 +14,8 @@
  * client concept cards share one source of truth for what "Meta-ready" means.
  */
 
+import type { CreativeTaxonomy } from '@/lib/taxonomy'
+
 /* --------------------------------- Limits ---------------------------------- */
 
 /** Characters of primary text visible before Meta's "See more" fold on mobile. */
@@ -153,6 +155,50 @@ export function validateAdPackage(pkg: MetaAdPackage | undefined): AdComplianceI
 export function ctaLabel(pkg: MetaAdPackage): string {
   const cta = (pkg.cta ?? '').toUpperCase() as MetaCta
   return META_CTA_LABELS[cta] ?? META_CTA_LABELS.LEARN_MORE
+}
+
+/* ------------------------- Test-ID name threading -------------------------- */
+
+/**
+ * The test/variant token format shared by the creative-push naming and the
+ * performance-ingest parsing — declared ONCE here so the two can never drift.
+ * A test is RXN-{5 chars}; a variant appends -A / -B / -AA…
+ */
+export const TEST_ID_RE = /\b(RXN-[A-Z0-9]{5})(?:-([A-Z]+))?\b/i
+
+export interface TestToken {
+  testId: string
+  variantId?: string
+}
+
+/** Recover the RXN test token from a Meta ad/creative name, if present. */
+export function parseTestToken(name: string | null | undefined): TestToken | null {
+  if (!name) return null
+  const m = TEST_ID_RE.exec(name)
+  if (!m) return null
+  const testId = m[1].toUpperCase()
+  return { testId, variantId: m[2] ? `${testId}-${m[2].toUpperCase()}` : undefined }
+}
+
+/**
+ * Build a Meta creative/ad name that leads with the test attribution so a synced
+ * ad auto-maps back to its hypothesis, then a human-readable descriptor — e.g.
+ * "RXN-4Z9Q1-B · Urgency · UGC Mashup". Capped at 90 chars (the publisher's
+ * existing limit). Falls back to a plain descriptor when there's no test.
+ */
+export function metaAdName(opts: {
+  variantId?: string
+  testId?: string
+  taxonomy?: CreativeTaxonomy
+  fallback?: string
+}): string {
+  const id = opts.variantId || opts.testId
+  const descr = [opts.taxonomy?.hookStyle, opts.taxonomy?.visualFormat || opts.taxonomy?.assetType]
+    .filter(Boolean)
+    .join(' · ')
+  const parts = [id, descr || opts.fallback?.trim()].filter(Boolean)
+  const name = parts.join(' · ') || opts.fallback?.trim() || 'TPB Reactor creative'
+  return name.slice(0, 90)
 }
 
 /* --------------------------- Ads Manager export ----------------------------- */

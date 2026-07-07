@@ -1,10 +1,12 @@
 import { NextResponse } from 'next/server'
-import { validateAdPackage, type MetaAdPackage } from '@/lib/meta-ads'
+import { validateAdPackage, metaAdName, type MetaAdPackage } from '@/lib/meta-ads'
 import {
   publishCreativeToMeta,
   publishConfigured,
   publishMissingEnv,
 } from '@/lib/meta-publish'
+import { recordOutcome } from '@/lib/outcomes'
+import type { CreativeTaxonomy } from '@/lib/taxonomy'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -17,6 +19,11 @@ export const dynamic = 'force-dynamic'
  *        orchestrator), then create the ad creative in the connected account.
  *        Never throws: every failure returns 200 with a structured reason so
  *        the Studio renders it inline.
+ *
+ * When the concept carries test attribution (testId/variantId/taxonomy from an
+ * isolation run), the creative name leads with the RXN token and a pending
+ * outcome row is pre-seeded so the Meta performance ingest later attributes the
+ * live result back to the exact hypothesis — no re-deriving the taxonomy.
  */
 
 export async function GET() {
@@ -28,6 +35,14 @@ interface PublishBody {
   imageUrl?: string
   videoUrl?: string
   name?: string
+  // Optional test attribution threaded from an isolation-run concept.
+  testId?: string
+  variantId?: string
+  isolatedAxis?: string
+  taxonomy?: CreativeTaxonomy
+  angle?: string
+  conceptType?: string
+  conceptText?: string
 }
 
 export async function POST(req: Request) {
@@ -58,11 +73,48 @@ export async function POST(req: Request) {
     })
   }
 
+  // Lead the creative name with the RXN token so the ingest can auto-attribute
+  // the live ad back to its test; keep the caller's name as the descriptor.
+  const name = metaAdName({
+    variantId: body.variantId,
+    testId: body.testId,
+    taxonomy: body.taxonomy,
+    fallback: body.name || pkg.headline,
+  })
+
   const result = await publishCreativeToMeta({
     pkg,
     imageUrl: body.imageUrl,
     videoUrl: body.videoUrl,
-    name: body.name,
+    name,
   })
+
+  // Pre-seed a pending outcome row carrying the authoritative taxonomy + test
+  // IDs. Best-effort: the push already succeeded, so a memory hiccup here must
+  // never surface as a publish failure (route convention: never throw).
+  if (result.ok && body.variantId && process.env.NEXT_PUBLIC_SUPABASE_URL) {
+    try {
+      await recordOutcome({
+        angle: body.angle || pkg.headline,
+        concept: {
+          type: body.conceptType || 'Meta creative',
+          text: body.conceptText || pkg.primaryText,
+          basis: 'Pushed to Meta',
+        },
+        attributes: {
+          platform: 'meta',
+          testId: body.testId,
+          variantId: body.variantId,
+          isolatedAxis: body.isolatedAxis,
+          taxonomy: body.taxonomy,
+        },
+        verdict: 'pending',
+        notes: `Pushed to Meta as "${name}"${result.creativeId ? ` (creative ${result.creativeId})` : ''}`,
+      })
+    } catch (err) {
+      console.error('Pre-seed pending outcome failed (push still succeeded):', err)
+    }
+  }
+
   return NextResponse.json(result)
 }
