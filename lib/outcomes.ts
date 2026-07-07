@@ -6,6 +6,7 @@
 import { getSupabaseAdmin } from '@/lib/supabase'
 import { ingestKnowledge } from '@/lib/knowledge'
 import type { AngleEvidence } from '@/lib/reactor-inputs'
+import type { CreativeTaxonomy } from '@/lib/taxonomy'
 
 export type Verdict = 'pending' | 'winner' | 'loser' | 'high_performer' | 'average' | 'unknown'
 
@@ -40,6 +41,16 @@ export interface OutcomeAttributes {
   // synced outcomes are idempotent and ORACLE memory carries real numbers.
   metaAdId?: string
   metrics?: Record<string, number>
+  // Clone & Iterate: the fixed taxonomy this concept was tagged with (the axis
+  // values ORACLE groups by) and the test it belonged to. Stored inside the
+  // concept jsonb like every other attribute here — no schema migration needed.
+  taxonomy?: CreativeTaxonomy
+  /** The isolation test this concept ran under, e.g. "RXN-42". */
+  testId?: string
+  /** This specific variant within the test, e.g. "RXN-42-B". */
+  variantId?: string
+  /** Which axis the test isolated (hook | persona | painPoint | visualFormat | assetType). */
+  isolatedAxis?: string
 }
 
 /** A past winning strategic configuration retrieved from ORACLE memory. */
