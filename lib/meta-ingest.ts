@@ -30,6 +30,7 @@ import {
 import { getSupabaseAdmin } from '@/lib/supabase'
 import { ingestKnowledge } from '@/lib/knowledge'
 import { parseTestToken, type TestToken } from '@/lib/meta-ads'
+import { computeWinnerScore } from '@/lib/winner-score'
 import {
   recordOutcome,
   VERDICT_LABELS,
@@ -64,6 +65,7 @@ interface AdPerf {
   cpl: number
   roas: number
   conversions: number
+  impressions: number
 }
 
 function minSpend(): number {
@@ -152,6 +154,7 @@ function toPerf(row: InsightRow): AdPerf | null {
     cpl: conv > 0 ? spend / conv : 0,
     roas: roas(row),
     conversions: conv,
+    impressions: num(row.impressions),
   }
 }
 
@@ -210,11 +213,24 @@ function perfNotes(ad: AdPerf): string {
   return parts.join(' · ')
 }
 
-function perfAttributes(ad: AdPerf, token?: TestToken | null): OutcomeAttributes {
+function perfAttributes(
+  ad: AdPerf,
+  medCtr: number,
+  medCpl: number,
+  medRoas: number,
+  token?: TestToken | null,
+): OutcomeAttributes {
+  // Blended "×-vs-account-average" score + volume confidence — the sortable
+  // winner metric the Our Winners picker and ORACLE rank by.
+  const ws = computeWinnerScore(
+    { ctr: ad.ctr, roas: ad.roas, cpl: ad.cpl, spend: ad.spend, impressions: ad.impressions },
+    { ctr: medCtr, roas: medRoas, cpl: medCpl },
+  )
   return {
     platform: 'meta',
     assetType: 'Live Meta Ad',
     metaAdId: ad.adId,
+    scoreConfidence: ws.confidence,
     // Attribution recovered from the ad name for ads that weren't pre-seeded at
     // push time (e.g. named by hand in Ads Manager). Pre-seeded rows already
     // carry the authoritative testId/variantId + taxonomy — those are preserved
@@ -226,6 +242,8 @@ function perfAttributes(ad: AdPerf, token?: TestToken | null): OutcomeAttributes
       cpl: Math.round(ad.cpl * 100) / 100,
       roas: Math.round(ad.roas * 100) / 100,
       conversions: Math.round(ad.conversions),
+      impressions: Math.round(ad.impressions),
+      winnerScore: ws.score,
     },
   }
 }
@@ -259,6 +277,7 @@ export async function syncMetaPerformance(): Promise<MetaIngestSummary> {
 
     const medCtr = median(eligible.map((a) => a.ctr))
     const medCpl = median(eligible.map((a) => a.cpl))
+    const medRoas = median(eligible.map((a) => a.roas))
     const existing = await existingMetaOutcomes()
     const supabase = getSupabaseAdmin()
 
@@ -284,7 +303,7 @@ export async function syncMetaPerformance(): Promise<MetaIngestSummary> {
           await recordOutcome({
             angle: ad.campaign,
             concept: { type: 'Live Meta Ad', text: ad.name, basis: 'Meta Marketing API' },
-            attributes: perfAttributes(ad, token),
+            attributes: perfAttributes(ad, medCtr, medCpl, medRoas, token),
             metricName: 'CTR',
             metricValue: ad.ctr,
             verdict,
@@ -297,7 +316,7 @@ export async function syncMetaPerformance(): Promise<MetaIngestSummary> {
           // id + measured metrics (and token attribution for un-seeded ads).
           const mergedConcept = {
             ...(prior.concept ?? { type: 'Live Meta Ad', text: ad.name }),
-            attributes: { ...(prior.concept?.attributes ?? {}), ...perfAttributes(ad, token) },
+            attributes: { ...(prior.concept?.attributes ?? {}), ...perfAttributes(ad, medCtr, medCpl, medRoas, token) },
           }
           const { error } = await supabase
             .from('campaign_outcomes')
