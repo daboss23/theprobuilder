@@ -108,15 +108,13 @@ export function AgentIntelligenceCard({
           <Icon size={16} />
         </span>
         <div className="min-w-0 flex-1">
-          <div className="flex items-center justify-between gap-2">
-            <div className="min-w-0">
-              <p className="truncate font-display text-[15px] font-bold tracking-tight text-white">
-                {def.codename}
-              </p>
-              <p className="truncate text-[11px] font-medium uppercase tracking-wider text-white/45">
-                {def.role}
-              </p>
-            </div>
+          <p className="truncate font-display text-[15px] font-bold tracking-tight text-white">
+            {def.codename}
+          </p>
+          <p className="truncate text-[11px] font-medium uppercase tracking-wider text-white/45">
+            {def.role}
+          </p>
+          <div className="mt-1.5">
             <StatusBadge status={agent.status} />
           </div>
         </div>

@@ -116,6 +116,7 @@ export function LiveAgentWorkflow(controls: WorkflowControls) {
   /* ------------------------------ Measurement ------------------------------ */
   const stageRef = useRef<HTMLDivElement | null>(null)
   const opusRef = useRef<HTMLDivElement | null>(null)
+  const opusWrapRef = useRef<HTMLDivElement | null>(null)
   const outputRef = useRef<HTMLDivElement | null>(null)
   const agentEls = useRef<Partial<Record<IntelligenceId, HTMLDivElement | null>>>({})
   const setAgentEl = useCallback(
@@ -133,26 +134,34 @@ export function LiveAgentWorkflow(controls: WorkflowControls) {
       return
     }
     const sr = stage.getBoundingClientRect()
+    // Vertical flow: agents sit in a row across the top, energy exits each card's
+    // bottom edge and converges into the top of the OPUS core below them.
     const agents: Partial<Record<IntelligenceId, Point>> = {}
     for (const id of INTELLIGENCE_IDS) {
       const el = agentEls.current[id]
       if (el) {
         const r = el.getBoundingClientRect()
-        agents[id] = { x: r.right - sr.left, y: r.top + r.height / 2 - sr.top }
+        agents[id] = { x: r.left + r.width / 2 - sr.left, y: r.bottom - sr.top }
       }
     }
+    // Channels converge into the core's top; synthesized output leaves the base
+    // of the whole OPUS unit (below its caption) so the beam never crosses text.
     let opusIn: Point = { x: sr.width / 2, y: sr.height / 2 }
     let opusOut: Point = opusIn
     if (opusRef.current) {
       const r = opusRef.current.getBoundingClientRect()
-      const cy = r.top + r.height / 2 - sr.top
-      opusIn = { x: r.left - sr.left, y: cy }
-      opusOut = { x: r.right - sr.left, y: cy }
+      const cx = r.left + r.width / 2 - sr.left
+      opusIn = { x: cx, y: r.top - sr.top }
+      opusOut = { x: cx, y: r.bottom - sr.top }
     }
-    let out: Point = { x: sr.width, y: sr.height / 2 }
+    if (opusWrapRef.current) {
+      const r = opusWrapRef.current.getBoundingClientRect()
+      opusOut = { x: r.left + r.width / 2 - sr.left, y: r.bottom - sr.top }
+    }
+    let out: Point = { x: sr.width / 2, y: sr.height }
     if (outputRef.current) {
       const r = outputRef.current.getBoundingClientRect()
-      out = { x: r.left - sr.left, y: r.top - sr.top + 44 }
+      out = { x: r.left + r.width / 2 - sr.left, y: r.top - sr.top + 8 }
     }
     setGeo({ w: sr.width, h: sr.height, agents, opusIn, opusOut, out })
   }, [isDesktop])
@@ -375,7 +384,7 @@ export function LiveAgentWorkflow(controls: WorkflowControls) {
       {/* ------------------------------- Desktop ------------------------------ */}
       {isDesktop ? (
         <div className="reactor-panel glass p-6 xl:p-8">
-          <div ref={stageRef} className="reactor-stage relative">
+          <div ref={stageRef} className="reactor-stage relative flex flex-col justify-center">
             <div className="reactor-stage-bg" aria-hidden="true" />
             {geo && (
               <svg
@@ -479,9 +488,14 @@ export function LiveAgentWorkflow(controls: WorkflowControls) {
               </svg>
             )}
 
-            <div className="relative grid grid-cols-[minmax(0,290px)_minmax(0,1fr)_minmax(0,380px)] items-center gap-8 xl:gap-10">
-              <div className="space-y-3">{renderAgents(true)}</div>
-              <div className="flex justify-center">
+            <div className="relative flex flex-col items-center gap-16 py-4 xl:gap-20">
+              {/* Tier 1 — the five intelligence agents, side by side across the top */}
+              <div className="grid w-full grid-cols-5 items-stretch gap-3 xl:gap-4">
+                {renderAgents(true)}
+              </div>
+
+              {/* Tier 2 — OPUS master strategist core, centred beneath the network */}
+              <div ref={opusWrapRef} className="flex justify-center">
                 <OpusReactorCore
                   {...opusProps}
                   coreRef={(el) => {
@@ -489,7 +503,9 @@ export function LiveAgentWorkflow(controls: WorkflowControls) {
                   }}
                 />
               </div>
-              <div ref={outputRef}>
+
+              {/* Tier 3 — synthesized campaign intelligence, fed by the core's output */}
+              <div ref={outputRef} className="w-full max-w-2xl">
                 <EmergingStrategyPanel workflow={workflow} conceptCount={concepts.length} />
               </div>
             </div>
@@ -517,10 +533,10 @@ export function LiveAgentWorkflow(controls: WorkflowControls) {
       ) : (
         /* --------------------------- Tablet / Mobile -------------------------- */
         <div className="reactor-panel glass space-y-5 p-4 sm:p-6">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">{renderAgents(false)}</div>
           <div className="flex justify-center py-2">
             <OpusReactorCore {...opusProps} />
           </div>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">{renderAgents(false)}</div>
           <EmergingStrategyPanel workflow={workflow} conceptCount={concepts.length} />
         </div>
       )}

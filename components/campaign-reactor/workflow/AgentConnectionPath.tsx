@@ -9,11 +9,15 @@ export interface Point {
   y: number
 }
 
-/** Smooth horizontal-handled cubic between two anchors (convergence curve). */
+/**
+ * Smooth cubic between two anchors (convergence curve). The control handles
+ * follow the dominant axis of travel: a vertical flow (agents stacked above the
+ * core) leaves/arrives straight up-and-down, a horizontal flow sweeps in from
+ * the side. This keeps every channel tangent to its node instead of kinking.
+ */
 export function connectionPath(from: Point, to: Point): string {
-  const dx = to.x - from.x
-  const handle = Math.max(48, Math.abs(dx) * 0.5)
-  return `M ${from.x} ${from.y} C ${from.x + handle} ${from.y}, ${to.x - handle} ${to.y}, ${to.x} ${to.y}`
+  const c = baseCubic(from, to)
+  return `M ${c.p0.x} ${c.p0.y} C ${c.c1.x} ${c.c1.y}, ${c.c2.x} ${c.c2.y}, ${c.p1.x} ${c.p1.y}`
 }
 
 export type ConnDirection = 'forward' | 'reverse'
@@ -44,11 +48,24 @@ interface CubicRefs {
 
 function baseCubic(from: Point, to: Point): CubicRefs {
   const dx = to.x - from.x
+  const dy = to.y - from.y
+  // Route handles along the dominant axis so the curve is tangent to each node.
+  if (Math.abs(dy) >= Math.abs(dx)) {
+    const handle = Math.max(48, Math.abs(dy) * 0.5)
+    const s = Math.sign(dy || 1)
+    return {
+      p0: from,
+      c1: { x: from.x, y: from.y + s * handle },
+      c2: { x: to.x, y: to.y - s * handle },
+      p1: to,
+    }
+  }
   const handle = Math.max(48, Math.abs(dx) * 0.5)
+  const s = Math.sign(dx || 1)
   return {
     p0: from,
-    c1: { x: from.x + handle, y: from.y },
-    c2: { x: to.x - handle, y: to.y },
+    c1: { x: from.x + s * handle, y: from.y },
+    c2: { x: to.x - s * handle, y: to.y },
     p1: to,
   }
 }
