@@ -26,6 +26,8 @@ import {
 } from 'lucide-react'
 import { FaceLibrary } from '@/components/reactor/FaceLibrary'
 import { CREATIVE_SIZES, type AngleEvidence, type CreativeSize } from '@/lib/reactor-inputs'
+import { IsolationConfigurator } from '@/components/campaign-reactor/IsolationConfigurator'
+import type { IsolateConfig } from '@/lib/taxonomy'
 
 // The launch sequence — six bold steps, each a moment, not a form field. `orb`
 // is the short label under the stepper node; `label` titles the step.
@@ -116,6 +118,9 @@ export interface ReactorForm {
   // Quick Launch — extract offer/audience/positioning from a website into the
   // brief. Resolves with the domain on success, or an error message.
   extractSite: (url: string) => Promise<{ ok: boolean; domain?: string; error?: string }>
+  // Step 6 — optional isolation test ("iterate one thing"). null = free generation.
+  isolate: IsolateConfig | null
+  setIsolate: (v: IsolateConfig | null) => void
 }
 
 interface ReactorModalProps {
@@ -824,7 +829,15 @@ export function ReactorModal({ open, onClose, onFire, form }: ReactorModalProps)
                     <span className="line-clamp-2 text-white/70">{form.brief.trim()}</span>
                   </div>
                 )}
+                {form.isolate && form.isolate.values.length > 0 && (
+                  <SummaryRow
+                    label="Test"
+                    value={`Iterating ${form.isolate.axis} · ${form.isolate.values.join(', ')}`}
+                  />
+                )}
               </div>
+
+              <IsolationConfigurator value={form.isolate} onChange={form.setIsolate} />
 
               <div>
                 <button

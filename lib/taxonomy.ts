@@ -166,6 +166,30 @@ export const AXIS_META: Record<IterationAxis, AxisMeta> = {
 /** Ordered axis metadata for rendering the configurator tabs. */
 export const AXIS_LIST: AxisMeta[] = ITERATION_AXES.map((a) => AXIS_META[a])
 
+/**
+ * Isolation-mode selection — shared by the configurator UI and the reactor
+ * request payload so the client and server agree on the shape. `values` are the
+ * (≤3) values of `axis` under test; `lockedTaxonomy` holds every other axis
+ * fixed; `notes` is the optional strategist directive.
+ */
+export interface IsolateConfig {
+  axis: IterationAxis
+  values: string[]
+  lockedTaxonomy: CreativeTaxonomy
+  notes?: string
+}
+
+/** First canonical value of each axis — the cold-start / demo lock defaults. */
+export function defaultLockedTaxonomy(): CreativeTaxonomy {
+  return {
+    hookStyle: HOOK_STYLES[0],
+    visualFormat: VISUAL_FORMATS[0],
+    assetType: ASSET_TYPES[0],
+    persona: PERSONA_SEEDS[0],
+    painPoint: PAIN_POINT_SEEDS[0],
+  }
+}
+
 /* ------------------------------- Helpers ----------------------------------- */
 
 /** The pickable values for an axis. */

@@ -35,6 +35,7 @@ import type { ModelAvailability } from '@/lib/video/types'
 import { recommendImageModel } from '@/lib/image/recommend'
 import type { ImageModelAvailability } from '@/lib/image/types'
 import { useReactorRun, type Concept } from '@/components/campaign-reactor/ReactorRunContext'
+import type { IsolateConfig } from '@/lib/taxonomy'
 
 // The native campaign-angle choices (the No Preference / Custom sentinels are
 // added by the dropdown itself).
@@ -54,6 +55,8 @@ export function Workbench() {
     videoFor,
   } = useReactorRun()
   const [modalOpen, setModalOpen] = useState(false)
+  // Optional isolation test ("iterate one thing") — null = free generation.
+  const [isolate, setIsolate] = useState<IsolateConfig | null>(null)
   // Output surface: the autonomous reactor (default hero), the Studio (remix the
   // run's parts into a finished ad), or the Flow (node-graph production canvas).
   const [view, setView] = useState<'reactor' | 'studio' | 'flow'>('reactor')
@@ -376,6 +379,9 @@ export function Workbench() {
       imageModel: resolvedImageModel,
       metaProvider,
       reactorInputs: reactorInputsPayload,
+      // Only sent when a valid test is configured — additive, keeps free
+      // generation the default (the reactor ignores an absent isolate block).
+      ...(isolate && isolate.values.length > 0 ? { isolate } : {}),
     })
   }
 
@@ -599,6 +605,8 @@ export function Workbench() {
     extractSite,
     onFaceChange: handleFaceSelection,
     refCount: faceUrls.length + refVideos.length,
+    isolate,
+    setIsolate,
   }
 
   // Everything the live agent workflow needs to keep the production actions
