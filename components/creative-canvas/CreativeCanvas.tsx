@@ -66,11 +66,13 @@ import type { MetaAdPackage, MetaCta } from '@/lib/meta-ads'
 import {
   BRANCH_DY,
   buildCanvasGraph,
-  canvasMode,
+  canvasTracks,
+  conceptsForTrack,
   isVisualConcept,
   KIND_DEFS,
   MODE_LABELS,
   NODE_W,
+  type CanvasMode,
   type CanvasNodeData,
   type CanvasNodeKind,
 } from '@/lib/creative-canvas/graph'
@@ -99,6 +101,8 @@ interface CreativeCanvasProps {
   onConfigure: () => void
   /** Leaves full-screen immersive mode, back to the Reactor. */
   onExit: () => void
+  /** Which format tab to land on (e.g. 'montage' when launched via the montage CTA). */
+  initialTab?: CanvasMode
 }
 
 /** Render state for a visual/scene node's media. */
@@ -128,10 +132,11 @@ const useCanvas = () => {
 
 type CanvasRFNode = Node<CanvasNodeData>
 
-/** The creative slots a card can be dragged INTO a new role for. Proof and
- * Output are structurally fixed — evidence and the assembled unit are never
- * "become-able" by dropping a card on them. */
-const REASSIGNABLE_KINDS: CanvasNodeKind[] = ['hook', 'message', 'visual', 'scene', 'cta']
+/** The creative slots a card can be dragged INTO a new role for — every
+ * content card supports semantic repositioning: Proof can become the Hook, a
+ * Hook can become the CTA, a Scene can become the opener. Only Output is
+ * structurally fixed: it is the lane's assembled unit, not a creative role. */
+const REASSIGNABLE_KINDS: CanvasNodeKind[] = ['hook', 'message', 'proof', 'visual', 'scene', 'cta']
 
 /** Swap a card's kind label into its title, keeping any " — Alt N" suffix. */
 function relabelForKind(kind: CanvasNodeKind, oldTitle: string): string {
@@ -292,9 +297,9 @@ export function CreativeCanvas(props: CreativeCanvasProps) {
     setMounted(true)
     const prevOverflow = document.body.style.overflow
     document.body.style.overflow = 'hidden'
-    // Escape-to-exit lives in CanvasInner (layered: it closes a context menu
-    // or clears a selection first, and only exits full-screen once nothing
-    // else is open) — this effect only owns the scroll lock.
+    // Escape-to-exit lives in the active tab's CanvasInner (layered: it closes
+    // a context menu or clears a selection first, and only exits full-screen
+    // once nothing else is open) — this effect only owns the scroll lock.
     return () => {
       document.body.style.overflow = prevOverflow
     }
@@ -304,17 +309,206 @@ export function CreativeCanvas(props: CreativeCanvasProps) {
 
   return createPortal(
     <div className="canvas-immersive fixed inset-0 z-[100]">
-      <ReactFlowProvider>
-        <CanvasInner {...props} />
-      </ReactFlowProvider>
+      <CampaignShell {...props} />
     </div>,
     document.body,
   )
 }
 
-function CanvasInner({ strategy, imageModel, videoModel, onSendToStudio, onConfigure, onExit }: CreativeCanvasProps) {
-  const { concepts, imageFor, videoFor, creativeStateFor } = useReactorRun()
-  const mode = canvasMode(strategy.outputs, Boolean(strategy.montage))
+/**
+ * The campaign shell — ONE campaign, ONE shared strategy layer, one format
+ * tab per selected deliverable family. The strategy bar and chip row are
+ * campaign-level (they power every format identically); each tab below is a
+ * self-contained canvas with its own mode-specific node structure. Tabs are
+ * lazy-mounted on first visit and kept alive after, so switching formats
+ * never loses in-progress edits, branches, or renders.
+ */
+function CampaignShell({
+  strategy,
+  imageModel,
+  videoModel,
+  onSendToStudio,
+  onConfigure,
+  onExit,
+  initialTab,
+}: CreativeCanvasProps) {
+  const { concepts } = useReactorRun()
+  const tracks = useMemo(
+    () => canvasTracks(strategy.outputs, Boolean(strategy.montage)),
+    [strategy.outputs, strategy.montage],
+  )
+  const [active, setActive] = useState<CanvasMode>(() =>
+    initialTab && tracks.some((t) => t.id === initialTab) ? initialTab : tracks[0].id,
+  )
+  // Tabs mount on first visit and stay mounted (hidden) after — React Flow
+  // must be visible at mount to measure, and kept-alive tabs preserve edits.
+  const [visited, setVisited] = useState<Set<CanvasMode>>(() => new Set([active]))
+
+  useEffect(() => {
+    if (!tracks.some((t) => t.id === active)) {
+      setActive(tracks[0].id)
+      setVisited((v) => new Set(v).add(tracks[0].id))
+    }
+  }, [tracks, active])
+
+  const selectTab = (id: CanvasMode) => {
+    setActive(id)
+    setVisited((v) => (v.has(id) ? v : new Set(v).add(id)))
+  }
+
+  /* ------------------------------- Empty state ------------------------------ */
+  if (concepts.length === 0) {
+    return (
+      <div className="canvas-shell relative grid h-full w-full place-items-center p-8 text-center">
+        <button
+          type="button"
+          onClick={onExit}
+          className="absolute right-5 top-5 inline-flex items-center gap-1.5 rounded-full border border-white/12 bg-white/[0.04] px-3.5 py-1.5 text-[11px] font-semibold text-white/55 transition-colors hover:border-white/25 hover:text-white"
+        >
+          <X size={13} /> Exit Canvas
+        </button>
+        <div className="canvas-lift max-w-lg">
+          <span className="mx-auto mb-5 grid h-14 w-14 place-items-center rounded-2xl border border-[#FF7C54]/25 bg-[#FF5E3A]/[0.06]">
+            <Workflow size={26} className="text-[#FF9D4D]" />
+          </span>
+          <h3 className="font-display text-xl font-bold text-white">The Creative Canvas</h3>
+          <p className="mx-auto mt-2 text-sm leading-relaxed text-white/50">
+            Where strategy becomes creative structure. Fire the reactor and the system builds the
+            first structure for you — hooks, message, proof, scenes, and CTA as connected nodes you
+            can shape, branch, and regenerate one piece at a time.
+          </p>
+          <div className="mx-auto mt-6 grid max-w-md grid-cols-3 gap-2.5 text-left">
+            {[
+              { Icon: Sparkles, t: 'Pre-structured', d: 'Never a blank board — the run arrives organized.' },
+              { Icon: GitBranch, t: 'Branch', d: 'Alternate hooks and CTAs as controlled variants.' },
+              { Icon: RefreshCw, t: 'Regenerate', d: 'One node at a time, strategy held constant.' },
+            ].map(({ Icon, t, d }) => (
+              <div key={t} className="rounded-xl border border-white/10 bg-white/[0.02] p-3">
+                <Icon size={14} className="mb-1.5 text-[#FF9D4D]" />
+                <p className="text-xs font-semibold text-white">{t}</p>
+                <p className="mt-0.5 text-[10px] leading-snug text-white/40">{d}</p>
+              </div>
+            ))}
+          </div>
+          <button
+            type="button"
+            onClick={onConfigure}
+            className="mt-7 inline-flex items-center gap-2 rounded-full border border-[#FF7C54]/35 bg-[#FF5E3A]/10 px-5 py-2.5 text-sm font-semibold text-[#FF9D4D] transition-colors hover:bg-[#FF5E3A]/20"
+          >
+            <Atom size={14} /> Open the campaign brief
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="canvas-shell flex h-full w-full flex-col rounded-none border-0">
+      {/* --------------------- Campaign bar (shared) --------------------- */}
+      <div className="canvas-lift flex flex-wrap items-center justify-between gap-3 border-b border-white/[0.08] px-5 py-3.5">
+        <div className="flex min-w-0 flex-wrap items-center gap-2.5">
+          <span className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.26em] text-[#FF9D4D]/80">
+            <Workflow size={13} /> Creative Canvas
+          </span>
+          <span className="hidden h-4 w-px bg-white/10 sm:block" />
+          <span className="truncate font-display text-sm font-semibold text-white">
+            {strategy.campaignName?.trim() || 'Untitled campaign'}
+          </span>
+          {tracks.length > 1 ? (
+            // One campaign → one tab per selected format. Same strategy layer
+            // powers every tab; only the creative flow inside differs.
+            <div className="inline-flex rounded-full border border-[#FF7C54]/25 bg-black/30 p-1">
+              {tracks.map((t) => (
+                <button
+                  key={t.id}
+                  type="button"
+                  onClick={() => selectTab(t.id)}
+                  aria-pressed={active === t.id}
+                  className={cn(
+                    'rounded-full px-3.5 py-1 text-[11px] font-semibold uppercase tracking-wide transition-colors',
+                    active === t.id
+                      ? 'bg-[#FF5E3A]/[0.16] text-[#FF9D4D]'
+                      : 'text-white/45 hover:text-white/75',
+                  )}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
+          ) : (
+            <span className="inline-flex items-center rounded-full border border-[#FF7C54]/30 bg-[#FF5E3A]/[0.08] px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[#FF9D4D]">
+              {MODE_LABELS[tracks[0].id]}
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={onConfigure}
+            className="inline-flex items-center gap-1.5 rounded-full border border-white/12 bg-white/[0.03] px-3.5 py-1.5 text-[11px] font-semibold text-white/60 transition-colors hover:border-white/25 hover:text-white"
+          >
+            <SlidersHorizontal size={12} /> Re-brief
+          </button>
+          <button
+            type="button"
+            onClick={onExit}
+            title="Exit Canvas (Esc)"
+            className="grid h-8 w-8 place-items-center rounded-full text-white/40 transition-colors hover:bg-white/5 hover:text-white"
+          >
+            <X size={16} />
+          </button>
+        </div>
+      </div>
+
+      {/* Shared strategy layer — pinned once, powering every format tab */}
+      <div className="canvas-lift flex flex-wrap items-center gap-1.5 border-b border-white/[0.06] px-5 py-2.5">
+        <StrategyChip label="Angle" value={strategy.angle} />
+        <StrategyChip label="Awareness" value={strategy.awareness} />
+        <StrategyChip label="Sophistication" value={strategy.sophistication} />
+        <StrategyChip label="Audience" value={strategy.audience} />
+        <StrategyChip label="Offer" value={strategy.offerName?.trim() || strategy.offer} />
+      </div>
+
+      {/* ---------------- Format tabs — one canvas per format ---------------- */}
+      {tracks
+        .filter((t) => visited.has(t.id))
+        .map((t) => (
+          <div
+            key={t.id}
+            className={cn('canvas-lift min-h-0 flex-1 flex-col', active === t.id ? 'flex' : 'hidden')}
+          >
+            <ReactFlowProvider>
+              <CanvasInner
+                mode={t.id}
+                concepts={conceptsForTrack(concepts, t.id)}
+                active={active === t.id}
+                strategy={strategy}
+                imageModel={imageModel}
+                videoModel={videoModel}
+                onSendToStudio={onSendToStudio}
+                onExit={onExit}
+              />
+            </ReactFlowProvider>
+          </div>
+        ))}
+    </div>
+  )
+}
+
+interface CanvasInnerProps {
+  mode: CanvasMode
+  concepts: Concept[]
+  /** Whether this tab is the visible one — gates keyboard handling. */
+  active: boolean
+  strategy: CanvasStrategy
+  imageModel?: string
+  videoModel?: string
+  onSendToStudio: (c: Concept) => void
+  onExit: () => void
+}
+
+function CanvasInner({ mode, concepts, active, strategy, imageModel, videoModel, onSendToStudio, onExit }: CanvasInnerProps) {
+  const { imageFor, videoFor, creativeStateFor } = useReactorRun()
 
   const [nodes, setNodes, onNodesChange] = useNodesState<CanvasRFNode>([])
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([])
@@ -836,6 +1030,9 @@ function CanvasInner({ strategy, imageModel, videoModel, onSendToStudio, onConfi
    * reassignment modal is open, Escape does nothing; that decision needs an
    * explicit choice. Ignored while typing in the detail panel's fields. */
   useEffect(() => {
+    // Only the visible format tab listens — hidden kept-alive tabs must never
+    // swallow (or double-handle) the campaign's keyboard input.
+    if (!active) return
     const onKey = (e: KeyboardEvent) => {
       const typing = ['INPUT', 'TEXTAREA'].includes((e.target as HTMLElement)?.tagName)
       if (e.key === 'Escape' && !typing) {
@@ -858,54 +1055,7 @@ function CanvasInner({ strategy, imageModel, videoModel, onSendToStudio, onConfi
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [selectedId, nodes, removeNode, branchNode, contextMenu, pendingReassign, onExit])
-
-  /* ------------------------------- Empty state ------------------------------ */
-
-  if (concepts.length === 0) {
-    return (
-      <div className="canvas-shell relative grid h-full w-full place-items-center p-8 text-center">
-        <button
-          type="button"
-          onClick={onExit}
-          className="absolute right-5 top-5 inline-flex items-center gap-1.5 rounded-full border border-white/12 bg-white/[0.04] px-3.5 py-1.5 text-[11px] font-semibold text-white/55 transition-colors hover:border-white/25 hover:text-white"
-        >
-          <X size={13} /> Exit Canvas
-        </button>
-        <div className="canvas-lift max-w-lg">
-          <span className="mx-auto mb-5 grid h-14 w-14 place-items-center rounded-2xl border border-[#FF7C54]/25 bg-[#FF5E3A]/[0.06]">
-            <Workflow size={26} className="text-[#FF9D4D]" />
-          </span>
-          <h3 className="font-display text-xl font-bold text-white">The Creative Canvas</h3>
-          <p className="mx-auto mt-2 text-sm leading-relaxed text-white/50">
-            Where strategy becomes creative structure. Fire the reactor and the system builds the
-            first structure for you — hooks, message, proof, scenes, and CTA as connected nodes you
-            can shape, branch, and regenerate one piece at a time.
-          </p>
-          <div className="mx-auto mt-6 grid max-w-md grid-cols-3 gap-2.5 text-left">
-            {[
-              { Icon: Sparkles, t: 'Pre-structured', d: 'Never a blank board — the run arrives organized.' },
-              { Icon: GitBranch, t: 'Branch', d: 'Alternate hooks and CTAs as controlled variants.' },
-              { Icon: RefreshCw, t: 'Regenerate', d: 'One node at a time, strategy held constant.' },
-            ].map(({ Icon, t, d }) => (
-              <div key={t} className="rounded-xl border border-white/10 bg-white/[0.02] p-3">
-                <Icon size={14} className="mb-1.5 text-[#FF9D4D]" />
-                <p className="text-xs font-semibold text-white">{t}</p>
-                <p className="mt-0.5 text-[10px] leading-snug text-white/40">{d}</p>
-              </div>
-            ))}
-          </div>
-          <button
-            type="button"
-            onClick={onConfigure}
-            className="mt-7 inline-flex items-center gap-2 rounded-full border border-[#FF7C54]/35 bg-[#FF5E3A]/10 px-5 py-2.5 text-sm font-semibold text-[#FF9D4D] transition-colors hover:bg-[#FF5E3A]/20"
-          >
-            <Atom size={14} /> Open the campaign brief
-          </button>
-        </div>
-      </div>
-    )
-  }
+  }, [active, selectedId, nodes, removeNode, branchNode, contextMenu, pendingReassign, onExit])
 
   /* --------------------------------- Canvas --------------------------------- */
 
@@ -913,59 +1063,9 @@ function CanvasInner({ strategy, imageModel, videoModel, onSendToStudio, onConfi
 
   return (
     <Ctx.Provider value={{ mediaFor: (id) => media[id] ?? IDLE_MEDIA, renderStill, regenBusy: (id) => Boolean(regenerating[id]) }}>
-      <div className="canvas-shell flex h-full w-full flex-col rounded-none border-0">
-        {/* ------------------------- Strategy bar ------------------------- */}
-        <div className="canvas-lift flex flex-wrap items-center justify-between gap-3 border-b border-white/[0.08] px-5 py-3.5">
-          <div className="flex min-w-0 flex-wrap items-center gap-2.5">
-            <span className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.26em] text-[#FF9D4D]/80">
-              <Workflow size={13} /> Creative Canvas
-            </span>
-            <span className="hidden h-4 w-px bg-white/10 sm:block" />
-            <span className="truncate font-display text-sm font-semibold text-white">
-              {strategy.campaignName?.trim() || 'Untitled campaign'}
-            </span>
-            <span className="inline-flex items-center rounded-full border border-[#FF7C54]/30 bg-[#FF5E3A]/[0.08] px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[#FF9D4D]">
-              {MODE_LABELS[mode]}
-            </span>
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={onConfigure}
-              className="inline-flex items-center gap-1.5 rounded-full border border-white/12 bg-white/[0.03] px-3.5 py-1.5 text-[11px] font-semibold text-white/60 transition-colors hover:border-white/25 hover:text-white"
-            >
-              <SlidersHorizontal size={12} /> Re-brief
-            </button>
-            <button
-              type="button"
-              onClick={() => sendLaneToStudio(selected?.data.lane ?? 0)}
-              className="fire-btn inline-flex items-center gap-1.5 rounded-full px-4 py-1.5 text-[11px] font-bold uppercase tracking-wide text-white"
-            >
-              Send to Studio <ArrowRight size={12} />
-            </button>
-            <span className="ml-1 h-5 w-px bg-white/10" />
-            <button
-              type="button"
-              onClick={onExit}
-              title="Exit Canvas (Esc)"
-              className="grid h-8 w-8 place-items-center rounded-full text-white/40 transition-colors hover:bg-white/5 hover:text-white"
-            >
-              <X size={16} />
-            </button>
-          </div>
-        </div>
-
-        {/* Pinned strategic read — the canvas never loses the strategy */}
-        <div className="canvas-lift flex flex-wrap items-center gap-1.5 border-b border-white/[0.06] px-5 py-2.5">
-          <StrategyChip label="Angle" value={strategy.angle} />
-          <StrategyChip label="Awareness" value={strategy.awareness} />
-          <StrategyChip label="Sophistication" value={strategy.sophistication} />
-          <StrategyChip label="Audience" value={strategy.audience} />
-          <StrategyChip label="Offer" value={strategy.offerName?.trim() || strategy.offer} />
-        </div>
-
+      <div className="relative flex h-full min-h-0 flex-1 flex-col">
         {/* --------------------- Canvas + detail panel --------------------- */}
-        <div className="canvas-lift grid min-h-0 flex-1 lg:grid-cols-[minmax(0,1fr)_330px]">
+        <div className="grid min-h-0 flex-1 lg:grid-cols-[minmax(0,1fr)_330px]">
           <div className="relative min-h-0">
             <ReactFlow
               nodes={nodes}
@@ -1018,7 +1118,7 @@ function CanvasInner({ strategy, imageModel, videoModel, onSendToStudio, onConfi
                     ['Edit', 'Rewrite any node by hand — your words always win.'],
                     ['Regenerate', 'One node at a time; strategy and locked nodes are held constant.'],
                     ['Branch', 'Spin controlled alternates of a hook or CTA, then approve the winner.'],
-                    ['Drag to reassign', 'Drop a card onto a different slot and the system asks whether its ROLE should follow — a Proof card dragged onto Hook can become the Hook.'],
+                    ['Drag to reassign', 'Every card is movable — drop any card onto any other slot and the system asks whether its ROLE should follow. Proof can become the Hook, a Hook can become the CTA.'],
                     ['Render', 'Scenes and visuals render stills, then animate into clips.'],
                     ['Send to Studio', 'The active lane becomes a launch-ready Meta ad unit.'],
                   ].map(([t, d]) => (
@@ -1032,6 +1132,13 @@ function CanvasInner({ strategy, imageModel, videoModel, onSendToStudio, onConfi
                   Right-click any card for quick actions. ⌘/Ctrl+D duplicates the selected card;
                   Delete removes an alternate or scene.
                 </p>
+                <button
+                  type="button"
+                  onClick={() => sendLaneToStudio(0)}
+                  className="fire-btn inline-flex w-full items-center justify-center gap-1.5 rounded-xl px-3 py-2.5 text-[11px] font-bold uppercase tracking-wide text-white"
+                >
+                  Send to Studio <ArrowRight size={12} />
+                </button>
               </div>
             ) : (
               <div className={cn('space-y-3.5', accentClass[def.accent])}>

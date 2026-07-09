@@ -51,25 +51,50 @@ surrounding app remains visible. This isn't a panel you scroll past — it is a
 mode you *enter* (via "Launch in Creative Canvas" or the Reactor·Canvas·Studio
 toggle) and *exit* (the header's X, or Escape, which is layered — see §9).
 
-**Arriving with a run:**
+**Arriving with a run — the campaign shell:**
 
-1. **Top strategy bar** — pinned, always visible: campaign name ·
-   output-mode badge (`Montage / Scene Flow`, `Static Image`, …) ·
-   **Re-brief** · **Send to Studio** · **Exit**.
-2. **Strategy chip row** — Angle · Awareness · **Sophistication** · Audience ·
-   Offer. Not decoration — every regeneration and every reassignment
-   regeneration carries these as hard constraints.
-3. **The pre-built structure** — one **lane per concept** (max 4), each lane
-   a left-to-right message spine. The viewport opens on the first lane's
-   opening (hook → message → proof → first scene) at readable zoom.
+1. **Campaign bar** — pinned, always visible: campaign name · **format tabs**
+   (see below) · **Re-brief** · **Exit**.
+2. **Shared strategy chip row** — Angle · Awareness · **Sophistication** ·
+   Audience · Offer. Campaign-level, shown once, powering every format tab
+   identically — every regeneration in every tab carries these as hard
+   constraints.
+3. **The pre-built structure** — inside each tab, one **lane per concept**
+   (max 4), each lane a left-to-right message spine. The viewport opens on
+   the first lane's opening at readable zoom.
 4. **Direction Deck** (right panel, nothing selected) — teaches Edit /
    Regenerate / Branch / **Drag to reassign** / Render / Send to Studio, plus
-   a one-line shortcuts hint (right-click for quick actions, ⌘/Ctrl+D to
-   duplicate, Delete to remove an alternate or scene).
+   a one-line shortcuts hint, plus the primary **Send to Studio** CTA.
 5. **Reactor-seeded media** — any image/video the Reactor already
-   auto-generated for a concept shows up immediately on that lane's Visual
-   node (non-montage) or Output node (montage preview), tagged "⚡ From your
-   run." The Canvas never opens on empty cards when the work already exists.
+   auto-generated shows up immediately, tagged "⚡ From your run."
+
+**Multi-format campaigns — 1 campaign = shared strategy, N formats = N tabs.**
+When the brief selects more than one creative format (e.g. Image + Video +
+Montage), the system organizes it as ONE campaign with ONE shared strategy
+layer and **one tab per selected format family** in the campaign bar:
+
+```
+Off The Tools — Q3   [ IMAGE | VIDEO | MONTAGE ]
+```
+
+- Deliverables map to tabs: Static/Carousel → **Image**, Video/UGC →
+  **Video**, Montage / Scene Flow → **Montage**, Creative Variations →
+  **Variations**, Recommend Format → **Recommended**.
+- Every tab inherits the same strategy chips and the same brief intelligence;
+  only the creative flow inside differs (per-mode node structures, §4).
+  Formats are never mixed into one graph — no mixed-node chaos, ever.
+- Each tab pulls the run's concepts matching its medium (image tabs build
+  from static/campaign concepts, video tabs from video/founder/testimonial
+  concepts, montage tabs from concepts carrying scene briefs), falling back
+  to all visual concepts so a tab is never empty.
+- Tabs are **lazy-mounted on first visit and kept alive after** — switching
+  formats never loses in-progress edits, branches, alternates, or renders.
+- Entry lands in campaign context on the first selected format's tab; the
+  montage "Launch in Creative Canvas" CTA lands directly on the Montage tab.
+  With a single format selected the tab bar collapses to a mode badge.
+- **(planned)** cross-format adaptation: promote a strong concept from one
+  tab into another (image → video, video → montage, montage → image) with a
+  structure-conversion pass.
 
 **Arriving without a run**: one headline, one paragraph, three capability
 cards (Pre-structured · Branch · Regenerate), one CTA into the brief. Still
@@ -87,7 +112,7 @@ lane · branchIdx`.
 |---|---|---|---|---|---|
 | **Hook** | emerald | The scroll-stopper; first line before the fold | one line, ≤125 chars | edit · regenerate · branch · lock · approve · drag | ✔ |
 | **Message** | cyan | The argument (titled *Script / VO* in video/montage modes) | 2–4 short paragraphs | edit · regenerate · branch · lock · approve · drag | ✔ |
-| **Proof** | blue | What grounds the concept — retrieved Vault evidence | basis citation | view · lock (locked **by default**) · drag (as a source) | ✘ — fixed slot, never a target role |
+| **Proof** | blue | What grounds the concept — retrieved Vault evidence | basis citation | edit · regenerate (unlocked only) · lock (locked **by default**) · drag | ✔ |
 | **Visual Direction** | violet | What the creative shows (non-montage lanes) | frame-by-frame beats | edit · regenerate · branch · render still · animate · drag | ✔ |
 | **Scene** | violet | One beat of a montage | direction + caption/VO line | edit · regenerate · add-scene-after · remove · render still · animate · drag | ✔ |
 | **CTA** | amber | The ask — headline + Meta button type | ≤40-char headline | edit · regenerate · branch · lock · approve · drag | ✔ |
@@ -97,10 +122,14 @@ lane · branchIdx`.
 `hook → message → proof → (scenes… | visual) → cta → output`. Branch
 alternates hang off the same upstream/downstream pair with dashed edges.
 
-**Cards can be dragged anywhere** (structured freedom — see §15), but only
-Hook / Message / Visual / Scene / CTA are valid **target** roles a card can be
-reassigned INTO. Proof and Output stay structurally fixed: evidence is
-retrieved, not authored, and the assembled unit is a summary, not a role.
+**Every card is movable, every card can be reassigned** (structured
+freedom — see §15): every content card — Hook, Message, Proof, Visual,
+Scene, CTA — is a valid drag source AND a valid target role. Proof can
+become the Hook; a Hook can become the CTA; a Scene can become the opener.
+The single exception is Output, which is the lane's assembled unit, not a
+creative role. Retrieved-evidence Proof nodes arrive locked, which protects
+their content from regeneration until deliberately unlocked — but never
+blocks moving or reassigning them.
 
 **(planned)** Audience/Offer/Mechanism as first-class nodes — today they are
 strategy-bar chips (constraints on every node), graduating to nodes only when
@@ -282,18 +311,21 @@ export) sits between canvas approval and Studio publish.
 
 ```
 ┌──────────────────────────────────────────────────────────────────────┐
-│  ⚙ CREATIVE CANVAS   Campaign name   [MODE]   Re-brief  SEND →  ✕     │  strategy bar
-│  Angle · Awareness · Sophistication · Audience · Offer                │  chip row
+│  ⚙ CREATIVE CANVAS  Campaign name  [IMAGE|VIDEO|MONTAGE]  Re-brief ✕  │  campaign bar
+│  Angle · Awareness · Sophistication · Audience · Offer                │  shared strategy
 ├──────────────────────────────────────────────────────┬───────────────┤
-│                                                        │  Direction    │
+│  (active format tab — its own canvas + node flow)     │  Direction    │
 │   lane 0:  HOOK → MESSAGE → PROOF → S1 → S2 → … → ⚡  │  Deck /       │
 │   lane 1:  HOOK → MESSAGE → PROOF → …                 │  Node editor  │
-│              └ Alt 1 (dashed)                         │  (right rail) │
-│   pan/zoom canvas · criss-cross ember grid            │               │
-│   [+ – ⤢] controls, bottom-left                       │               │
-│   right-click any card → context menu                 │               │
+│              └ Alt 1 (dashed)                         │  + SEND →     │
+│   pan/zoom canvas · criss-cross ember grid            │  (right rail) │
+│   [+ – ⤢] controls · right-click → context menu       │               │
 └──────────────────────────────────────────────────────┴───────────────┘
 ```
+
+One campaign bar, one shared strategy row, N format tabs — each tab is a
+fully independent canvas pane (own graph, selection, media, alternates),
+kept alive across switches.
 
 This is the ENTIRE screen — no sidebar, no topbar, no dashboard cards. The
 background is the same faded criss-cross engineering grid as the campaign
@@ -339,11 +371,16 @@ proposes, the human directs.
 
 This is a signature behavior: position can change meaning.
 
+**Universal rule**: every card is movable, every card can be repositioned,
+and every content card can be reassigned when dropped into a new semantic
+role — this applies across the entire canvas, not to one or two special
+kinds. Hook, Message, Proof, Visual, Scene, and CTA are all both sources and
+targets (Proof → Hook, Hook → CTA, Scene → opener, …). Only Output is fixed.
+
 **How it detects a reassignment**: on drag stop, the dragged card's landing
 position is compared against every *other primary card in the same lane*.
 If it lands within roughly two-thirds of a card-width of a **different-kind**
-card whose kind is a valid target role (Hook, Message, Visual, Scene, or
-CTA — never Proof or Output), that's treated as "dropped onto that slot."
+content card, that's treated as "dropped onto that slot."
 
 **What happens immediately**: the two cards' positions swap — always, no
 confirmation needed for the visual move itself. This is the "structured

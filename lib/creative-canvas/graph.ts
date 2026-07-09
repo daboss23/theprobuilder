@@ -52,7 +52,10 @@ export const KIND_DEFS: Record<CanvasNodeKind, KindDef> = {
     label: 'Proof',
     accent: 'blue',
     hint: 'What grounds this — the winning assets it draws from',
-    regen: false,
+    // Regeneration is allowed (a card reassigned INTO the proof role needs a
+    // proof written for it) — retrieved-evidence proof nodes stay safe because
+    // they arrive locked by default, and locked nodes never regenerate.
+    regen: true,
     branch: false,
   },
   visual: {
@@ -114,6 +117,82 @@ export function canvasMode(outputs: string[] | undefined, montage: boolean): Can
   if (video) return 'video'
   if (still) return 'static'
   return 'mixed'
+}
+
+/* ------------------------------ Format tracks ------------------------------ */
+
+/**
+ * A format track — one tab inside the campaign. One campaign carries ONE
+ * shared strategy layer; each selected creative format opens as its own tab
+ * with its own canvas flow and node structure. Formats are never mixed into
+ * a single graph.
+ */
+export interface CanvasTrack {
+  id: CanvasMode
+  label: string
+}
+
+const TRACK_LABELS: Partial<Record<CanvasMode, string>> = {
+  static: 'Image',
+  video: 'Video',
+  montage: 'Montage',
+  variations: 'Variations',
+  recommend: 'Recommended',
+}
+
+/**
+ * Derive the campaign's format tabs from the brief's deliverables, in a fixed
+ * presentation order (Image → Video → Montage → Variations → Recommended).
+ * Selecting one format yields one track; the tab bar only appears at 2+.
+ */
+export function canvasTracks(outputs: string[] | undefined, montage: boolean): CanvasTrack[] {
+  const o = (outputs ?? []).map((s) => s.toLowerCase())
+  const tracks: CanvasTrack[] = []
+  const add = (id: CanvasMode) => {
+    if (!tracks.some((t) => t.id === id)) tracks.push({ id, label: TRACK_LABELS[id] ?? MODE_LABELS[id] })
+  }
+  if (o.some((s) => /static|carousel/.test(s))) add('static')
+  if (o.some((s) => /video|ugc/.test(s))) add('video')
+  if (montage || o.some((s) => /montage|scene/.test(s))) add('montage')
+  if (o.some((s) => /variation/.test(s))) add('variations')
+  if (o.some((s) => /recommend/.test(s))) add('recommend')
+  if (tracks.length === 0) {
+    const single = canvasMode(outputs, montage)
+    tracks.push({ id: single, label: TRACK_LABELS[single] ?? MODE_LABELS[single] })
+  }
+  return tracks
+}
+
+/**
+ * The concepts a track builds its lanes from. Each format tab pulls the run's
+ * concepts that match its medium; when the run produced nothing tagged for a
+ * format, the tab falls back to all visual concepts so it is never empty —
+ * the shared strategy still powers it, only the flow shape differs.
+ */
+export function conceptsForTrack(concepts: Concept[], track: CanvasMode): Concept[] {
+  const visual = concepts.filter(isVisualConcept)
+  const pick = (re: RegExp) => visual.filter((c) => re.test(c.type))
+  let matched: Concept[]
+  switch (track) {
+    case 'static':
+      matched = pick(/static|campaign|event/i)
+      break
+    case 'video':
+      matched = pick(/video|founder|testimonial/i)
+      break
+    case 'montage':
+      // Montage lanes need a scene sequence — prefer concepts with briefs.
+      matched = visual.filter((c) => c.productionBrief?.frames?.length)
+      break
+    case 'recommend':
+      matched = visual.length
+        ? [[...visual].sort((a, b) => (b.score ?? 0) - (a.score ?? 0))[0]]
+        : []
+      break
+    default:
+      matched = visual
+  }
+  return matched.length ? matched : concepts
 }
 
 /* ------------------------------- Node data -------------------------------- */

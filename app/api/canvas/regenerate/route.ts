@@ -40,6 +40,8 @@ const KIND_INSTRUCTIONS: Record<string, string> = {
   hook: 'Write ONE scroll-stopping opening line for a Meta ad. Under 125 characters, specific and contrarian, no hype words, no emoji. It must survive the "See more" fold on its own.',
   message:
     'Write the ad’s primary-text body: the argument. 2–4 short paragraphs — mechanism, stakes, and one concrete proof point. Operator-to-operator voice, no fluff.',
+  proof:
+    'Write ONE proof block for the ad: a named, specific piece of evidence — a member result with concrete figures, a documented win, or a verifiable stat. One or two sentences. The result must be attributed to a named individual as THEIR result, never implied as typical.',
   visual:
     'Write a frame-by-frame visual direction for one ad creative (3–5 numbered beats, one line each). Premium, photographic, on-site builder context.',
   scene:
@@ -69,6 +71,11 @@ const DEMO_POOL: Record<string, string[]> = {
     'Close on a margin report — 14% crossed out, 24% circled in red pen. Caption: "Same jobs. Different business."',
   ],
   cta: ['Get Off The Tools', 'Fix The Margin First', 'Run It Without You', 'Book A Strategy Call'],
+  proof: [
+    'Jason — $2.4M residential builder: off the tools in 14 months, margin up 9 points, first full week away from site in six years. His result, documented in the member vault.',
+    'Mark went from 70-hour weeks at 11% margin to 45 hours at 24% inside a year of installing the leadership layer. Results are individual and not typical.',
+    'Over 500 builders have run this exact margin-first playbook — the vault holds their documented before/after numbers, job by job.',
+  ],
 }
 
 function demoAlternate(kind: string, current: string): string {

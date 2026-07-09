@@ -47,6 +47,7 @@ import { recommendImageModel } from '@/lib/image/recommend'
 import type { ImageModelAvailability } from '@/lib/image/types'
 import { useReactorRun, type Concept } from '@/components/campaign-reactor/ReactorRunContext'
 import { CLONE_STORAGE_KEY, type CloneReference, type IsolateConfig } from '@/lib/taxonomy'
+import type { CanvasMode } from '@/lib/creative-canvas/graph'
 
 // The native campaign-angle choices (the No Preference / Custom sentinels are
 // added by the dropdown itself).
@@ -88,6 +89,10 @@ export function Workbench() {
   // (structured creative direction — shape, branch, and sequence the run), or
   // the Studio (finish one ad as a real Meta unit).
   const [view, setView] = useState<'reactor' | 'canvas' | 'studio'>('reactor')
+  // Which format tab the Canvas lands on — set by intent-carrying entrances
+  // (the montage CTA), cleared for the generic toggle so the campaign opens
+  // on its first selected format.
+  const [canvasTab, setCanvasTab] = useState<CanvasMode | undefined>(undefined)
   // Selected intelligence source IDs — the agents recommend a subset from the
   // brief (behind the scenes); OPUS runs on this set. Empty until the brief
   // produces recommendations, then defaulted to the full set at fire time.
@@ -776,7 +781,10 @@ export function Workbench() {
           // sequence to the Creative Canvas for shaping, branching, and assembly.
           <button
             type="button"
-            onClick={() => setView('canvas')}
+            onClick={() => {
+              setCanvasTab('montage')
+              setView('canvas')
+            }}
             className="fire-btn inline-flex items-center gap-2 rounded-full px-5 py-2.5 font-display text-sm font-bold uppercase tracking-wide text-white"
           >
             <Workflow size={15} /> Launch in Creative Canvas
@@ -791,7 +799,10 @@ export function Workbench() {
             <button
               key={v}
               type="button"
-              onClick={() => setView(v)}
+              onClick={() => {
+                if (v === 'canvas') setCanvasTab(undefined)
+                setView(v)
+              }}
               aria-pressed={view === v}
               className={`rounded-full px-3.5 py-1.5 text-xs font-semibold capitalize transition-colors ${
                 view === v ? 'bg-glow/15 text-glow' : 'text-white/45 hover:text-white/70'
@@ -825,6 +836,7 @@ export function Workbench() {
           onSendToStudio={configureInStudio}
           onConfigure={() => setModalOpen(true)}
           onExit={() => setView('reactor')}
+          initialTab={canvasTab}
         />
       ) : view === 'studio' ? (
         <AdStudio
