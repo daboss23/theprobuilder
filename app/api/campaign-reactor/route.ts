@@ -547,8 +547,13 @@ function buildInputBlocks(inputs: ReactorInputs | undefined): string {
     if (inputs.audienceDirective) parts.push(`AUDIENCE TYPE: ${inputs.audienceDirective}`)
   }
 
-  // Block 5 — Market sophistication (every run)
-  parts.push(SOPHISTICATION_BLOCK)
+  // Block 5 — Market sophistication (every run). When the user picked a stage
+  // on the brief its directive wins; otherwise the platform default applies.
+  parts.push(
+    inputs?.sophisticationDirective && inputs.sophisticationStage !== 'No Preference'
+      ? inputs.sophisticationDirective
+      : SOPHISTICATION_BLOCK,
+  )
 
   if (inputs) {
     // Block 6 — Offer
@@ -567,6 +572,38 @@ function buildInputBlocks(inputs: ReactorInputs | undefined): string {
       )
     } else {
       parts.push(`Generate the following output types: ${inputs.outputTypes.join(', ')}.`)
+    }
+
+    // Block 7a — Deliverable modes that change how concepts are constructed.
+    const chosen = inputs.outputTypes.map((o) => o.toLowerCase())
+    if (chosen.some((o) => /montage|scene/.test(o))) {
+      parts.push(
+        'MONTAGE / SCENE FLOW: This campaign ships as a multi-scene montage. For each montage concept, write the production brief as an ordered SCENE SEQUENCE (4–6 frames): each frame is one scene with its own visual direction and a one-line on-screen caption or VO beat. The scenes must build one argument — hook scene → tension/proof scenes → payoff scene → CTA scene. Frame labels become scene titles in the Creative Canvas, so make them specific ("Scene 1 — 5:47am, still on the tools"), never generic ("Frame 1").',
+      )
+    }
+    if (chosen.some((o) => /creative variations/.test(o))) {
+      parts.push(
+        'CREATIVE VARIATIONS PACK: The deliverable is a controlled variation pack, not standalone one-offs. Anchor ONE core concept, then produce the requested variations by changing exactly one strategic lever per variation (hook, proof asset, or visual construction) while holding everything else constant — so performance differences are attributable. Name the changed lever in each concept’s basis.',
+      )
+    }
+    if (chosen.some((o) => /recommend format/.test(o))) {
+      parts.push(
+        'RECOMMEND FORMAT: The user asked the platform to choose the best creative format. Weigh the angle, awareness stage, sophistication stage, and audience temperature against retrieved winners, then produce the single best-fit format (static, video, UGC, carousel, or montage) and state WHY that format wins in the concept basis. Do not hedge across formats.',
+      )
+    }
+
+    // Block 7a2 — Render engines the user pinned per deliverable (informational;
+    // actual rendering honours these picks client-side and in the tools).
+    const models = inputs.models
+    if (models && Object.keys(models).length) {
+      const lines = Object.entries(models)
+        .filter(([, m]) => m && m !== 'auto')
+        .map(([d, m]) => `${d} → ${m}`)
+      if (lines.length) {
+        parts.push(
+          `RENDER MODELS (user-pinned per deliverable — assume these engines render the visuals):\n${lines.join('\n')}`,
+        )
+      }
     }
 
     // Block 7b — Target formats. When the user chose aspect ratios per

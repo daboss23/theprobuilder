@@ -11,9 +11,11 @@ import {
   ChevronRight,
   CircleOff,
   Clapperboard,
+  Film,
   GalleryHorizontalEnd,
   Globe,
   ImageIcon,
+  Layers,
   Loader2,
   Radio,
   ShieldCheck,
@@ -21,20 +23,22 @@ import {
   Smartphone,
   Sparkles,
   Tag,
+  Wand2,
   X,
   Zap,
 } from 'lucide-react'
 import { FaceLibrary } from '@/components/reactor/FaceLibrary'
-import { CREATIVE_SIZES, type AngleEvidence, type CreativeSize } from '@/lib/reactor-inputs'
+import { type AngleEvidence, type CreativeSize } from '@/lib/reactor-inputs'
+import { OPENMONTAGE_ID, sizesForModel, resolveModelPick, type ModelMenu } from '@/lib/model-menu'
 import { IsolationConfigurator } from '@/components/campaign-reactor/IsolationConfigurator'
 import type { IsolateConfig } from '@/lib/taxonomy'
 
 // The launch sequence — six bold steps, each a moment, not a form field. `orb`
 // is the short label under the stepper node; `label` titles the step.
 const STEPS = [
-  { orb: 'Brief', label: 'The Brief', sub: 'Name it, set the direction, and pick what to build.' },
-  { orb: 'Formats', label: 'Formats & Sizes', sub: 'Choose the dimensions for each creative you selected.' },
-  { orb: 'Audience', label: 'Audience & Offer', sub: 'Who you are speaking to — and what you are selling.' },
+  { orb: 'Brief', label: 'The Brief', sub: 'Name it, set the offer and direction, and pick what to build.' },
+  { orb: 'Formats', label: 'Formats & Sizes', sub: 'Choose the render model and dimensions for each creative.' },
+  { orb: 'Audience', label: 'Audience & Market', sub: 'Who you are speaking to — and how sophisticated the market is.' },
   { orb: 'Feed', label: 'Performance Feed', sub: 'Plug live Meta ad performance into this run.' },
   { orb: 'Brand', label: 'On Brand', sub: 'Apply your brand voice, tone, and compliance.' },
   { orb: 'Ignition', label: 'Ignition', sub: 'Review the configuration and fire the reactor.' },
@@ -49,6 +53,8 @@ const LAST_STEP = STEPS.length
  */
 export interface StrategicField {
   options: string[]
+  /** Optional one-line explanations rendered under each option (label → text). */
+  descriptions?: Record<string, string>
   /** The currently selected native option, or '' when custom / no-preference. */
   value: string
   recommended: string | null
@@ -98,11 +104,17 @@ export interface ReactorForm {
   toggleDimension: (deliverable: string, ratio: string) => void
   variations: number
   setVariations: (n: number) => void
+  // Render model per deliverable — the system recommends, the user can override.
+  // Menus are keyed by deliverable; a null menu means the reactor decides fully.
+  modelMenus: Record<string, ModelMenu | null>
+  models: Record<string, string>
+  setModel: (deliverable: string, modelId: string) => void
   // Reference images/videos for consistent-character UGC (shown when UGC is picked).
   onFaceChange: (images: string[], videos: string[]) => void
   refCount: number
-  // Step 3 — awareness, audience, offer
+  // Step 3 — awareness, sophistication, audience
   awarenessField: StrategicField
+  sophisticationField: StrategicField
   audienceField: StrategicField
   offerField: StrategicField
   offerName: string
@@ -227,7 +239,7 @@ function StrategicSelect({ field }: { field: StrategicField }) {
       </button>
 
       {open && (
-        <div className="absolute z-[70] mt-2 max-h-64 w-full overflow-y-auto rounded-xl border border-white/12 bg-[#0B0B12] p-1.5 shadow-2xl">
+        <div className="absolute z-[70] mt-2 max-h-80 w-full overflow-y-auto rounded-xl border border-white/12 bg-[#0B0B12] p-1.5 shadow-2xl">
           {ordered.map((opt) => {
             const isRec = opt === recommended
             const isSel = !custom.active && !noPreference && opt === value
@@ -242,15 +254,22 @@ function StrategicSelect({ field }: { field: StrategicField }) {
                     : 'text-white/80 hover:bg-white/[0.06]'
                 }`}
               >
-                <span className="flex min-w-0 items-center gap-2">
+                <span className="flex min-w-0 flex-1 items-start gap-2">
                   {isRec ? (
-                    <Check size={14} className="shrink-0 text-[#FF9D4D]" />
+                    <Check size={14} className="mt-0.5 shrink-0 text-[#FF9D4D]" />
                   ) : isSel ? (
-                    <Check size={14} className="shrink-0 text-white/60" />
+                    <Check size={14} className="mt-0.5 shrink-0 text-white/60" />
                   ) : (
                     <span className="w-[14px] shrink-0" />
                   )}
-                  <span className={`truncate ${isRec ? 'font-semibold' : ''}`}>{opt}</span>
+                  <span className="min-w-0">
+                    <span className={`block truncate ${isRec ? 'font-semibold' : ''}`}>{opt}</span>
+                    {field.descriptions?.[opt] && (
+                      <span className="mt-0.5 block text-[11px] leading-snug text-white/40">
+                        {field.descriptions[opt]}
+                      </span>
+                    )}
+                  </span>
                 </span>
                 {isRec && (
                   <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-[#FF7C54]/40 bg-[#FF5E3A]/10 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-[#FF9D4D]">
@@ -297,6 +316,11 @@ function StrategicSelect({ field }: { field: StrategicField }) {
         </div>
       )}
 
+      {/* The selected stage's meaning, kept visible after the menu closes. */}
+      {!open && !custom.active && !noPreference && value && field.descriptions?.[value] && (
+        <p className="mt-2 text-xs leading-relaxed text-white/40">{field.descriptions[value]}</p>
+      )}
+
       {custom.active && (
         <div className="mt-2.5">
           <input
@@ -322,9 +346,134 @@ function deliverableMeta(label: string) {
     return { Icon: Smartphone, blurb: 'Creator-style, phone-shot talking-head ads that feel native.' }
   if (l.includes('carousel'))
     return { Icon: GalleryHorizontalEnd, blurb: 'Multi-card swipe ads — proof, steps, or a story arc.' }
+  if (l.includes('montage') || l.includes('scene'))
+    return { Icon: Film, blurb: 'A multi-scene sequence — hook, proof, payoff — shaped in the Creative Canvas.' }
+  if (l.includes('variation'))
+    return { Icon: Layers, blurb: 'One core concept spun into controlled variants — one lever changed at a time.' }
+  if (l.includes('recommend'))
+    return { Icon: Wand2, blurb: 'Not sure? The reactor weighs your brief against proven winners and picks the format.' }
   if (l.includes('video'))
     return { Icon: Clapperboard, blurb: 'Founder VSLs, testimonials & cinematic on-site B-roll.' }
   return { Icon: ImageIcon, blurb: 'Proof statics, founder photos & concept stills.' }
+}
+
+/**
+ * Render-model dropdown for one deliverable. The system's pick leads the menu
+ * with the Recommended badge and is pre-selected; every other registry model is
+ * one tap away. Each option carries its one-line strength note, so choosing a
+ * model is a decision, not a guess.
+ */
+function ModelSelect({
+  menu,
+  pick,
+  onPick,
+}: {
+  menu: ModelMenu
+  pick: string | undefined
+  onPick: (id: string) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    const onDown = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    window.addEventListener('mousedown', onDown)
+    return () => window.removeEventListener('mousedown', onDown)
+  }, [open])
+
+  const resolved = resolveModelPick(menu, pick)
+  const current = menu.options.find((o) => o.id === resolved) ?? menu.options[0]
+  const isRecommendedSelected = current.id === menu.recommendedId
+  const ordered = [
+    ...menu.options.filter((o) => o.id === menu.recommendedId),
+    ...menu.options.filter((o) => o.id !== menu.recommendedId),
+  ]
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className={`flex w-full items-center justify-between gap-2 rounded-xl border px-3.5 py-2.5 text-left text-[13px] outline-none transition-all ${
+          isRecommendedSelected
+            ? 'border-[#FF7C54]/45 bg-[#FF5E3A]/[0.06] text-white'
+            : 'border-white/12 bg-black/40 text-white hover:border-[#FF9D4D]/40'
+        }`}
+      >
+        <span className="flex min-w-0 items-center gap-2">
+          {isRecommendedSelected && <Sparkles size={13} className="shrink-0 text-[#FF9D4D]" />}
+          <span className="truncate">
+            {current.label}
+            {isRecommendedSelected && (
+              <span className="ml-2 text-[12px] text-[#FF9D4D]">• Recommended</span>
+            )}
+          </span>
+        </span>
+        <ChevronDown
+          size={15}
+          className={`shrink-0 text-white/40 transition-transform ${open ? 'rotate-180' : ''}`}
+        />
+      </button>
+
+      {open && (
+        <div className="absolute z-[70] mt-2 max-h-72 w-full overflow-y-auto rounded-xl border border-white/12 bg-[#0B0B12] p-1.5 shadow-2xl">
+          {ordered.map((o) => {
+            const isRec = o.id === menu.recommendedId
+            const isSel = o.id === current.id
+            return (
+              <button
+                key={o.id}
+                type="button"
+                onClick={() => {
+                  onPick(o.id)
+                  setOpen(false)
+                }}
+                className={`flex w-full items-start justify-between gap-2 rounded-lg px-3 py-2.5 text-left text-[13px] transition-colors ${
+                  isRec
+                    ? 'bg-[#FF5E3A]/[0.09] text-white hover:bg-[#FF5E3A]/15'
+                    : 'text-white/80 hover:bg-white/[0.06]'
+                }`}
+              >
+                <span className="flex min-w-0 flex-1 items-start gap-2">
+                  {isSel ? (
+                    <Check size={13} className={`mt-0.5 shrink-0 ${isRec ? 'text-[#FF9D4D]' : 'text-white/60'}`} />
+                  ) : (
+                    <span className="w-[13px] shrink-0" />
+                  )}
+                  <span className="min-w-0">
+                    <span className={`block truncate ${isRec ? 'font-semibold' : ''}`}>
+                      {o.label}
+                      {!o.configured && o.id !== OPENMONTAGE_ID && (
+                        <span className="ml-1.5 text-[10px] uppercase tracking-wide text-white/30">
+                          key needed
+                        </span>
+                      )}
+                    </span>
+                    <span className="mt-0.5 block text-[11px] leading-snug text-white/40">{o.note}</span>
+                  </span>
+                </span>
+                {isRec && (
+                  <span className="mt-0.5 inline-flex shrink-0 items-center gap-1 rounded-full border border-[#FF7C54]/40 bg-[#FF5E3A]/10 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-[#FF9D4D]">
+                    <Sparkles size={9} /> Recommended
+                  </span>
+                )}
+              </button>
+            )
+          })}
+        </div>
+      )}
+
+      {isRecommendedSelected && (
+        <p className="mt-1.5 flex items-start gap-1.5 text-[11px] leading-snug text-white/35">
+          <Sparkles size={10} className="mt-0.5 shrink-0 text-[#FF9D4D]/70" />
+          {menu.reason}
+        </p>
+      )}
+    </div>
+  )
 }
 
 // A tiny aspect-ratio preview box for the Formats step.
@@ -382,6 +531,20 @@ function formatsSummary(form: ReactorForm): string {
   return form.variations > 1 ? `${base} · ×${form.variations} variations` : base
 }
 
+// "Static — FLUX.1 · Montage — OpenMontage" line for the review step.
+function modelsSummary(form: ReactorForm): string {
+  const parts = form.outputs
+    .map((o) => {
+      const menu = form.modelMenus[o] ?? null
+      if (!menu) return ''
+      const pick = resolveModelPick(menu, form.models[o])
+      const model = menu.options.find((m) => m.id === pick)
+      return model ? `${o.replace(/ Creatives?$/, '').replace(' / Scene Flow', '')} — ${model.label}` : ''
+    })
+    .filter(Boolean)
+  return parts.length ? parts.join(' · ') : 'Reactor decides'
+}
+
 export function ReactorModal({ open, onClose, onFire, form }: ReactorModalProps) {
   const [step, setStep] = useState(1)
   // Two ways in: Quick Launch (one input → fire, everything auto-decided) and
@@ -400,6 +563,7 @@ export function ReactorModal({ open, onClose, onFire, form }: ReactorModalProps)
       form.brief.trim() !== '' ||
       form.offerName.trim() !== '' ||
       !form.awarenessField.noPreference ||
+      !form.sophisticationField.noPreference ||
       !form.audienceField.noPreference ||
       !form.offerField.noPreference ||
       form.onBrand === false,
@@ -541,6 +705,22 @@ export function ReactorModal({ open, onClose, onFire, form }: ReactorModalProps)
                 />
               </div>
 
+              <div className="grid gap-5 sm:grid-cols-2 sm:gap-4">
+                <div>
+                  <SectionLabel thinking={form.suggesting}>Campaign Offer</SectionLabel>
+                  <StrategicSelect field={form.offerField} />
+                </div>
+                <div>
+                  <SectionLabel>Offer Name</SectionLabel>
+                  <input
+                    value={form.offerName}
+                    onChange={(e) => form.setOfferName(e.target.value)}
+                    placeholder={`e.g. "The Owner Freedom Roadmap"`}
+                    className="launch-input px-4 py-3.5 text-[15px]"
+                  />
+                </div>
+              </div>
+
               <div>
                 <SectionLabel thinking={form.suggesting}>Campaign Brief</SectionLabel>
                 <p className="-mt-1 mb-2.5 text-sm text-white/40">
@@ -614,42 +794,70 @@ export function ReactorModal({ open, onClose, onFire, form }: ReactorModalProps)
               ) : (
                 <>
                   <p className="text-sm text-white/40">
-                    Each format renders at your selected ratio. Choose one or several per creative.
+                    Pick the render model for each creative — the system pre-selects the best fit —
+                    then choose its sizes. Dimensions adapt to whichever model you choose.
                   </p>
                   {form.outputs.map((o) => {
-                    const sizes: CreativeSize[] = CREATIVE_SIZES[o] ?? []
+                    const menu = form.modelMenus[o] ?? null
+                    const pick = resolveModelPick(menu, form.models[o])
+                    const sizes: CreativeSize[] = sizesForModel(menu, pick ?? undefined)
                     const chosen = form.dimensions[o] ?? []
                     const { Icon } = deliverableMeta(o)
+                    const isMontageEngine = pick === OPENMONTAGE_ID
                     return (
-                      <div key={o}>
+                      <div key={o} className="space-y-2.5">
                         <SectionLabel>
                           <span className="inline-flex items-center gap-1.5">
                             <Icon size={12} /> {o}
                           </span>
                         </SectionLabel>
-                        <div className="grid grid-cols-3 gap-2.5">
-                          {sizes.map((s) => {
-                            const on = chosen.includes(s.ratio)
-                            return (
-                              <button
-                                key={s.ratio}
-                                type="button"
-                                onClick={() => form.toggleDimension(o, s.ratio)}
-                                className={`pick-card flex items-center gap-2.5 p-3 text-left ${on ? 'is-on' : ''}`}
-                              >
-                                <RatioPreview ratio={s.ratio} />
-                                <span className="min-w-0">
-                                  <span className="block truncate text-sm font-semibold text-white">
-                                    {s.label}
-                                  </span>
-                                  <span className="block text-[11px] text-white/45">
-                                    {s.ratio} · {s.use}
-                                  </span>
-                                </span>
-                              </button>
-                            )
-                          })}
-                        </div>
+                        {menu === null ? (
+                          <div className="rounded-xl border border-[#FF7C54]/20 bg-[#FF5E3A]/[0.04] px-4 py-3.5">
+                            <p className="flex items-start gap-2 text-sm text-white/60">
+                              <Wand2 size={14} className="mt-0.5 shrink-0 text-[#FF9D4D]" />
+                              The reactor picks the winning format for this brief — model and sizes
+                              are decided by the system, grounded in what has already worked.
+                            </p>
+                          </div>
+                        ) : (
+                          <>
+                            <ModelSelect
+                              menu={menu}
+                              pick={form.models[o]}
+                              onPick={(id) => form.setModel(o, id)}
+                            />
+                            {isMontageEngine && (
+                              <p className="flex items-start gap-1.5 rounded-lg border border-white/10 bg-white/[0.02] px-3 py-2 text-[11px] leading-snug text-white/50">
+                                <Film size={11} className="mt-0.5 shrink-0 text-[#FF9D4D]" />
+                                Scene engine — the reactor renders every scene as stills and video,
+                                then opens the full sequence in the Creative Canvas for shaping.
+                              </p>
+                            )}
+                            <div className="grid grid-cols-3 gap-2.5">
+                              {sizes.map((s) => {
+                                const on = chosen.includes(s.ratio)
+                                return (
+                                  <button
+                                    key={s.ratio}
+                                    type="button"
+                                    onClick={() => form.toggleDimension(o, s.ratio)}
+                                    className={`pick-card flex items-center gap-2.5 p-3 text-left ${on ? 'is-on' : ''}`}
+                                  >
+                                    <RatioPreview ratio={s.ratio} />
+                                    <span className="min-w-0">
+                                      <span className="block truncate text-sm font-semibold text-white">
+                                        {s.label}
+                                      </span>
+                                      <span className="block text-[11px] text-white/45">
+                                        {s.ratio} · {s.use}
+                                      </span>
+                                    </span>
+                                  </button>
+                                )
+                              })}
+                            </div>
+                          </>
+                        )}
                       </div>
                     )
                   })}
@@ -705,23 +913,17 @@ export function ReactorModal({ open, onClose, onFire, form }: ReactorModalProps)
               </div>
 
               <div>
+                <SectionLabel thinking={form.suggesting}>Market Sophistication</SectionLabel>
+                <p className="-mt-1 mb-2.5 text-sm text-white/40">
+                  How many times this market has already been pitched — it decides what kind of
+                  claim still lands. The system reads your brief and picks the stage for you.
+                </p>
+                <StrategicSelect field={form.sophisticationField} />
+              </div>
+
+              <div>
                 <SectionLabel thinking={form.suggesting}>Audience Type</SectionLabel>
                 <StrategicSelect field={form.audienceField} />
-              </div>
-
-              <div>
-                <SectionLabel thinking={form.suggesting}>Offer Type</SectionLabel>
-                <StrategicSelect field={form.offerField} />
-              </div>
-
-              <div>
-                <SectionLabel>Offer Name</SectionLabel>
-                <input
-                  value={form.offerName}
-                  onChange={(e) => form.setOfferName(e.target.value)}
-                  placeholder={`e.g. "The Owner Freedom Roadmap"`}
-                  className="launch-input px-4 py-3.5 text-[15px]"
-                />
               </div>
             </div>
           )}
@@ -808,12 +1010,14 @@ export function ReactorModal({ open, onClose, onFire, form }: ReactorModalProps)
                 <SummaryRow label="Campaign" value={form.campaignName.trim() || 'Untitled campaign'} />
                 <SummaryRow label="Audience" value={fieldSummary(form.audienceField)} />
                 <SummaryRow label="Awareness" value={fieldSummary(form.awarenessField)} />
+                <SummaryRow label="Sophistication" value={fieldSummary(form.sophisticationField)} />
                 <SummaryRow label="Offer" value={fieldSummary(form.offerField)} />
                 <SummaryRow label="CTA name" value={form.offerName.trim() || '—'} />
                 <SummaryRow
                   label="Deliverables"
                   value={form.outputs.length ? form.outputs.join(' · ') : 'Reactor decides'}
                 />
+                <SummaryRow label="Models" value={modelsSummary(form)} />
                 <SummaryRow label="Formats" value={formatsSummary(form)} />
                 {form.refCount > 0 && (
                   <SummaryRow

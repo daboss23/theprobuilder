@@ -307,7 +307,7 @@ function FacebookAdPreview({
 /*  The Studio — edit the ad on the left, watch the real Meta unit update      */
 /* -------------------------------------------------------------------------- */
 
-export function CreativeCanvas({
+export function AdStudio({
   offerName,
   seed,
   onConfigure,

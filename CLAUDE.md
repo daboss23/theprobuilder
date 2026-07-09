@@ -297,6 +297,12 @@ To run the *real* agent end to end: set `ANTHROPIC_API_KEY` (agent),
 - [x] Performance Intelligence (ORACLE): expanded outcome verdicts, strategic attributes, pattern confidence, strategic memory page
 - [x] Agent Network page (`/network`) — living visibility dashboard grounded in live vault + outcome data
 
+**Creative Canvas — the structured creative operating layer**
+- [x] Brief upgrades: Market Sophistication dropdown (Schwartz stages with per-option descriptions, system-recommended) under Awareness; Campaign Offer + Offer Name moved under Campaign Name on step 1; new deliverables (Montage / Scene Flow, Creative Variations, Recommend Format)
+- [x] Per-deliverable render-model menus on the Formats step (`lib/model-menu.ts`) — system recommends, user overrides; dimension options adapt to the chosen model's registry ratios; OpenMontage scene engine leads the montage menu
+- [x] Creative Canvas view (`components/creative-canvas/`, `lib/creative-canvas/graph.ts`): pre-structured node lanes (hook → message → proof → scenes/visual → CTA → output), branch/approve/lock, precise per-node regeneration (`/api/canvas/regenerate`, strategy-coherent, demo fallback), scene render + animate, Send-to-Studio composition; "Launch in Creative Canvas" CTA on montage runs; full spec in `docs/CREATIVE_CANVAS.md`
+- [x] Reactor view toggle is Reactor · Canvas · Studio (`components/campaign-reactor/canvas/AdStudio.tsx` is the renamed Studio; the old free-node Flow view is retired from the toggle)
+
 **Meta-native output + closed loop**
 - [x] Launch-ready Meta ad units on every concept (`lib/meta-ads.ts`): primary text with 125-char fold discipline, headline/description limits, CTA button types, compliance validator wired into the submit gate + concept cards ("Copy for Ads Manager")
 - [x] Meta craft block injected into every orchestrator run (fold/hook rules, placement ratios, safe zones, CTA-to-temperature mapping)
