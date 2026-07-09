@@ -41,22 +41,25 @@ export interface ModelMenu {
 }
 
 /**
- * OpenMontage — the scene engine. Not a single render model: it plans the
- * scene sequence, renders a still per scene through the configured image
- * models, animates each scene through the configured video models, and hands
- * the whole sequence to the Creative Canvas for shaping and assembly.
+ * OpenMontage — the scene engine. It is NOT a render model and is never a
+ * selectable item in a model list: it plans the scene sequence and then hands
+ * every scene to two REAL models underneath — a still model (renders each
+ * scene) and a motion model (animates each scene into a clip). This constant
+ * only backs the informational badge shown above the two real pickers.
  */
 export const OPENMONTAGE_ID = 'openmontage'
 
-const OPENMONTAGE_OPTION: ModelMenuOption = {
+export const OPENMONTAGE_BADGE = {
   id: OPENMONTAGE_ID,
   label: 'OpenMontage — Scene Engine',
-  kind: 'montage',
-  provider: 'reactor',
-  aspectRatios: ['9:16', '1:1', '16:9'],
-  configured: true, // orchestrates the configured providers; degrades gracefully
-  note: 'Plans the scene sequence, renders every scene, then opens the full flow in the Creative Canvas.',
+  note: 'Plans the scene sequence and sequencing logic. It renders nothing itself — the two models below do the actual rendering, scene by scene.',
 }
+
+/** Compound model-key suffixes for the montage deliverable's two real picks. */
+export const MONTAGE_STILL_SUFFIX = '::still'
+export const MONTAGE_MOTION_SUFFIX = '::motion'
+export const montageStillKey = (deliverable: string) => `${deliverable}${MONTAGE_STILL_SUFFIX}`
+export const montageMotionKey = (deliverable: string) => `${deliverable}${MONTAGE_MOTION_SUFFIX}`
 
 /** Everything the user sees for the montage sizing options. */
 export const MONTAGE_RATIO_LABELS: Record<string, CreativeSize> = {
@@ -80,7 +83,7 @@ export function sizeFor(ratio: string): CreativeSize {
 }
 
 const isVideoDeliverable = (d: string) => /video|ugc|montage|scene/i.test(d)
-const isMontageDeliverable = (d: string) => /montage|scene/i.test(d)
+export const isMontageDeliverable = (d: string) => /montage|scene/i.test(d)
 
 function imageOption(m: (typeof IMAGE_MODELS)[number], configured: boolean): ModelMenuOption {
   return {
@@ -119,22 +122,15 @@ export function modelMenuFor(
   // "Recommend Format" carries no model choice — the reactor decides the
   // format, the model, and the sizes downstream.
   if (/recommend format/i.test(deliverable)) return null
+  // Montage has TWO real model picks (still + motion), not one — handled by
+  // montageMenus() and rendered as two dedicated pickers, never this single menu.
+  if (isMontageDeliverable(deliverable)) return null
 
   const imgConfigured = (id: string) => imageAvail.find((m) => m.id === id)?.configured ?? false
   const vidConfigured = (id: string) => videoAvail.find((m) => m.id === id)?.configured ?? false
 
   const imageOptions = IMAGE_MODELS.map((m) => imageOption(m, imgConfigured(m.id)))
   const videoOptions = VIDEO_MODELS.map((m) => videoOption(m, vidConfigured(m.id)))
-
-  if (isMontageDeliverable(deliverable)) {
-    return {
-      deliverable,
-      options: [OPENMONTAGE_OPTION, ...videoOptions],
-      recommendedId: OPENMONTAGE_ID,
-      reason:
-        'Montage is a sequence, not a clip — the scene engine plans, renders, and assembles every scene, then opens in the Creative Canvas.',
-    }
-  }
 
   if (isVideoDeliverable(deliverable)) {
     const rec = recommendVideoModel(
@@ -159,6 +155,47 @@ export function modelMenuFor(
     options: imageOptions,
     recommendedId: rec?.modelId ?? imageOptions[0].id,
     reason: rec?.reason ?? 'Photoreal stills with strong prompt adherence.',
+  }
+}
+
+/**
+ * The montage deliverable's two real model menus: a Still Model (renders each
+ * scene) and a Motion Model (animates each scene). OpenMontage sequences them
+ * but is never itself a pick — this is what actually answers "what model does
+ * montage use."
+ */
+export function montageMenus(
+  deliverable: string,
+  imageAvail: ImageModelAvailability[],
+  videoAvail: ModelAvailability[],
+): { still: ModelMenu; motion: ModelMenu } {
+  const imgConfigured = (id: string) => imageAvail.find((m) => m.id === id)?.configured ?? false
+  const vidConfigured = (id: string) => videoAvail.find((m) => m.id === id)?.configured ?? false
+  const imageOptions = IMAGE_MODELS.map((m) => imageOption(m, imgConfigured(m.id)))
+  const videoOptions = VIDEO_MODELS.map((m) => videoOption(m, vidConfigured(m.id)))
+
+  const stillRec = recommendImageModel(
+    ['Static Creative'],
+    imageAvail.length ? imageAvail : IMAGE_MODELS.map((m) => ({ ...m, configured: false })),
+  )
+  const motionRec = recommendVideoModel(
+    ['Video Creative'],
+    videoAvail.length ? videoAvail : VIDEO_MODELS.map((m) => ({ ...m, configured: false })),
+  )
+
+  return {
+    still: {
+      deliverable: montageStillKey(deliverable),
+      options: imageOptions,
+      recommendedId: stillRec?.modelId ?? imageOptions[0].id,
+      reason: stillRec?.reason ?? 'Photoreal stills with strong prompt adherence, rendered per scene.',
+    },
+    motion: {
+      deliverable: montageMotionKey(deliverable),
+      options: videoOptions,
+      recommendedId: motionRec?.modelId ?? videoOptions[0].id,
+      reason: motionRec?.reason ?? 'Cinematic realism for animating each scene into a clip.',
+    },
   }
 }
 

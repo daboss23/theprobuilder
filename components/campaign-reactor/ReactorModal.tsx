@@ -29,7 +29,15 @@ import {
 } from 'lucide-react'
 import { FaceLibrary } from '@/components/reactor/FaceLibrary'
 import { type AngleEvidence, type CreativeSize } from '@/lib/reactor-inputs'
-import { OPENMONTAGE_ID, sizesForModel, resolveModelPick, type ModelMenu } from '@/lib/model-menu'
+import {
+  OPENMONTAGE_BADGE,
+  isMontageDeliverable,
+  montageMotionKey,
+  montageStillKey,
+  sizesForModel,
+  resolveModelPick,
+  type ModelMenu,
+} from '@/lib/model-menu'
 import { IsolationConfigurator } from '@/components/campaign-reactor/IsolationConfigurator'
 import type { IsolateConfig } from '@/lib/taxonomy'
 
@@ -107,6 +115,9 @@ export interface ReactorForm {
   // Render model per deliverable — the system recommends, the user can override.
   // Menus are keyed by deliverable; a null menu means the reactor decides fully.
   modelMenus: Record<string, ModelMenu | null>
+  // Montage's two real model picks (still + motion) — set only when a montage
+  // deliverable is selected. OpenMontage itself is never a pick.
+  montageMenus: { still: ModelMenu; motion: ModelMenu } | null
   models: Record<string, string>
   setModel: (deliverable: string, modelId: string) => void
   // Reference images/videos for consistent-character UGC (shown when UGC is picked).
@@ -446,7 +457,7 @@ function ModelSelect({
                   <span className="min-w-0">
                     <span className={`block truncate ${isRec ? 'font-semibold' : ''}`}>
                       {o.label}
-                      {!o.configured && o.id !== OPENMONTAGE_ID && (
+                      {!o.configured && (
                         <span className="ml-1.5 text-[10px] uppercase tracking-wide text-white/30">
                           key needed
                         </span>
@@ -531,15 +542,23 @@ function formatsSummary(form: ReactorForm): string {
   return form.variations > 1 ? `${base} · ×${form.variations} variations` : base
 }
 
-// "Static — FLUX.1 · Montage — OpenMontage" line for the review step.
+// "Static — FLUX.1 · Montage — FLUX.1 stills / Seedance 2.0 motion" line.
 function modelsSummary(form: ReactorForm): string {
   const parts = form.outputs
     .map((o) => {
+      const short = o.replace(/ Creatives?$/, '').replace(' / Scene Flow', '')
+      if (isMontageDeliverable(o) && form.montageMenus) {
+        const { still, motion } = form.montageMenus
+        const stillModel = still.options.find((m) => m.id === resolveModelPick(still, form.models[montageStillKey(o)]))
+        const motionModel = motion.options.find((m) => m.id === resolveModelPick(motion, form.models[montageMotionKey(o)]))
+        if (!stillModel || !motionModel) return ''
+        return `${short} — ${stillModel.label} stills / ${motionModel.label} motion`
+      }
       const menu = form.modelMenus[o] ?? null
       if (!menu) return ''
       const pick = resolveModelPick(menu, form.models[o])
       const model = menu.options.find((m) => m.id === pick)
-      return model ? `${o.replace(/ Creatives?$/, '').replace(' / Scene Flow', '')} — ${model.label}` : ''
+      return model ? `${short} — ${model.label}` : ''
     })
     .filter(Boolean)
   return parts.length ? parts.join(' · ') : 'Reactor decides'
@@ -798,12 +817,79 @@ export function ReactorModal({ open, onClose, onFire, form }: ReactorModalProps)
                     then choose its sizes. Dimensions adapt to whichever model you choose.
                   </p>
                   {form.outputs.map((o) => {
+                    const { Icon } = deliverableMeta(o)
+
+                    // Montage has two real picks (still + motion) — OpenMontage
+                    // sequences them, it never renders anything itself.
+                    if (isMontageDeliverable(o) && form.montageMenus) {
+                      const { still, motion } = form.montageMenus
+                      const stillPick = resolveModelPick(still, form.models[montageStillKey(o)])
+                      const motionPick = resolveModelPick(motion, form.models[montageMotionKey(o)])
+                      const sizes: CreativeSize[] = sizesForModel(motion, motionPick ?? undefined)
+                      const chosen = form.dimensions[o] ?? []
+                      return (
+                        <div key={o} className="space-y-2.5">
+                          <SectionLabel>
+                            <span className="inline-flex items-center gap-1.5">
+                              <Icon size={12} /> {o}
+                            </span>
+                          </SectionLabel>
+                          <div className="flex items-start gap-2 rounded-lg border border-white/10 bg-white/[0.02] px-3 py-2.5">
+                            <Film size={13} className="mt-0.5 shrink-0 text-[#FF9D4D]" />
+                            <span className="min-w-0">
+                              <span className="text-[12px] font-semibold text-white">{OPENMONTAGE_BADGE.label}</span>
+                              <span className="mt-0.5 block text-[11px] leading-snug text-white/45">
+                                {OPENMONTAGE_BADGE.note}
+                              </span>
+                            </span>
+                          </div>
+                          <p className="text-[11px] font-semibold uppercase tracking-wide text-white/40">
+                            Still Model — renders every scene
+                          </p>
+                          <ModelSelect
+                            menu={still}
+                            pick={form.models[montageStillKey(o)]}
+                            onPick={(id) => form.setModel(montageStillKey(o), id)}
+                          />
+                          <p className="pt-1 text-[11px] font-semibold uppercase tracking-wide text-white/40">
+                            Motion Model — animates every scene
+                          </p>
+                          <ModelSelect
+                            menu={motion}
+                            pick={form.models[montageMotionKey(o)]}
+                            onPick={(id) => form.setModel(montageMotionKey(o), id)}
+                          />
+                          <div className="grid grid-cols-3 gap-2.5 pt-1">
+                            {sizes.map((s) => {
+                              const on = chosen.includes(s.ratio)
+                              return (
+                                <button
+                                  key={s.ratio}
+                                  type="button"
+                                  onClick={() => form.toggleDimension(o, s.ratio)}
+                                  className={`pick-card flex items-center gap-2.5 p-3 text-left ${on ? 'is-on' : ''}`}
+                                >
+                                  <RatioPreview ratio={s.ratio} />
+                                  <span className="min-w-0">
+                                    <span className="block truncate text-sm font-semibold text-white">
+                                      {s.label}
+                                    </span>
+                                    <span className="block text-[11px] text-white/45">
+                                      {s.ratio} · {s.use}
+                                    </span>
+                                  </span>
+                                </button>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      )
+                    }
+
                     const menu = form.modelMenus[o] ?? null
                     const pick = resolveModelPick(menu, form.models[o])
                     const sizes: CreativeSize[] = sizesForModel(menu, pick ?? undefined)
                     const chosen = form.dimensions[o] ?? []
-                    const { Icon } = deliverableMeta(o)
-                    const isMontageEngine = pick === OPENMONTAGE_ID
                     return (
                       <div key={o} className="space-y-2.5">
                         <SectionLabel>
@@ -826,13 +912,6 @@ export function ReactorModal({ open, onClose, onFire, form }: ReactorModalProps)
                               pick={form.models[o]}
                               onPick={(id) => form.setModel(o, id)}
                             />
-                            {isMontageEngine && (
-                              <p className="flex items-start gap-1.5 rounded-lg border border-white/10 bg-white/[0.02] px-3 py-2 text-[11px] leading-snug text-white/50">
-                                <Film size={11} className="mt-0.5 shrink-0 text-[#FF9D4D]" />
-                                Scene engine — the reactor renders every scene as stills and video,
-                                then opens the full sequence in the Creative Canvas for shaping.
-                              </p>
-                            )}
                             <div className="grid grid-cols-3 gap-2.5">
                               {sizes.map((s) => {
                                 const on = chosen.includes(s.ratio)

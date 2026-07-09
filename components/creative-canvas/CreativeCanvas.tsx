@@ -24,6 +24,7 @@ import {
   useRef,
   useState,
 } from 'react'
+import { createPortal } from 'react-dom'
 import {
   Background,
   BackgroundVariant,
@@ -56,6 +57,7 @@ import {
   Sparkles,
   Trash2,
   Workflow,
+  X,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { accentClass } from '@/components/reactor/ui'
@@ -95,6 +97,8 @@ interface CreativeCanvasProps {
   videoModel?: string
   onSendToStudio: (c: Concept) => void
   onConfigure: () => void
+  /** Leaves full-screen immersive mode, back to the Reactor. */
+  onExit: () => void
 }
 
 /** Render state for a visual/scene node's media. */
@@ -103,6 +107,8 @@ interface NodeMedia {
   imageUrl?: string
   videoUrl?: string
   error?: string
+  /** Where this media came from — the Reactor's auto-render, or rendered here. */
+  source?: 'reactor' | 'canvas'
 }
 
 const IDLE_MEDIA: NodeMedia = { status: 'idle' }
@@ -122,6 +128,28 @@ const useCanvas = () => {
 
 type CanvasRFNode = Node<CanvasNodeData>
 
+/** The creative slots a card can be dragged INTO a new role for. Proof and
+ * Output are structurally fixed — evidence and the assembled unit are never
+ * "become-able" by dropping a card on them. */
+const REASSIGNABLE_KINDS: CanvasNodeKind[] = ['hook', 'message', 'visual', 'scene', 'cta']
+
+/** Swap a card's kind label into its title, keeping any " — Alt N" suffix. */
+function relabelForKind(kind: CanvasNodeKind, oldTitle: string): string {
+  const suffix = oldTitle.match(/—\s*Alt\s*\d+$/)
+  return suffix ? `${KIND_DEFS[kind].label} ${suffix[0]}` : KIND_DEFS[kind].label
+}
+
+/** A card was dropped onto a different-kind slot — awaiting the user's call
+ * on whether the ROLE follows the position (the position swap already applied). */
+interface PendingReassign {
+  draggedId: string
+  targetId: string
+  draggedOriginalPos: { x: number; y: number }
+  targetOriginalPos: { x: number; y: number }
+  draggedKind: CanvasNodeKind
+  targetKind: CanvasNodeKind
+}
+
 /* -------------------------------------------------------------------------- */
 /*  The node card                                                             */
 /* -------------------------------------------------------------------------- */
@@ -131,6 +159,9 @@ function CanvasNodeView({ id, data, selected }: NodeProps<CanvasRFNode>) {
   const def = KIND_DEFS[data.kind]
   const media = mediaFor(id)
   const visual = data.kind === 'scene' || data.kind === 'visual'
+  // The output node never has its own "render" button — it only ever shows
+  // whatever the Reactor already produced for this lane (montage preview).
+  const outputPreview = data.kind === 'output' && (media.imageUrl || media.videoUrl || media.status === 'rendering')
   const busy = regenBusy(id)
 
   return (
@@ -196,6 +227,28 @@ function CanvasNodeView({ id, data, selected }: NodeProps<CanvasRFNode>) {
             {media.status === 'error' && (
               <p className="mt-1 text-[9px] text-warning">{media.error ?? 'Render failed'}</p>
             )}
+            {media.source && (
+              <p className="mt-1 text-[9px] text-white/25">
+                {media.source === 'reactor' ? '⚡ From your run' : '✎ Rendered here'}
+              </p>
+            )}
+          </div>
+        )}
+
+        {outputPreview && (
+          <div className="mt-2">
+            {media.status === 'done' && media.videoUrl ? (
+              // eslint-disable-next-line jsx-a11y/media-has-caption
+              <video src={media.videoUrl} muted loop playsInline autoPlay className="w-full rounded-lg border border-white/10" />
+            ) : media.imageUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={media.imageUrl} alt={data.title} className="w-full rounded-lg border border-white/10 object-cover" />
+            ) : (
+              <span className="grid h-16 w-full place-items-center rounded-lg border border-white/10 bg-white/[0.02]">
+                <Loader2 size={14} className="animate-spin text-[#FF9D4D]" />
+              </span>
+            )}
+            <p className="mt-1 text-[9px] text-white/25">⚡ From your run</p>
           </div>
         )}
       </div>
@@ -226,22 +279,49 @@ function StrategyChip({ label, value }: { label: string; value?: string }) {
 /*  The Creative Canvas                                                       */
 /* -------------------------------------------------------------------------- */
 
+/**
+ * Full-screen immersive mode (hard rule) — the Creative Canvas takes over the
+ * entire viewport the moment it mounts. Portaled to document.body so it visibly
+ * covers the platform sidebar/topbar rather than living inside the dashboard's
+ * `command-surface` column; body scroll is locked while it's open; Escape (or
+ * the Exit control) hands control back to the Reactor.
+ */
 export function CreativeCanvas(props: CreativeCanvasProps) {
-  return (
-    <ReactFlowProvider>
-      <CanvasInner {...props} />
-    </ReactFlowProvider>
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => {
+    setMounted(true)
+    const prevOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    // Escape-to-exit lives in CanvasInner (layered: it closes a context menu
+    // or clears a selection first, and only exits full-screen once nothing
+    // else is open) — this effect only owns the scroll lock.
+    return () => {
+      document.body.style.overflow = prevOverflow
+    }
+  }, [])
+
+  if (!mounted) return null
+
+  return createPortal(
+    <div className="canvas-immersive fixed inset-0 z-[100]">
+      <ReactFlowProvider>
+        <CanvasInner {...props} />
+      </ReactFlowProvider>
+    </div>,
+    document.body,
   )
 }
 
-function CanvasInner({ strategy, imageModel, videoModel, onSendToStudio, onConfigure }: CreativeCanvasProps) {
-  const { concepts } = useReactorRun()
+function CanvasInner({ strategy, imageModel, videoModel, onSendToStudio, onConfigure, onExit }: CreativeCanvasProps) {
+  const { concepts, imageFor, videoFor, creativeStateFor } = useReactorRun()
   const mode = canvasMode(strategy.outputs, Boolean(strategy.montage))
 
   const [nodes, setNodes, onNodesChange] = useNodesState<CanvasRFNode>([])
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([])
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [media, setMedia] = useState<Record<string, NodeMedia>>({})
+  const [pendingReassign, setPendingReassign] = useState<PendingReassign | null>(null)
+  const [contextMenu, setContextMenu] = useState<{ id: string; x: number; y: number } | null>(null)
   const [regenerating, setRegenerating] = useState<Record<string, boolean>>({})
   const [direction, setDirection] = useState('')
 
@@ -286,6 +366,55 @@ function CanvasInner({ strategy, imageModel, videoModel, onSendToStudio, onConfi
     return lanes
   }, [concepts])
 
+  // Nodes whose media has been touched by a manual render/animate in the
+  // Canvas — once a user renders their own take, the Reactor's auto-generated
+  // creative must never silently overwrite it again.
+  const manualMediaRef = useRef<Set<string>>(new Set())
+
+  /* --------------- Seed cards from what the Reactor already rendered -------- *
+   * The Reactor auto-generates one creative per concept the moment a run
+   * lands (Workbench's auto-gen effect). That asset belongs on the lane's
+   * primary visual node (non-montage) or the output node (montage, where the
+   * single combined render is a preview — each scene still renders on its
+   * own). This keeps the Canvas from ever opening on empty cards when the
+   * work already exists. */
+  useEffect(() => {
+    const targetKind: CanvasNodeKind = mode === 'montage' ? 'output' : 'visual'
+    setMedia((prev) => {
+      let changed = false
+      const next = { ...prev }
+      laneConcepts.forEach((c, lane) => {
+        const nodeId = nodes.find(
+          (n) => n.data.lane === lane && n.data.kind === targetKind && n.data.branchIdx === 0,
+        )?.id
+        if (!nodeId || manualMediaRef.current.has(nodeId)) return
+        const img = imageFor(c)
+        const vid = videoFor(c)
+        const state = creativeStateFor(c)
+        const rendering = state?.status === 'working' || vid?.status === 'rendering'
+        const videoUrl = vid?.status === 'done' ? vid.url : undefined
+        const desired: NodeMedia = videoUrl
+          ? { status: 'done', videoUrl, imageUrl: img, source: 'reactor' }
+          : img
+            ? { status: 'done', imageUrl: img, source: 'reactor' }
+            : rendering
+              ? { status: 'rendering', source: 'reactor' }
+              : IDLE_MEDIA
+        const existing = prev[nodeId]
+        if (
+          !existing ||
+          existing.status !== desired.status ||
+          existing.imageUrl !== desired.imageUrl ||
+          existing.videoUrl !== desired.videoUrl
+        ) {
+          next[nodeId] = desired
+          changed = true
+        }
+      })
+      return changed ? next : prev
+    })
+  }, [laneConcepts, mode, nodes, imageFor, videoFor, creativeStateFor])
+
   const selected = nodes.find((n) => n.id === selectedId) ?? null
 
   /* ------------------------------ Node helpers ------------------------------ */
@@ -308,21 +437,22 @@ function CanvasInner({ strategy, imageModel, videoModel, onSendToStudio, onConfi
     [nodes],
   )
 
-  const regenerate = useCallback(
-    async (id: string) => {
-      const node = nodes.find((n) => n.id === id)
-      if (!node || node.data.locked || regenerating[id]) return
+  /** Shared regeneration call — kind/title/text passed explicitly so a card
+   * that just changed role (semantic reassignment) can regenerate INTO its
+   * new role without waiting on a state read-back. */
+  const runRegenerate = useCallback(
+    async (id: string, lane: number, kind: CanvasNodeKind, title: string, currentText: string) => {
       setRegenerating((r) => ({ ...r, [id]: true }))
       try {
         const res = await fetch('/api/canvas/regenerate', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            kind: node.data.kind,
-            title: node.data.title,
-            current: node.data.text,
+            kind,
+            title,
+            current: currentText,
             strategy,
-            context: laneContext(node.data.lane, id),
+            context: laneContext(lane, id),
             direction: direction.trim() || undefined,
           }),
         }).then((r) => r.json())
@@ -333,7 +463,112 @@ function CanvasInner({ strategy, imageModel, videoModel, onSendToStudio, onConfi
         setRegenerating((r) => ({ ...r, [id]: false }))
       }
     },
-    [nodes, regenerating, strategy, laneContext, direction, patchNode],
+    [strategy, laneContext, direction, patchNode],
+  )
+
+  const regenerate = useCallback(
+    async (id: string) => {
+      const node = nodes.find((n) => n.id === id)
+      if (!node || node.data.locked || regenerating[id]) return
+      void runRegenerate(id, node.data.lane, node.data.kind, node.data.title, node.data.text)
+    },
+    [nodes, regenerating, runRegenerate],
+  )
+
+  /* --------------------- Semantic reassignment on drag ---------------------- *
+   * Structured freedom: cards can be dragged anywhere, but dropping a card
+   * onto a different-kind slot in its own lane means the user may be asking
+   * it to take on that slot's role. The position swap always happens; the
+   * ROLE only changes if the user confirms it in the modal. */
+
+  const dragOriginRef = useRef<Record<string, { x: number; y: number }>>({})
+
+  const onNodeDragStart = useCallback((_: unknown, node: CanvasRFNode) => {
+    dragOriginRef.current[node.id] = { x: node.position.x, y: node.position.y }
+  }, [])
+
+  const onNodeDragStop = useCallback(
+    (_: unknown, node: CanvasRFNode) => {
+      const origin = dragOriginRef.current[node.id]
+      delete dragOriginRef.current[node.id]
+      if (!origin) return
+      // Only primary cards can change role — alternates are for comparing and
+      // approving, not relocating into a different slot. The DRAGGED card can
+      // be any kind (a Proof card dropped onto Hook is the signature case);
+      // only the TARGET's slot is restricted to positions a card can become.
+      if (node.data.branchIdx > 0 || node.data.kind === 'output') return
+      const target = nodes.find(
+        (n) =>
+          n.id !== node.id &&
+          n.data.lane === node.data.lane &&
+          n.data.branchIdx === 0 &&
+          n.data.kind !== node.data.kind &&
+          REASSIGNABLE_KINDS.includes(n.data.kind) &&
+          Math.hypot(n.position.x - node.position.x, n.position.y - node.position.y) < NODE_W * 0.65,
+      )
+      if (!target) return
+      const targetOrigin = { x: target.position.x, y: target.position.y }
+      // The visual move always applies immediately; the modal below only
+      // decides whether the semantic ROLE follows the new position.
+      setNodes((ns) =>
+        ns.map((n) => {
+          if (n.id === node.id) return { ...n, position: targetOrigin }
+          if (n.id === target.id) return { ...n, position: origin }
+          return n
+        }),
+      )
+      setPendingReassign({
+        draggedId: node.id,
+        targetId: target.id,
+        draggedOriginalPos: origin,
+        targetOriginalPos: targetOrigin,
+        draggedKind: node.data.kind,
+        targetKind: target.data.kind,
+      })
+    },
+    [nodes, setNodes],
+  )
+
+  const resolveReassign = useCallback(
+    (choice: 'cosmetic' | 'reassign' | 'reassignRegenerate' | 'cancel') => {
+      const p = pendingReassign
+      if (!p) return
+      if (choice === 'cancel') {
+        setNodes((ns) =>
+          ns.map((n) => {
+            if (n.id === p.draggedId) return { ...n, position: p.draggedOriginalPos }
+            if (n.id === p.targetId) return { ...n, position: p.targetOriginalPos }
+            return n
+          }),
+        )
+        setPendingReassign(null)
+        return
+      }
+      if (choice === 'cosmetic') {
+        setPendingReassign(null)
+        return
+      }
+      // reassign / reassignRegenerate — the two cards trade kind + title.
+      const draggedNode = nodes.find((n) => n.id === p.draggedId)
+      const targetNode = nodes.find((n) => n.id === p.targetId)
+      const draggedTitle = draggedNode ? relabelForKind(p.targetKind, draggedNode.data.title) : KIND_DEFS[p.targetKind].label
+      const targetTitle = targetNode ? relabelForKind(p.draggedKind, targetNode.data.title) : KIND_DEFS[p.draggedKind].label
+      setNodes((ns) =>
+        ns.map((n) => {
+          // A role change unlocks the card — its old lock guarded the old
+          // role's content, not the new one.
+          if (n.id === p.draggedId) return { ...n, data: { ...n.data, kind: p.targetKind, title: draggedTitle, locked: false } }
+          if (n.id === p.targetId) return { ...n, data: { ...n.data, kind: p.draggedKind, title: targetTitle, locked: false } }
+          return n
+        }),
+      )
+      if (choice === 'reassignRegenerate') {
+        if (draggedNode) void runRegenerate(p.draggedId, draggedNode.data.lane, p.targetKind, draggedTitle, draggedNode.data.text)
+        if (targetNode) void runRegenerate(p.targetId, targetNode.data.lane, p.draggedKind, targetTitle, targetNode.data.text)
+      }
+      setPendingReassign(null)
+    },
+    [pendingReassign, nodes, setNodes, runRegenerate],
   )
 
   /** Branch: a controlled alternate stacked under the original, dashed in. */
@@ -479,7 +714,8 @@ function CanvasInner({ strategy, imageModel, videoModel, onSendToStudio, onConfi
     async (id: string) => {
       const node = nodes.find((n) => n.id === id)
       if (!node) return
-      setMedia((m) => ({ ...m, [id]: { status: 'rendering' } }))
+      manualMediaRef.current.add(id)
+      setMedia((m) => ({ ...m, [id]: { status: 'rendering', source: 'canvas' } }))
       try {
         const prompt = `${node.data.prompt ?? node.data.text}\n\nRender as a premium Meta ad creative for The Professional Builder — photographic, on-site builder context, high contrast, room for text overlay.${strategy.angle ? ` Campaign angle: ${strategy.angle}.` : ''}`
         const res = await fetch('/api/generate-image', {
@@ -488,7 +724,7 @@ function CanvasInner({ strategy, imageModel, videoModel, onSendToStudio, onConfi
           body: JSON.stringify({ prompt, aspectRatio, model: imageModel }),
         }).then((r) => r.json())
         if (res.success && res.imageUrl) {
-          setMedia((m) => ({ ...m, [id]: { status: 'done', imageUrl: res.imageUrl } }))
+          setMedia((m) => ({ ...m, [id]: { status: 'done', imageUrl: res.imageUrl, source: 'canvas' } }))
         } else {
           setMedia((m) => ({
             ...m,
@@ -531,7 +767,8 @@ function CanvasInner({ strategy, imageModel, videoModel, onSendToStudio, onConfi
       const node = nodes.find((n) => n.id === id)
       const still = media[id]?.imageUrl
       if (!node) return
-      setMedia((m) => ({ ...m, [id]: { ...m[id], status: 'animating' } }))
+      manualMediaRef.current.add(id)
+      setMedia((m) => ({ ...m, [id]: { ...m[id], status: 'animating', source: 'canvas' } }))
       try {
         const body = still
           ? { imageUrl: still, mode: 'image-to-video', model: videoModel, aspectRatio, prompt: node.data.text }
@@ -591,12 +828,51 @@ function CanvasInner({ strategy, imageModel, videoModel, onSendToStudio, onConfi
     [laneConcepts, activeText, onSendToStudio],
   )
 
+  /* ------------------------------ Keyboard shortcuts ------------------------ *
+   * Delete/Backspace removes the selected alternate or scene; Cmd/Ctrl+D
+   * duplicates (branches) it. Escape is layered so one press does the most
+   * local thing: close the context menu, else clear the selection, else exit
+   * full-screen Canvas — never more than one of those per press. While the
+   * reassignment modal is open, Escape does nothing; that decision needs an
+   * explicit choice. Ignored while typing in the detail panel's fields. */
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const typing = ['INPUT', 'TEXTAREA'].includes((e.target as HTMLElement)?.tagName)
+      if (e.key === 'Escape' && !typing) {
+        if (contextMenu) setContextMenu(null)
+        else if (pendingReassign) return
+        else if (selectedId) setSelectedId(null)
+        else onExit()
+        return
+      }
+      if (typing || !selectedId) return
+      const node = nodes.find((n) => n.id === selectedId)
+      if (!node) return
+      if ((e.key === 'Delete' || e.key === 'Backspace') && (node.data.branchIdx > 0 || node.data.kind === 'scene')) {
+        e.preventDefault()
+        removeNode(selectedId)
+      } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'd' && KIND_DEFS[node.data.kind].branch) {
+        e.preventDefault()
+        branchNode(selectedId)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [selectedId, nodes, removeNode, branchNode, contextMenu, pendingReassign, onExit])
+
   /* ------------------------------- Empty state ------------------------------ */
 
   if (concepts.length === 0) {
     return (
-      <div className="canvas-shell grid min-h-[560px] place-items-center p-8 text-center">
-        <div className="max-w-lg">
+      <div className="canvas-shell relative grid h-full w-full place-items-center p-8 text-center">
+        <button
+          type="button"
+          onClick={onExit}
+          className="absolute right-5 top-5 inline-flex items-center gap-1.5 rounded-full border border-white/12 bg-white/[0.04] px-3.5 py-1.5 text-[11px] font-semibold text-white/55 transition-colors hover:border-white/25 hover:text-white"
+        >
+          <X size={13} /> Exit Canvas
+        </button>
+        <div className="canvas-lift max-w-lg">
           <span className="mx-auto mb-5 grid h-14 w-14 place-items-center rounded-2xl border border-[#FF7C54]/25 bg-[#FF5E3A]/[0.06]">
             <Workflow size={26} className="text-[#FF9D4D]" />
           </span>
@@ -637,9 +913,9 @@ function CanvasInner({ strategy, imageModel, videoModel, onSendToStudio, onConfi
 
   return (
     <Ctx.Provider value={{ mediaFor: (id) => media[id] ?? IDLE_MEDIA, renderStill, regenBusy: (id) => Boolean(regenerating[id]) }}>
-      <div className="canvas-shell flex h-[720px] flex-col">
+      <div className="canvas-shell flex h-full w-full flex-col rounded-none border-0">
         {/* ------------------------- Strategy bar ------------------------- */}
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/[0.08] px-5 py-3.5">
+        <div className="canvas-lift flex flex-wrap items-center justify-between gap-3 border-b border-white/[0.08] px-5 py-3.5">
           <div className="flex min-w-0 flex-wrap items-center gap-2.5">
             <span className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.26em] text-[#FF9D4D]/80">
               <Workflow size={13} /> Creative Canvas
@@ -667,11 +943,20 @@ function CanvasInner({ strategy, imageModel, videoModel, onSendToStudio, onConfi
             >
               Send to Studio <ArrowRight size={12} />
             </button>
+            <span className="ml-1 h-5 w-px bg-white/10" />
+            <button
+              type="button"
+              onClick={onExit}
+              title="Exit Canvas (Esc)"
+              className="grid h-8 w-8 place-items-center rounded-full text-white/40 transition-colors hover:bg-white/5 hover:text-white"
+            >
+              <X size={16} />
+            </button>
           </div>
         </div>
 
         {/* Pinned strategic read — the canvas never loses the strategy */}
-        <div className="flex flex-wrap items-center gap-1.5 border-b border-white/[0.06] px-5 py-2.5">
+        <div className="canvas-lift flex flex-wrap items-center gap-1.5 border-b border-white/[0.06] px-5 py-2.5">
           <StrategyChip label="Angle" value={strategy.angle} />
           <StrategyChip label="Awareness" value={strategy.awareness} />
           <StrategyChip label="Sophistication" value={strategy.sophistication} />
@@ -680,8 +965,8 @@ function CanvasInner({ strategy, imageModel, videoModel, onSendToStudio, onConfi
         </div>
 
         {/* --------------------- Canvas + detail panel --------------------- */}
-        <div className="grid min-h-0 flex-1 lg:grid-cols-[minmax(0,1fr)_330px]">
-          <div className="relative min-h-[320px]">
+        <div className="canvas-lift grid min-h-0 flex-1 lg:grid-cols-[minmax(0,1fr)_330px]">
+          <div className="relative min-h-0">
             <ReactFlow
               nodes={nodes}
               edges={edges}
@@ -689,7 +974,24 @@ function CanvasInner({ strategy, imageModel, videoModel, onSendToStudio, onConfi
               onEdgesChange={onEdgesChange}
               nodeTypes={nodeTypes}
               onNodeClick={(_, n) => setSelectedId(n.id)}
-              onPaneClick={() => setSelectedId(null)}
+              onPaneClick={() => {
+                setSelectedId(null)
+                setContextMenu(null)
+              }}
+              onNodeDragStart={onNodeDragStart}
+              onNodeDragStop={onNodeDragStop}
+              onNodeContextMenu={(e, n) => {
+                e.preventDefault()
+                setSelectedId(n.id)
+                // Anchor to the card's own on-screen rect rather than the
+                // synthetic event's clientX/Y, which xyflow can report in
+                // flow-space rather than viewport-space depending on zoom/pan.
+                const cardEl = (e.target as HTMLElement).closest<HTMLElement>('.react-flow__node')
+                const rect = cardEl?.getBoundingClientRect()
+                const x = rect ? Math.min(rect.left + 12, window.innerWidth - 210) : e.clientX
+                const y = rect ? Math.min(rect.top + 12, window.innerHeight - 260) : e.clientY
+                setContextMenu({ id: n.id, x, y })
+              }}
               minZoom={0.25}
               maxZoom={1.4}
               proOptions={{ hideAttribution: true }}
@@ -716,6 +1018,7 @@ function CanvasInner({ strategy, imageModel, videoModel, onSendToStudio, onConfi
                     ['Edit', 'Rewrite any node by hand — your words always win.'],
                     ['Regenerate', 'One node at a time; strategy and locked nodes are held constant.'],
                     ['Branch', 'Spin controlled alternates of a hook or CTA, then approve the winner.'],
+                    ['Drag to reassign', 'Drop a card onto a different slot and the system asks whether its ROLE should follow — a Proof card dragged onto Hook can become the Hook.'],
                     ['Render', 'Scenes and visuals render stills, then animate into clips.'],
                     ['Send to Studio', 'The active lane becomes a launch-ready Meta ad unit.'],
                   ].map(([t, d]) => (
@@ -725,6 +1028,10 @@ function CanvasInner({ strategy, imageModel, videoModel, onSendToStudio, onConfi
                     </li>
                   ))}
                 </ul>
+                <p className="text-[10px] leading-snug text-white/30">
+                  Right-click any card for quick actions. ⌘/Ctrl+D duplicates the selected card;
+                  Delete removes an alternate or scene.
+                </p>
               </div>
             ) : (
               <div className={cn('space-y-3.5', accentClass[def.accent])}>
@@ -872,7 +1179,172 @@ function CanvasInner({ strategy, imageModel, videoModel, onSendToStudio, onConfi
             )}
           </aside>
         </div>
+
+        {/* --------------------- Semantic reassignment modal --------------------- */}
+        {pendingReassign && (
+          <ReassignModal pending={pendingReassign} onResolve={resolveReassign} />
+        )}
+
+        {/* ------------------------------ Context menu ---------------------------- */}
+        {contextMenu && (
+          <CanvasContextMenu
+            menu={contextMenu}
+            node={nodes.find((n) => n.id === contextMenu.id) ?? null}
+            onClose={() => setContextMenu(null)}
+            onRegenerate={regenerate}
+            onBranch={branchNode}
+            onLock={(id) => {
+              const n = nodes.find((nn) => nn.id === id)
+              if (n) patchNode(id, { locked: !n.data.locked })
+            }}
+            onApprove={approveNode}
+            onDelete={removeNode}
+            onSendToStudio={(id) => {
+              const n = nodes.find((nn) => nn.id === id)
+              if (n) sendLaneToStudio(n.data.lane)
+            }}
+          />
+        )}
       </div>
     </Ctx.Provider>
+  )
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Semantic reassignment — confirmation modal                                */
+/* -------------------------------------------------------------------------- */
+
+function ReassignModal({
+  pending,
+  onResolve,
+}: {
+  pending: PendingReassign
+  onResolve: (choice: 'cosmetic' | 'reassign' | 'reassignRegenerate' | 'cancel') => void
+}) {
+  const draggedLabel = KIND_DEFS[pending.draggedKind].label
+  const targetLabel = KIND_DEFS[pending.targetKind].label
+
+  return (
+    <div className="absolute inset-0 z-30 grid place-items-center bg-black/60 p-6 backdrop-blur-sm">
+      <div className="canvas-node w-[380px] !cursor-default border-[#FF7C54]/35 bg-[#0d0c11] p-5">
+        <p className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.14em] text-[#FF9D4D]">
+          <GitBranch size={12} /> Position changed role
+        </p>
+        <p className="mt-2.5 text-[14px] leading-snug text-white">
+          This <span className="font-semibold">{draggedLabel}</span> card will now become the{' '}
+          <span className="font-semibold">{targetLabel}</span>. Lock it in?
+        </p>
+        <p className="mt-1.5 text-[11px] leading-snug text-white/40">
+          The card swapped position with the {targetLabel.toLowerCase()} card. Choose whether its
+          role changes with it.
+        </p>
+        <div className="mt-4 space-y-1.5">
+          <button
+            type="button"
+            onClick={() => onResolve('reassignRegenerate')}
+            className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-[#FF7C54]/40 bg-[#FF5E3A]/[0.1] px-3 py-2.5 text-[12px] font-semibold text-[#FF9D4D] transition-colors hover:bg-[#FF5E3A]/20"
+          >
+            <RefreshCw size={12} /> Reassign &amp; regenerate for the new role
+          </button>
+          <button
+            type="button"
+            onClick={() => onResolve('reassign')}
+            className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-white/14 bg-white/[0.04] px-3 py-2.5 text-[12px] font-semibold text-white/75 transition-colors hover:border-white/25 hover:text-white"
+          >
+            Reassign role, keep the current words
+          </button>
+          <button
+            type="button"
+            onClick={() => onResolve('cosmetic')}
+            className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.02] px-3 py-2.5 text-[12px] font-medium text-white/55 transition-colors hover:border-white/20 hover:text-white/80"
+          >
+            Keep visual move only — no role change
+          </button>
+          <button
+            type="button"
+            onClick={() => onResolve('cancel')}
+            className="flex w-full items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-[11px] font-medium text-white/35 transition-colors hover:text-white/60"
+          >
+            Cancel — undo the move
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Right-click context menu                                                  */
+/* -------------------------------------------------------------------------- */
+
+function CanvasContextMenu({
+  menu,
+  node,
+  onClose,
+  onRegenerate,
+  onBranch,
+  onLock,
+  onApprove,
+  onDelete,
+  onSendToStudio,
+}: {
+  menu: { id: string; x: number; y: number }
+  node: CanvasRFNode | null
+  onClose: () => void
+  onRegenerate: (id: string) => void
+  onBranch: (id: string) => void
+  onLock: (id: string) => void
+  onApprove: (id: string) => void
+  onDelete: (id: string) => void
+  onSendToStudio: (id: string) => void
+}) {
+  const ref = useRef<HTMLDivElement>(null)
+
+  // Escape is handled centrally in CanvasInner (it needs to know whether a
+  // menu, a selection, or nothing is open, and act on only the first of
+  // those) — this effect only owns the click-outside-to-close behavior.
+  useEffect(() => {
+    const onDown = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as globalThis.Node)) onClose()
+    }
+    window.addEventListener('mousedown', onDown)
+    return () => window.removeEventListener('mousedown', onDown)
+  }, [onClose])
+
+  if (!node) return null
+  const def = KIND_DEFS[node.data.kind]
+  const canRemove = node.data.branchIdx > 0 || node.data.kind === 'scene'
+
+  const item = (label: string, onClick: () => void, danger?: boolean) => (
+    <button
+      type="button"
+      onClick={() => {
+        onClick()
+        onClose()
+      }}
+      className={cn(
+        'flex w-full items-center px-3 py-2 text-left text-[12px] transition-colors',
+        danger ? 'text-danger hover:bg-danger/10' : 'text-white/75 hover:bg-white/[0.06] hover:text-white',
+      )}
+    >
+      {label}
+    </button>
+  )
+
+  return (
+    <div
+      ref={ref}
+      style={{ left: menu.x, top: menu.y }}
+      className="fixed z-[110] w-48 overflow-hidden rounded-xl border border-white/12 bg-[#0B0B12] py-1.5 shadow-2xl"
+    >
+      <p className="px-3 py-1.5 text-[9px] font-bold uppercase tracking-wider text-white/30">{def.label}</p>
+      {def.regen && item('Regenerate', () => onRegenerate(node.id))}
+      {def.branch && item('Branch / Duplicate', () => onBranch(node.id))}
+      {item(node.data.locked ? 'Unlock' : 'Lock', () => onLock(node.id))}
+      {item(node.data.approved ? 'Unapprove' : 'Approve', () => onApprove(node.id))}
+      {item('Send lane to Studio', () => onSendToStudio(node.id))}
+      {canRemove && <div className="my-1 h-px bg-white/10" />}
+      {canRemove && item('Delete', () => onDelete(node.id), true)}
+    </div>
   )
 }

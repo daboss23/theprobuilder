@@ -31,7 +31,16 @@ import {
   type ReactorInputs,
   type ReactorSuggestion,
 } from '@/lib/reactor-inputs'
-import { modelMenuFor, resolveModelPick, sizesForModel, OPENMONTAGE_ID, type ModelMenu } from '@/lib/model-menu'
+import {
+  modelMenuFor,
+  montageMenus,
+  isMontageDeliverable,
+  montageStillKey,
+  montageMotionKey,
+  resolveModelPick,
+  sizesForModel,
+  type ModelMenu,
+} from '@/lib/model-menu'
 import { recommendVideoModel } from '@/lib/video/recommend'
 import type { ModelAvailability } from '@/lib/video/types'
 import { recommendImageModel } from '@/lib/image/recommend'
@@ -209,11 +218,22 @@ export function Workbench() {
 
   // Per-deliverable model menus (the Formats step) — the system's pick leads,
   // the user can pin any registry model, and sizes adapt to the chosen model.
+  // Montage is excluded here (modelMenuFor returns null for it) — it gets its
+  // own two-picker menu below.
   const modelMenus = useMemo(() => {
     const menus: Record<string, ModelMenu | null> = {}
     for (const o of outputs) menus[o] = modelMenuFor(o, imageModels, videoModels)
     return menus
   }, [outputs, imageModels, videoModels])
+
+  const montageDeliverable = outputs.find(isMontageDeliverable)
+  // The montage deliverable's two REAL model menus (still + motion) — what
+  // actually answers "what model does montage use." OpenMontage sequences
+  // them; it is never itself selectable.
+  const montageModelMenus = useMemo(
+    () => (montageDeliverable ? montageMenus(montageDeliverable, imageModels, videoModels) : null),
+    [montageDeliverable, imageModels, videoModels],
+  )
 
   const setDeliverableModel = useCallback((deliverable: string, modelId: string) => {
     touchedRef.current.add(`model:${deliverable}`)
@@ -221,12 +241,20 @@ export function Workbench() {
   }, [])
 
   // A user-pinned model beats the heuristic recommendation for its media kind.
-  // OpenMontage is a scene engine, not a single render model — it never
-  // overrides the clip/still models; its scenes render through them.
-  const pinnedVideo = ['Video Creative', 'UGC Creative', 'Montage / Scene Flow']
+  // Montage's still/motion picks travel under compound keys.
+  const pinnedVideo = [
+    'Video Creative',
+    'UGC Creative',
+    ...(montageDeliverable ? [montageMotionKey(montageDeliverable)] : []),
+  ]
     .map((d) => (deliverableModels[d] && deliverableModels[d] !== 'auto' ? deliverableModels[d] : undefined))
-    .find((m) => m && m !== OPENMONTAGE_ID)
-  const pinnedImage = ['Static Creative', 'Carousel Creatives', 'Creative Variations']
+    .find(Boolean)
+  const pinnedImage = [
+    'Static Creative',
+    'Carousel Creatives',
+    'Creative Variations',
+    ...(montageDeliverable ? [montageStillKey(montageDeliverable)] : []),
+  ]
     .map((d) => (deliverableModels[d] && deliverableModels[d] !== 'auto' ? deliverableModels[d] : undefined))
     .find(Boolean)
 
@@ -236,11 +264,9 @@ export function Workbench() {
   const resolvedImageModel =
     pinnedImage ?? (imageModel === 'auto' ? imageRecommendation?.modelId : imageModel)
 
-  // The montage path is active when the deliverable was picked or the scene
-  // engine was pinned — it unlocks the "Launch in Creative Canvas" handoff.
-  const montageSelected =
-    outputs.some((o) => /montage|scene/i.test(o)) ||
-    Object.values(deliverableModels).includes(OPENMONTAGE_ID)
+  // The montage path is active whenever the deliverable was picked — it
+  // unlocks the "Launch in Creative Canvas" handoff.
+  const montageSelected = Boolean(montageDeliverable)
 
   const toggle = (arr: string[], set: (v: string[]) => void, val: string) =>
     set(arr.includes(val) ? arr.filter((v) => v !== val) : [...arr, val])
@@ -267,9 +293,11 @@ export function Workbench() {
       const next: Record<string, string[]> = {}
       let changed = false
       for (const o of outputs) {
-        const menu = modelMenus[o] ?? null
+        const isMontage = isMontageDeliverable(o) && montageModelMenus
+        const menu = isMontage ? montageModelMenus!.motion : (modelMenus[o] ?? null)
+        const pickKey = isMontage ? montageMotionKey(o) : o
         const supported = menu
-          ? sizesForModel(menu, resolveModelPick(menu, deliverableModels[o]) ?? undefined).map((s) => s.ratio)
+          ? sizesForModel(menu, resolveModelPick(menu, deliverableModels[pickKey]) ?? undefined).map((s) => s.ratio)
           : (CREATIVE_SIZES[o]?.map((s) => s.ratio) ?? [])
         const kept = (prev[o] ?? []).filter((r) => supported.includes(r as (typeof supported)[number]))
         if (kept.length) {
@@ -285,7 +313,7 @@ export function Workbench() {
       if (!changed && Object.keys(next).length === Object.keys(prev).length) return prev
       return next
     })
-  }, [outputs, modelMenus, deliverableModels])
+  }, [outputs, modelMenus, montageModelMenus, deliverableModels])
 
   /* ----------------------- Agent pre-selection (suggest) ------------------- */
   // The reactor strategist pre-picks a concrete angle / awareness / audience /
@@ -693,6 +721,7 @@ export function Workbench() {
     variations,
     setVariations,
     modelMenus,
+    montageMenus: montageModelMenus,
     models: deliverableModels,
     setModel: setDeliverableModel,
     awarenessField,
@@ -795,6 +824,7 @@ export function Workbench() {
           videoModel={resolvedVideoModel}
           onSendToStudio={configureInStudio}
           onConfigure={() => setModalOpen(true)}
+          onExit={() => setView('reactor')}
         />
       ) : view === 'studio' ? (
         <AdStudio

@@ -2159,7 +2159,11 @@ body {
   -webkit-mask-image: radial-gradient(130% 96% at 50% 0%, #000, transparent 88%);
   mask-image: radial-gradient(130% 96% at 50% 0%, #000, transparent 88%);
 }
-.canvas-shell > * { position: relative; z-index: 1; }
+/* Lifts persistent chrome above the faded ::before grid. Deliberately NOT a
+   blanket `.canvas-shell > *` rule — that clobbers position:fixed/absolute on
+   dynamically-mounted overlays (the reassignment modal, the context menu),
+   which are also direct children and must keep their own positioning. */
+.canvas-lift { position: relative; z-index: 1; }
 
 /* A node card on the canvas — glass, kind-accented via --acc channels */
 .canvas-node {
@@ -2222,4 +2226,19 @@ body {
 .canvas-shell .canvas-edge-branch .react-flow__edge-path {
   stroke-dasharray: 5 4;
   stroke: rgba(255, 255, 255, 0.22);
+}
+
+/* Full-screen immersive Canvas wrapper — portaled to document.body, sits above
+   every app surface (nav, topbar, dialogs). The shell inside fills it edge to
+   edge, no rounding/border since there is no surrounding page to frame it against. */
+.canvas-immersive {
+  background: #030409;
+  animation: canvas-immersive-in 0.22s ease-out;
+}
+@keyframes canvas-immersive-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .canvas-immersive { animation: none; }
 }

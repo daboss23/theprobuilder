@@ -594,11 +594,17 @@ function buildInputBlocks(inputs: ReactorInputs | undefined): string {
 
     // Block 7a2 — Render engines the user pinned per deliverable (informational;
     // actual rendering honours these picks client-side and in the tools).
+    // Montage keys are compound ("Deliverable::still" / "::motion") — a scene
+    // engine has no single model, so read those as the two real engines.
     const models = inputs.models
     if (models && Object.keys(models).length) {
       const lines = Object.entries(models)
         .filter(([, m]) => m && m !== 'auto')
-        .map(([d, m]) => `${d} → ${m}`)
+        .map(([d, m]) => {
+          if (d.endsWith('::still')) return `${d.replace('::still', '')} (scene stills) → ${m}`
+          if (d.endsWith('::motion')) return `${d.replace('::motion', '')} (scene motion) → ${m}`
+          return `${d} → ${m}`
+        })
       if (lines.length) {
         parts.push(
           `RENDER MODELS (user-pinned per deliverable — assume these engines render the visuals):\n${lines.join('\n')}`,
@@ -725,21 +731,32 @@ async function runIntelligence(
 /* --------------------------- Demo fallback flow --------------------------- */
 
 // A frame-by-frame production brief for a visual demo concept, so demo mode also
-// shows the production-brief-driven workflow.
-function demoBrief(creativeType: string, angle: string): ProductionBrief {
+// shows the production-brief-driven workflow. When `montage` is set, frames are
+// labelled as an ordered scene sequence (matching the live orchestrator's
+// MONTAGE / SCENE FLOW instruction) instead of generic numbered frames.
+function demoBrief(creativeType: string, angle: string, montage = false): ProductionBrief {
   const al = angle.toLowerCase()
+  const frames = montage
+    ? [
+        { label: 'Scene 1 — 5:47am, still on the tools', description: 'Builder overwhelmed on a chaotic job site, headlights sweeping an empty yard.' },
+        { label: 'Scene 2 — The leak exposed', description: `Close on a stark figure — the hidden ${al} leak nobody names out loud.` },
+        { label: 'Scene 3 — The turning point', description: 'The system introduced — a whiteboard session, a new second layer of leadership.' },
+        { label: 'Scene 4 — The after', description: 'Margin dashboard ticking up; the owner walking off site mid-afternoon.' },
+        { label: 'Scene 5 — Soft CTA', description: 'A quiet, qualifying call to the next step — no hard sell.' },
+      ]
+    : [
+        { label: 'Frame 1', description: 'Builder overwhelmed on a chaotic job site.' },
+        { label: 'Frame 2', description: `The hidden ${al} problem exposed with one stark figure.` },
+        { label: 'Frame 3', description: 'The system / turning point introduced.' },
+        { label: 'Frame 4', description: 'The after — margin, time, and control restored.' },
+        { label: 'Frame 5', description: 'Soft, qualifying call to action to the next step.' },
+      ]
   return {
     creativeType,
     pattern: angle === 'Profit' ? 'Profit Leak' : angle,
     audience: 'Builders $1M–$3M',
     awareness: 'Problem-Aware',
-    frames: [
-      { label: 'Frame 1', description: 'Builder overwhelmed on a chaotic job site.' },
-      { label: 'Frame 2', description: `The hidden ${al} problem exposed with one stark figure.` },
-      { label: 'Frame 3', description: 'The system / turning point introduced.' },
-      { label: 'Frame 4', description: 'The after — margin, time, and control restored.' },
-      { label: 'Frame 5', description: 'Soft, qualifying call to action to the next step.' },
-    ],
+    frames,
   }
 }
 
@@ -755,6 +772,7 @@ function pace(ms: number): Promise<void> {
 
 async function runDemo(controller: ReadableStreamDefaultController, body: ReactorRequest) {
   const outputs = body.outputs ?? ['Hook', 'Headline', 'Campaign Concept']
+  const wantsMontage = outputs.some((o) => /montage|scene/i.test(o))
   sse(controller, { type: 'step', text: 'OPUS online (demo mode — set ANTHROPIC_API_KEY for the live network)' })
   await pace(1100)
   if (body.cloneReference) {
@@ -828,7 +846,7 @@ async function runDemo(controller: ReadableStreamDefaultController, body: Reacto
   // Every concept carries a launch-ready Meta ad unit, same as the live agent.
   for (const c of pool) {
     if (/static|video|founder|testimonial|event|campaign/i.test(c.type) && /concept/i.test(c.type)) {
-      c.productionBrief = demoBrief(c.type, a)
+      c.productionBrief = demoBrief(c.type, a, wantsMontage)
     }
     c.adPackage = demoAdPackage(c.type, a)
   }
@@ -871,11 +889,14 @@ async function runDemo(controller: ReadableStreamDefaultController, body: Reacto
   }
 
   const norm = (s: string) => s.toLowerCase().replace(/s$/, '').trim()
-  // The onboarding flow offers two deliverables — Static Creative / Video
-  // Creative — which fan out into the richer internal concept taxonomy here.
-  // Legacy exact-type requests still pass straight through.
+  // The onboarding flow offers plain-language deliverables (Static Creative,
+  // Video Creative, Montage / Scene Flow, …) which fan out into the richer
+  // internal concept taxonomy here. Legacy exact-type requests pass through.
   const expand = (o: string): string[] => {
     const l = o.toLowerCase()
+    if (/montage|scene/.test(l)) return ['Video Concept', 'Founder Concept']
+    if (/variation/.test(l)) return ['Static Concept', 'Video Concept']
+    if (/recommend/.test(l)) return ['Campaign Concept', 'Founder Concept']
     if (l.includes('static')) return ['Static Concept', 'Founder Concept']
     if (l.includes('ugc')) return ['Testimonial Concept', 'Video Concept']
     if (l.includes('carousel')) return ['Campaign Concept', 'Static Concept']
