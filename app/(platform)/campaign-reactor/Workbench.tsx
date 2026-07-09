@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Atom, Loader2 } from 'lucide-react'
+import { Atom, Loader2, Workflow } from 'lucide-react'
 import { Panel, PanelHeader } from '@/components/reactor/ui'
 import {
   ReactorModal,
@@ -12,12 +12,13 @@ import {
   LiveAgentWorkflow,
   type WorkflowControls,
 } from '@/components/campaign-reactor/workflow/LiveAgentWorkflow'
-import { CreativeCanvas } from '@/components/campaign-reactor/canvas/CreativeCanvas'
-import { CreativeFlow } from '@/components/campaign-reactor/flow/CreativeFlow'
+import { AdStudio } from '@/components/campaign-reactor/canvas/AdStudio'
+import { CreativeCanvas } from '@/components/creative-canvas/CreativeCanvas'
 import { reactorOutputTypes, winningAngles } from '@/lib/reactor-data'
 import { INTEL_SOURCES, intelSourceLabel } from '@/lib/intelligence-sources'
 import {
   awarenessOptions,
+  sophisticationOptions,
   audienceOptions,
   offerOptions,
   defaultBrandSettings,
@@ -30,12 +31,23 @@ import {
   type ReactorInputs,
   type ReactorSuggestion,
 } from '@/lib/reactor-inputs'
+import {
+  modelMenuFor,
+  montageMenus,
+  isMontageDeliverable,
+  montageStillKey,
+  montageMotionKey,
+  resolveModelPick,
+  sizesForModel,
+  type ModelMenu,
+} from '@/lib/model-menu'
 import { recommendVideoModel } from '@/lib/video/recommend'
 import type { ModelAvailability } from '@/lib/video/types'
 import { recommendImageModel } from '@/lib/image/recommend'
 import type { ImageModelAvailability } from '@/lib/image/types'
 import { useReactorRun, type Concept } from '@/components/campaign-reactor/ReactorRunContext'
 import { CLONE_STORAGE_KEY, type CloneReference, type IsolateConfig } from '@/lib/taxonomy'
+import type { CanvasMode } from '@/lib/creative-canvas/graph'
 
 // The native campaign-angle choices (the No Preference / Custom sentinels are
 // added by the dropdown itself).
@@ -73,9 +85,14 @@ export function Workbench() {
       /* nothing to clone */
     }
   }, [])
-  // Output surface: the autonomous reactor (default hero), the Studio (remix the
-  // run's parts into a finished ad), or the Flow (node-graph production canvas).
-  const [view, setView] = useState<'reactor' | 'studio' | 'flow'>('reactor')
+  // Output surface: the autonomous reactor (default hero), the Creative Canvas
+  // (structured creative direction — shape, branch, and sequence the run), or
+  // the Studio (finish one ad as a real Meta unit).
+  const [view, setView] = useState<'reactor' | 'canvas' | 'studio'>('reactor')
+  // Which format tab the Canvas lands on — set by intent-carrying entrances
+  // (the montage CTA), cleared for the generic toggle so the campaign opens
+  // on its first selected format.
+  const [canvasTab, setCanvasTab] = useState<CanvasMode | undefined>(undefined)
   // Selected intelligence source IDs — the agents recommend a subset from the
   // brief (behind the scenes); OPUS runs on this set. Empty until the brief
   // produces recommendations, then defaulted to the full set at fire time.
@@ -105,6 +122,7 @@ export function Workbench() {
   // Strategic fields (the guided step-by-step inputs)
   const [brief, setBrief] = useState('')
   const [awareness, setAwareness] = useState(awarenessOptions[0])
+  const [sophistication, setSophistication] = useState(sophisticationOptions[0])
   const [audience, setAudience] = useState(audienceOptions[0])
   const [offer, setOffer] = useState(offerOptions[0])
   const [offerName, setOfferName] = useState('')
@@ -121,6 +139,7 @@ export function Workbench() {
   const [rec, setRec] = useState<{
     angle?: string
     awareness?: string
+    sophistication?: string
     audience?: string
     offer?: string
   }>({})
@@ -134,6 +153,8 @@ export function Workbench() {
   const [imageModel] = useState<string>('auto')
   // Meta Ads performance feed for the run: 'off' (standalone), 'pipeboard', 'meta'.
   const [metaProvider, setMetaProvider] = useState<string>('pipeboard')
+  // Render model per deliverable ('auto' until the user overrides the system pick).
+  const [deliverableModels, setDeliverableModels] = useState<Record<string, string>>({})
   // Reference assets for consistent-character UGC (Seedance reference-to-video).
   // Collected on the Formats step when UGC Creative is selected; the selected
   // image/video URLs flow into every "Generate UGC" call after firing.
@@ -194,15 +215,63 @@ export function Workbench() {
     () => (videoModels.length ? recommendVideoModel(outputs, videoModels) : null),
     [outputs, videoModels],
   )
-  // What we actually send: the recommendation when on Auto (always, here).
-  const resolvedVideoModel = videoModel === 'auto' ? recommendation?.modelId : videoModel
-
   // Image model: same pattern.
   const imageRecommendation = useMemo(
     () => (imageModels.length ? recommendImageModel(outputs, imageModels) : null),
     [outputs, imageModels],
   )
-  const resolvedImageModel = imageModel === 'auto' ? imageRecommendation?.modelId : imageModel
+
+  // Per-deliverable model menus (the Formats step) — the system's pick leads,
+  // the user can pin any registry model, and sizes adapt to the chosen model.
+  // Montage is excluded here (modelMenuFor returns null for it) — it gets its
+  // own two-picker menu below.
+  const modelMenus = useMemo(() => {
+    const menus: Record<string, ModelMenu | null> = {}
+    for (const o of outputs) menus[o] = modelMenuFor(o, imageModels, videoModels)
+    return menus
+  }, [outputs, imageModels, videoModels])
+
+  const montageDeliverable = outputs.find(isMontageDeliverable)
+  // The montage deliverable's two REAL model menus (still + motion) — what
+  // actually answers "what model does montage use." OpenMontage sequences
+  // them; it is never itself selectable.
+  const montageModelMenus = useMemo(
+    () => (montageDeliverable ? montageMenus(montageDeliverable, imageModels, videoModels) : null),
+    [montageDeliverable, imageModels, videoModels],
+  )
+
+  const setDeliverableModel = useCallback((deliverable: string, modelId: string) => {
+    touchedRef.current.add(`model:${deliverable}`)
+    setDeliverableModels((prev) => ({ ...prev, [deliverable]: modelId }))
+  }, [])
+
+  // A user-pinned model beats the heuristic recommendation for its media kind.
+  // Montage's still/motion picks travel under compound keys.
+  const pinnedVideo = [
+    'Video Creative',
+    'UGC Creative',
+    ...(montageDeliverable ? [montageMotionKey(montageDeliverable)] : []),
+  ]
+    .map((d) => (deliverableModels[d] && deliverableModels[d] !== 'auto' ? deliverableModels[d] : undefined))
+    .find(Boolean)
+  const pinnedImage = [
+    'Static Creative',
+    'Carousel Creatives',
+    'Creative Variations',
+    ...(montageDeliverable ? [montageStillKey(montageDeliverable)] : []),
+  ]
+    .map((d) => (deliverableModels[d] && deliverableModels[d] !== 'auto' ? deliverableModels[d] : undefined))
+    .find(Boolean)
+
+  // What we actually send: the user's pin, else the recommendation.
+  const resolvedVideoModel =
+    pinnedVideo ?? (videoModel === 'auto' ? recommendation?.modelId : videoModel)
+  const resolvedImageModel =
+    pinnedImage ?? (imageModel === 'auto' ? imageRecommendation?.modelId : imageModel)
+
+  // The montage path is active whenever the deliverable was picked — it
+  // unlocks the "Launch in Creative Canvas" handoff.
+  const montageSelected = Boolean(montageDeliverable)
 
   const toggle = (arr: string[], set: (v: string[]) => void, val: string) =>
     set(arr.includes(val) ? arr.filter((v) => v !== val) : [...arr, val])
@@ -221,24 +290,35 @@ export function Workbench() {
     })
   }
 
-  // Keep the Formats selection in sync with the chosen deliverables: seed each
-  // newly selected deliverable with its default size, and drop any deselected.
+  // Keep the Formats selection in sync with the chosen deliverables AND the
+  // chosen model: seed each newly selected deliverable with its default size,
+  // drop any deselected, and prune ratios the pinned model cannot render.
   useEffect(() => {
     setDimensions((prev) => {
       const next: Record<string, string[]> = {}
       let changed = false
       for (const o of outputs) {
-        if (prev[o]?.length) next[o] = prev[o]
-        else {
+        const isMontage = isMontageDeliverable(o) && montageModelMenus
+        const menu = isMontage ? montageModelMenus!.motion : (modelMenus[o] ?? null)
+        const pickKey = isMontage ? montageMotionKey(o) : o
+        const supported = menu
+          ? sizesForModel(menu, resolveModelPick(menu, deliverableModels[pickKey]) ?? undefined).map((s) => s.ratio)
+          : (CREATIVE_SIZES[o]?.map((s) => s.ratio) ?? [])
+        const kept = (prev[o] ?? []).filter((r) => supported.includes(r as (typeof supported)[number]))
+        if (kept.length) {
+          next[o] = kept
+          if (kept.length !== (prev[o]?.length ?? 0)) changed = true
+        } else {
           const def = DEFAULT_SIZE[o] ?? CREATIVE_SIZES[o]?.[0]?.ratio
-          next[o] = def ? [def] : []
+          const seed = def && supported.includes(def) ? def : supported[0]
+          next[o] = seed ? [seed] : []
           changed = true
         }
       }
       if (!changed && Object.keys(next).length === Object.keys(prev).length) return prev
       return next
     })
-  }, [outputs])
+  }, [outputs, modelMenus, montageModelMenus, deliverableModels])
 
   /* ----------------------- Agent pre-selection (suggest) ------------------- */
   // The reactor strategist pre-picks a concrete angle / awareness / audience /
@@ -257,6 +337,10 @@ export function Workbench() {
   const setAwarenessUser = (v: DirectiveOption) => {
     markTouched('awareness')
     setAwareness(v)
+  }
+  const setSophisticationUser = (v: DirectiveOption) => {
+    markTouched('sophistication')
+    setSophistication(v)
   }
   const setAudienceUser = (v: DirectiveOption) => {
     markTouched('audience')
@@ -288,6 +372,9 @@ export function Workbench() {
           awareness: awarenessOptions.some((x) => x.label === suggestion.awareness)
             ? suggestion.awareness
             : undefined,
+          sophistication: sophisticationOptions.some((x) => x.label === suggestion.sophistication)
+            ? suggestion.sophistication
+            : undefined,
           audience: audienceOptions.some((x) => x.label === suggestion.audience)
             ? suggestion.audience
             : undefined,
@@ -309,6 +396,10 @@ export function Workbench() {
         if (!touched.has('awareness')) {
           const o = awarenessOptions.find((x) => x.label === suggestion.awareness)
           if (o) setAwareness(o)
+        }
+        if (!touched.has('sophistication')) {
+          const o = sophisticationOptions.find((x) => x.label === suggestion.sophistication)
+          if (o) setSophistication(o)
         }
         if (!touched.has('audience')) {
           const o = audienceOptions.find((x) => x.label === suggestion.audience)
@@ -373,9 +464,12 @@ export function Workbench() {
       outputTypes: outputs,
       outputTypesAgentDecided: outputs.length === 0,
       dimensions,
+      models: deliverableModels,
       variations,
       awarenessStage: awareness.label,
       awarenessDirective: awareness.directive,
+      sophisticationStage: sophistication.label,
+      sophisticationDirective: sophistication.directive,
       audienceType: audience.label,
       audienceDirective: audience.directive,
       offerType: offer.label,
@@ -528,6 +622,27 @@ export function Workbench() {
     onNoPreference: () => setAwarenessUser(awarenessOptions[0]),
   }
 
+  const sophisticationField: StrategicField = {
+    options: sophisticationOptions.slice(1).map((o) => o.label),
+    descriptions: Object.fromEntries(
+      sophisticationOptions
+        .filter((o) => o.description)
+        .map((o) => [o.label, o.description as string]),
+    ),
+    value: sophistication === sophisticationOptions[0] ? '' : sophistication.label,
+    recommended: rec.sophistication ?? null,
+    noPreference: sophistication === sophisticationOptions[0],
+    thinking: suggesting,
+    custom: { allowed: false, active: false, value: '', placeholder: '', examples: [] },
+    onSelect: (label) => {
+      const o = sophisticationOptions.find((x) => x.label === label)
+      if (o) setSophisticationUser(o)
+    },
+    onCustom: () => {},
+    onCustomChange: () => {},
+    onNoPreference: () => setSophisticationUser(sophisticationOptions[0]),
+  }
+
   const audienceField: StrategicField = {
     options: audienceOptions.slice(1).map((o) => o.label),
     value: audienceCustom || audience === audienceOptions[0] ? '' : audience.label,
@@ -610,7 +725,12 @@ export function Workbench() {
     toggleDimension,
     variations,
     setVariations,
+    modelMenus,
+    montageMenus: montageModelMenus,
+    models: deliverableModels,
+    setModel: setDeliverableModel,
     awarenessField,
+    sophisticationField,
     audienceField,
     offerField,
     offerName,
@@ -656,17 +776,33 @@ export function Workbench() {
             <Loader2 size={13} className="animate-spin" /> Reactor firing — agents are working
             through your brief.
           </span>
+        ) : phase === 'done' && montageSelected && view !== 'canvas' ? (
+          // The montage path lands here: scenes are rendered — hand the whole
+          // sequence to the Creative Canvas for shaping, branching, and assembly.
+          <button
+            type="button"
+            onClick={() => {
+              setCanvasTab('montage')
+              setView('canvas')
+            }}
+            className="fire-btn inline-flex items-center gap-2 rounded-full px-5 py-2.5 font-display text-sm font-bold uppercase tracking-wide text-white"
+          >
+            <Workflow size={15} /> Launch in Creative Canvas
+          </button>
         ) : (
           <span />
         )}
-        {/* Output surface toggle — watch the reactor work, remix in the
-            Studio, or wire the production graph in the Flow. */}
+        {/* Output surface toggle — watch the reactor work, shape the run in the
+            Creative Canvas, or finish one ad in the Studio. */}
         <div className="inline-flex rounded-full border border-white/10 bg-white/[0.03] p-1">
-          {(['reactor', 'studio', 'flow'] as const).map((v) => (
+          {(['reactor', 'canvas', 'studio'] as const).map((v) => (
             <button
               key={v}
               type="button"
-              onClick={() => setView(v)}
+              onClick={() => {
+                if (v === 'canvas') setCanvasTab(undefined)
+                setView(v)
+              }}
               aria-pressed={view === v}
               className={`rounded-full px-3.5 py-1.5 text-xs font-semibold capitalize transition-colors ${
                 view === v ? 'bg-glow/15 text-glow' : 'text-white/45 hover:text-white/70'
@@ -678,17 +814,32 @@ export function Workbench() {
         </div>
       </div>
 
-      {/* Output — the Creative Canvas (hands-on remix) or the autonomous reactor.
+      {/* Output — the reactor (autonomous run), the Creative Canvas (structured
+          creative direction over the run), or the Studio (finish one ad).
           In reactor mode: before firing, the empty state; once fired, the live
           agent workflow (raw telemetry collapses into a drawer inside it). */}
-      {view === 'flow' ? (
-        <CreativeFlow
-          offerName={offerName}
-          angle={angle === NO_PREFERENCE ? undefined : angle}
+      {view === 'canvas' ? (
+        <CreativeCanvas
+          strategy={{
+            campaignName,
+            angle: angle === NO_PREFERENCE ? undefined : angle,
+            awareness: awareness.label,
+            sophistication: sophistication.label,
+            audience: audience.label,
+            offer: offer.label,
+            offerName,
+            outputs,
+            montage: montageSelected,
+          }}
+          imageModel={resolvedImageModel}
+          videoModel={resolvedVideoModel}
+          onSendToStudio={configureInStudio}
           onConfigure={() => setModalOpen(true)}
+          onExit={() => setView('reactor')}
+          initialTab={canvasTab}
         />
       ) : view === 'studio' ? (
-        <CreativeCanvas
+        <AdStudio
           offerName={offerName}
           seed={studioSeed}
           onConfigure={() => setModalOpen(true)}

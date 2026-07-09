@@ -110,10 +110,14 @@ export interface ReactorInputs {
   outputTypesAgentDecided: boolean
   /** Selected aspect ratios per deliverable, e.g. { 'Video Creative': ['9:16'] }. */
   dimensions?: Record<string, string[]>
+  /** Selected render model per deliverable, e.g. { 'Video Creative': 'veo-3.1' }. 'auto' = system pick. */
+  models?: Record<string, string>
   /** How many distinct versions of every image/video creative the reactor makes (1–4). */
   variations?: number
   awarenessStage: string
   awarenessDirective: string
+  sophisticationStage: string
+  sophisticationDirective: string
   audienceType: string
   audienceDirective: string
   offerType: string
@@ -160,6 +164,7 @@ export interface ReactorSuggestion {
   angleConfidence: number
   angleReason: string
   awareness: string
+  sophistication: string
   audience: string
   offer: string
   deliverables: string[]
@@ -259,6 +264,16 @@ export const CREATIVE_SIZES: Record<string, CreativeSize[]> = {
     { ratio: '1:1', label: 'Square', use: 'Feed carousel', dims: '1080×1080' },
     { ratio: '9:16', label: 'Vertical', use: 'Stories carousel', dims: '1080×1920' },
   ],
+  'Montage / Scene Flow': [
+    { ratio: '9:16', label: 'Vertical', use: 'Reels / TikTok', dims: '1080×1920' },
+    { ratio: '1:1', label: 'Square', use: 'Feed', dims: '1080×1080' },
+    { ratio: '16:9', label: 'Landscape', use: 'In-stream / YouTube', dims: '1920×1080' },
+  ],
+  'Creative Variations': [
+    { ratio: '1:1', label: 'Square', use: 'Feed', dims: '1080×1080' },
+    { ratio: '9:16', label: 'Vertical', use: 'Stories / Reels', dims: '1080×1920' },
+    { ratio: '16:9', label: 'Landscape', use: 'Desktop / in-stream', dims: '1920×1080' },
+  ],
 }
 
 // The size pre-selected for a deliverable so the Formats step is never blank.
@@ -267,6 +282,8 @@ export const DEFAULT_SIZE: Record<string, CreativeRatio> = {
   'Video Creative': '9:16',
   'UGC Creative': '9:16',
   'Carousel Creatives': '1:1',
+  'Montage / Scene Flow': '9:16',
+  'Creative Variations': '1:1',
 }
 
 /* ------------------------------- Slide 2 ---------------------------------- */
@@ -274,6 +291,8 @@ export const DEFAULT_SIZE: Record<string, CreativeRatio> = {
 export interface DirectiveOption {
   label: string
   directive: string
+  /** Optional one-line, builder-facing explanation rendered under the option. */
+  description?: string
 }
 
 export const awarenessOptions: DirectiveOption[] = [
@@ -306,6 +325,57 @@ export const awarenessOptions: DirectiveOption[] = [
     label: 'Most-Aware',
     directive:
       'The audience is ready. Lead directly with the offer and a reason to act now. Short, punchy, direct. Skip the problem and mechanism build entirely.',
+  },
+]
+
+/**
+ * Market Sophistication — Eugene Schwartz, Breakthrough Advertising. How many
+ * times this market has already been pitched a solution, and therefore what
+ * KIND of claim still lands. Distinct from awareness (which governs how much
+ * you explain); sophistication governs what you are allowed to claim.
+ */
+export const sophisticationOptions: DirectiveOption[] = [
+  {
+    label: NO_PREFERENCE,
+    description:
+      'The system reads the brief and market context and picks the sophistication stage for you.',
+    directive:
+      'The user has no market-sophistication preference — infer the stage from the brief, the competitive context, and vault research. For coaching offers to trades business owners (a heavily pitched market), default to Stage 4–5: mechanism-led differentiation with identity-level identification.',
+  },
+  {
+    label: 'Stage 1 — First Claim',
+    description:
+      'The market has never heard this promise before. A simple, direct claim wins on its own.',
+    directive:
+      'MARKET SOPHISTICATION — STAGE 1 (first to market): The audience has never been pitched this benefit. Lead with the direct claim, stated simply and boldly. No mechanism, no elaboration — name the desire and promise its fulfilment. Do not overcomplicate.',
+  },
+  {
+    label: 'Stage 2 — Bigger Claim',
+    description:
+      'Competitors make the same promise. Winning needs a bigger, more specific version of the claim.',
+    directive:
+      'MARKET SOPHISTICATION — STAGE 2 (claim competition): Competitors already make the same promise. Outbid them with a larger, sharper, more specific claim — concrete numbers, tighter timeframes, named outcomes. Still claim-led, but enlarged and made specific enough that generic competitors cannot copy it.',
+  },
+  {
+    label: 'Stage 3 — New Mechanism',
+    description:
+      'The market has heard every claim and is skeptical. Lead with a NEW mechanism — the unique way this works.',
+    directive:
+      'MARKET SOPHISTICATION — STAGE 3 (claims exhausted): The audience has heard every claim and no longer believes bare promises. Lead with a NEW MECHANISM — the specific, preferably named, way this works that competitors do not have. The mechanism is the headline; the claim rides behind it.',
+  },
+  {
+    label: 'Stage 4 — Better Mechanism',
+    description:
+      'Mechanisms are everywhere too. Elaborate and dramatize why THIS mechanism is easier, faster, more certain.',
+    directive:
+      'MARKET SOPHISTICATION — STAGE 4 (mechanism competition): Competing mechanisms crowd the market. Elaborate and dramatize the mechanism — prove it is easier, faster, more certain than the alternatives the prospect has already seen. Comparison, proof, and specificity of process are the levers. A named proprietary process beats a generic one.',
+  },
+  {
+    label: 'Stage 5 — Identity & Tribe',
+    description:
+      'A fully exhausted market. Claims and mechanisms bounce off — lead with identification and who they become.',
+    directive:
+      'MARKET SOPHISTICATION — STAGE 5 (fully exhausted market): Claims and mechanisms both bounce off. Lead with IDENTIFICATION — mirror the prospect’s day, language, and identity so precisely they feel seen, then sell who they become and the tribe they join, not what the product does. Experience, identity, and belonging are the message; the offer arrives late and quietly.',
   },
 ]
 
@@ -390,6 +460,8 @@ export function createDefaultInputs(): ReactorInputs {
     outputTypesAgentDecided: true,
     awarenessStage: awarenessOptions[0].label,
     awarenessDirective: awarenessOptions[0].directive,
+    sophisticationStage: sophisticationOptions[0].label,
+    sophisticationDirective: sophisticationOptions[0].directive,
     audienceType: audienceOptions[0].label,
     audienceDirective: audienceOptions[0].directive,
     offerType: offerOptions[0].label,

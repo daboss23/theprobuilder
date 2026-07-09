@@ -2,6 +2,7 @@ import Anthropic from '@anthropic-ai/sdk'
 import { NextRequest, NextResponse } from 'next/server'
 import {
   awarenessOptions,
+  sophisticationOptions,
   audienceOptions,
   offerOptions,
   type IntelSourceRecommendation,
@@ -26,6 +27,7 @@ const MODEL = ORCHESTRATOR_FALLBACK_MODEL
 // Base strategic categories — a starting vocabulary, not a hard limit.
 const angleCategories = ['Profit', 'Systems', 'Time Freedom', 'Leadership', 'Cashflow', 'Growth', 'Team Accountability']
 const awarenessLabels = awarenessOptions.slice(1).map((o) => o.label)
+const sophisticationLabels = sophisticationOptions.slice(1).map((o) => o.label)
 const audienceLabels = audienceOptions.slice(1).map((o) => o.label)
 const offerLabels = offerOptions.slice(1).map((o) => o.label)
 const deliverableLabels = [...reactorOutputTypes]
@@ -35,6 +37,7 @@ interface RawSuggestion {
   angleConfidence: number
   angleReason: string
   awareness: string
+  sophistication: string
   audience: string
   offer: string
   deliverables: string[]
@@ -62,6 +65,15 @@ function fallback(brief: string, angle: string): RawSuggestion {
     : /compare|coaching|hiring|options?|vs\b/.test(t)
       ? 'Solution-Aware'
       : 'Problem-Aware'
+  // Trades-coaching is a heavily pitched market: default to late-stage
+  // sophistication, escalating to identity when the brief signals it.
+  const sophistication = /identity|tribe|community|belong|who they become|not another hustle/.test(t)
+    ? 'Stage 5 — Identity & Tribe'
+    : /mechanism|method|system|framework|process|blueprint|roadmap/.test(t)
+      ? 'Stage 4 — Better Mechanism'
+      : /new to market|first of its kind|never been done|no one else offers/.test(t)
+        ? 'Stage 1 — First Claim'
+        : 'Stage 4 — Better Mechanism'
   const audience = /retarget|applied|application|sales page|visited/.test(t)
     ? 'Retargeting — visited sales page'
     : /warm|seen|content|follower/.test(t)
@@ -93,6 +105,7 @@ function fallback(brief: string, angle: string): RawSuggestion {
     angleConfidence: 62,
     angleReason: `Best-fit base angle inferred from the brief${pickAngle ? ` — leads with ${pickAngle}.` : '.'}`,
     awareness,
+    sophistication,
     audience,
     offer,
     deliverables,
@@ -114,6 +127,9 @@ function validate(s: Partial<RawSuggestion>, fb: RawSuggestion): RawSuggestion {
     angleConfidence: Number.isFinite(conf) ? Math.max(40, Math.min(99, Math.round(conf))) : fb.angleConfidence,
     angleReason: typeof s.angleReason === 'string' && s.angleReason.trim() ? s.angleReason.trim() : fb.angleReason,
     awareness: awarenessLabels.includes(s.awareness ?? '') ? (s.awareness as string) : fb.awareness,
+    sophistication: sophisticationLabels.includes(s.sophistication ?? '')
+      ? (s.sophistication as string)
+      : fb.sophistication,
     audience: audienceLabels.includes(s.audience ?? '') ? (s.audience as string) : fb.audience,
     offer: offerLabels.includes(s.offer ?? '') ? (s.offer as string) : fb.offer,
     deliverables: deliverables.length ? deliverables : fb.deliverables,
@@ -215,11 +231,11 @@ export async function POST(request: NextRequest) {
       model: MODEL,
       max_tokens: 500,
       system:
-        'You are OPUS, the Campaign Reactor strategist for The Professional Builder (a coaching program for trades/construction business owners). Given a brief, name the single strongest campaign ANGLE — a precise, evocative strategic angle that may be sharper than the base categories (e.g. "Profit Leak", "Owner Dependency", "Foreman Trap"). Then choose the best-fit awareness, audience and offer from the provided lists, and the creative deliverables to produce. Reply with ONLY a JSON object, no prose.',
+        'You are OPUS, the Campaign Reactor strategist for The Professional Builder (a coaching program for trades/construction business owners). Given a brief, name the single strongest campaign ANGLE — a precise, evocative strategic angle that may be sharper than the base categories (e.g. "Profit Leak", "Owner Dependency", "Foreman Trap"). Then choose the best-fit awareness stage, market-sophistication stage (Eugene Schwartz — what KIND of claim still lands in this market), audience and offer from the provided lists, and the creative deliverables to produce. Reply with ONLY a JSON object, no prose.',
       messages: [
         {
           role: 'user',
-          content: `Campaign brief:\n"""${brief.trim()}"""\n\nAngle hint: ${angle}\n\nBase angle categories (you may go sharper than these): ${angleCategories.join(' | ')}\nAWARENESS (pick one exact label): ${awarenessLabels.join(' | ')}\nAUDIENCE (pick one exact label): ${audienceLabels.join(' | ')}\nOFFER (pick one exact label): ${offerLabels.join(' | ')}\nDELIVERABLES (pick the subset that fits the brief's medium): ${deliverableLabels.join(' | ')}\n\nReturn JSON:\n{"angle":"<precise angle name>","angleConfidence":<0-100>,"angleReason":"<one sentence why this angle fits>","awareness":"...","audience":"...","offer":"...","deliverables":["...","..."],"deliverablesReason":"<one sentence why these deliverables>"}`,
+          content: `Campaign brief:\n"""${brief.trim()}"""\n\nAngle hint: ${angle}\n\nBase angle categories (you may go sharper than these): ${angleCategories.join(' | ')}\nAWARENESS (pick one exact label): ${awarenessLabels.join(' | ')}\nSOPHISTICATION (pick one exact label): ${sophisticationLabels.join(' | ')}\nAUDIENCE (pick one exact label): ${audienceLabels.join(' | ')}\nOFFER (pick one exact label): ${offerLabels.join(' | ')}\nDELIVERABLES (pick the subset that fits the brief's medium): ${deliverableLabels.join(' | ')}\n\nReturn JSON:\n{"angle":"<precise angle name>","angleConfidence":<0-100>,"angleReason":"<one sentence why this angle fits>","awareness":"...","sophistication":"...","audience":"...","offer":"...","deliverables":["...","..."],"deliverablesReason":"<one sentence why these deliverables>"}`,
         },
       ],
     })
