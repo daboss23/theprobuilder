@@ -1,5 +1,6 @@
 'use client'
 
+import { useState } from 'react'
 import {
   Activity,
   Check,
@@ -10,8 +11,10 @@ import {
   Hexagon,
   ImageIcon,
   Loader2,
+  Rocket,
   Users,
   Wand2,
+  Workflow,
 } from 'lucide-react'
 import { Pill } from '@/components/reactor/ui'
 import { NEURO_AXES, NEURO_PASS_MARK, type NeuroScore } from '@/lib/reactor-inputs'
@@ -113,6 +116,8 @@ export function ConceptResultCard({
   onAnimate,
   onGenerateUGC,
   onConfigureInStudio,
+  onLaunchCanvas,
+  onPushToMeta,
 }: {
   concept: Concept
   index: number
@@ -129,9 +134,20 @@ export function ConceptResultCard({
   onAnimate: (image: string) => void
   onGenerateUGC: () => void
   onConfigureInStudio: () => void
+  onLaunchCanvas: () => void
+  onPushToMeta: () => Promise<{ ok: boolean; message: string }>
 }) {
   const creativeBusy = creativeState?.status === 'working' || video?.status === 'rendering'
   const hasCreative = Boolean(image || (video?.status === 'done' && video.url))
+  const [push, setPush] = useState<{ status: 'idle' | 'pushing' | 'done' | 'error'; message?: string }>({
+    status: 'idle',
+  })
+
+  const handlePush = async () => {
+    setPush({ status: 'pushing' })
+    const res = await onPushToMeta()
+    setPush({ status: res.ok ? 'done' : 'error', message: res.message })
+  }
 
   return (
     <div
@@ -238,15 +254,57 @@ export function ConceptResultCard({
         </div>
       )}
 
-      {/* Like it? Take the finished creative into the Studio to edit the ad. */}
+      {/* Advance the creative down the production line: shape it in the Canvas,
+          finish it in the Studio, or push the ready ad unit straight to Meta. */}
       {(hasCreative || c.adPackage) && (
-        <button
-          type="button"
-          onClick={onConfigureInStudio}
-          className="fire-btn mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl px-4 py-2.5 font-display text-xs font-bold uppercase tracking-[0.14em] text-white"
-        >
-          <Wand2 size={14} /> Configure in Studio
-        </button>
+        <div className="mt-3 space-y-2">
+          <button
+            type="button"
+            onClick={onConfigureInStudio}
+            className="fire-btn inline-flex w-full items-center justify-center gap-2 rounded-xl px-4 py-2.5 font-display text-xs font-bold uppercase tracking-[0.14em] text-white"
+          >
+            <Wand2 size={14} /> Configure in Studio
+          </button>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={onLaunchCanvas}
+              className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-white/12 bg-white/[0.03] px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.1em] text-white/70 transition-colors hover:border-cyan/40 hover:text-cyan"
+            >
+              <Workflow size={13} /> Creative Canvas
+            </button>
+            <button
+              type="button"
+              onClick={handlePush}
+              disabled={!c.adPackage || push.status === 'pushing' || push.status === 'done'}
+              className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-white/12 bg-white/[0.03] px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.1em] text-white/70 transition-colors hover:border-primary/40 hover:text-primary disabled:opacity-50 disabled:hover:border-white/12 disabled:hover:text-white/70"
+              title={c.adPackage ? 'Push this ad unit to your Meta creative library' : 'No ad package on this concept'}
+            >
+              {push.status === 'pushing' ? (
+                <Loader2 size={13} className="animate-spin" />
+              ) : push.status === 'done' ? (
+                <Check size={13} />
+              ) : (
+                <Rocket size={13} />
+              )}
+              {push.status === 'done' ? 'Pushed' : 'Push to Meta'}
+            </button>
+          </div>
+          {push.status !== 'idle' && push.status !== 'pushing' && push.message && (
+            <p
+              className={`rounded-lg border p-2 text-[11px] ${
+                push.status === 'done'
+                  ? 'border-success/30 bg-success/[0.06] text-success'
+                  : 'border-warning/30 bg-warning/[0.06] text-warning'
+              }`}
+            >
+              {push.message}
+            </p>
+          )}
+          <p className="text-center text-[10px] text-white/30">
+            Push skips the Studio pre-test — finish in Studio first for a NEURO check before spend.
+          </p>
+        </div>
       )}
 
       <p className="mt-3 text-[12px] leading-relaxed text-white/55">{c.text}</p>

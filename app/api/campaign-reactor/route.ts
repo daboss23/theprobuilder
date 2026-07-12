@@ -482,7 +482,7 @@ Your intelligence network:
 - ORACLE — Strategic Memory: the memory of every winning strategic configuration (angle, audience, offer, awareness, creative + copy structure) — which patterns win, which lose, and what is most likely to work next.
 
 Process:
-1. Consult your network with consult_intelligence. ALWAYS consult ATLAS FIRST — she is the knowledge foundation (frameworks, SOPs, calls, uploaded assets); every build is grounded in the Vault before anything else. Then ALWAYS consult NOVA and ORACLE, plus at least one of SPARK/ECHO. Use their findings as evidence — don't guess.${metaAdsLine}
+1. Consult your network with consult_intelligence. ALWAYS consult ATLAS FIRST — she is the knowledge foundation (frameworks, SOPs, calls, uploaded assets); every build is grounded in the Vault before anything else. Then ALWAYS consult NOVA and ORACLE, plus at least one of SPARK/ECHO. You may request several independent layers in a SINGLE step (multiple consult_intelligence calls at once) — they run in parallel, so batch them to move faster without losing any depth. Use their findings as evidence — don't guess.${metaAdsLine}
 2. Call get_learnings and self-score every concept against that rubric. Revise or drop anything below 7.${imageLine}${videoLine}
 3. Call submit_concepts with concepts ONLY for these requested output types: ${outputs.join(', ')}. Each concept cites which intelligence layer its evidence came from, and each concept carries a complete adPackage — the launch-ready Meta ad unit.
 
@@ -1188,7 +1188,31 @@ export async function POST(request: NextRequest) {
           if (toolUses.length === 0) break
 
           const results: Anthropic.Beta.Messages.BetaToolResultBlockParam[] = []
+          // Independent knowledge retrievals requested in the same turn run
+          // concurrently — identical findings and quality, just less waiting.
+          // Stateful/terminal tools (submit, media) stay strictly ordered below.
+          const consultUses = toolUses.filter((b) => b.name === 'consult_intelligence')
+          if (consultUses.length > 1) {
+            const parallel = await Promise.all(
+              consultUses.map(async (tu) => {
+                const { layer, question } = tu.input as { layer: string; question: string }
+                if (!isIntelligenceId(layer)) {
+                  return {
+                    type: 'tool_result' as const,
+                    tool_use_id: tu.id,
+                    content: 'Unknown intelligence layer',
+                    is_error: true,
+                  }
+                }
+                const findings = await runIntelligence(anthropic, controller, layer, question, body.builderId ?? null)
+                return { type: 'tool_result' as const, tool_use_id: tu.id, content: findings }
+              }),
+            )
+            results.push(...parallel)
+          }
           for (const tu of toolUses) {
+            // Consults with siblings were already resolved in parallel above.
+            if (tu.name === 'consult_intelligence' && consultUses.length > 1) continue
             if (tu.name === 'consult_intelligence') {
               const { layer, question } = tu.input as { layer: string; question: string }
               if (!isIntelligenceId(layer)) {
