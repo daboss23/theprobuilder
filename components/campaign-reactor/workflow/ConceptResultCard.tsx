@@ -5,6 +5,7 @@ import {
   Check,
   ChevronRight,
   Copy as CopyIcon,
+  Download,
   Film,
   Hexagon,
   ImageIcon,
@@ -155,6 +156,19 @@ export function ConceptResultCard({
               <Users size={12} />
               Generate UGC
             </button>
+          )}
+          {image && (
+            <a
+              href={`/api/image/download?url=${encodeURIComponent(image)}&name=${encodeURIComponent(
+                `tpb-${c.type}`,
+              )}`}
+              download
+              className="flex items-center gap-1 text-[11px] text-white/40 hover:text-glow"
+              title="Download the finished creative as a PNG"
+            >
+              <Download size={12} />
+              Download
+            </a>
           )}
           {image && !video && (
             <button
