@@ -4,10 +4,11 @@ import type { ImageModelAvailability } from './types'
  * Recommend an image model before the Reactor fires. Pure (types only) so it
  * runs on client and server.
  *
- * Heuristic:
- *  - Photographic founder / testimonial creative → Higgsfield Soul (premium ad
- *    look, pairs with its image-to-video).
- *  - Otherwise → FLUX.1 via fal (photoreal stills in-house on one fal key).
+ * Heuristic (best configured wins, in order):
+ *  - Kie flagships lead when a KIE_API_KEY is present — one key unlocks the most
+ *    powerful market models, so text-heavy creative → Nano Banana Pro / GPT
+ *    Image (in-image text), photographic → Seedream 4.0 / Nano Banana Pro.
+ *  - Then Higgsfield Soul (premium founder/testimonial look) and FLUX via fal.
  * Prefers configured models; falls back to the ideal for display when none have
  * keys yet.
  */
@@ -33,15 +34,21 @@ export function recommendImageModel(
 
   const preference: { id: string; reason: string }[] = wantsText
     ? [
+        { id: 'kie-nano-banana-pro', reason: 'best-in-class prompt adherence and in-image text via Kie' },
+        { id: 'kie-gpt-image', reason: 'clean in-image text for headline/offer creatives via Kie' },
         { id: 'fal-flux', reason: 'photoreal stills with strong prompt adherence via one fal key' },
         { id: 'higgsfield-soul', reason: 'premium photographic look' },
       ]
     : wantsPhoto
       ? [
+          { id: 'kie-seedream-v4', reason: 'cinematic photoreal founder/testimonial stills via Kie' },
+          { id: 'kie-nano-banana-pro', reason: 'top-tier photoreal detail via Kie' },
           { id: 'higgsfield-soul', reason: 'premium photographic look for founder/testimonial ads' },
           { id: 'fal-flux', reason: 'photoreal founder/testimonial stills in-house via one fal key' },
         ]
       : [
+          { id: 'kie-nano-banana-pro', reason: 'strongest all-round ad still via Kie' },
+          { id: 'kie-seedream-v4', reason: 'cinematic realism via Kie' },
           { id: 'fal-flux', reason: 'photoreal variants in-house via one fal key' },
           { id: 'higgsfield-soul', reason: 'premium photographic look' },
         ]

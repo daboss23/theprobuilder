@@ -1,5 +1,6 @@
 import { generateImage as higgsfieldImage, higgsfieldConfigured } from '@/lib/higgsfield'
 import { generateFalImage, falImageConfigured } from './fal'
+import { generateKieImage, kieImageConfigured } from './kie'
 import { DEFAULT_IMAGE_MODEL, IMAGE_MODELS, getImageModel } from './registry'
 import type { AspectRatio, ImageModelAvailability } from './types'
 
@@ -15,12 +16,13 @@ export { IMAGE_MODELS, DEFAULT_IMAGE_MODEL, getImageModel } from './registry'
 export function providerConfigured(provider: string): boolean {
   if (provider === 'higgsfield') return higgsfieldConfigured()
   if (provider === 'fal') return falImageConfigured()
+  if (provider === 'kie') return kieImageConfigured()
   return false
 }
 
 /** True if ANY image provider is configured. */
 export function imageConfigured(): boolean {
-  return higgsfieldConfigured() || falImageConfigured()
+  return higgsfieldConfigured() || falImageConfigured() || kieImageConfigured()
 }
 
 /** The image model menu annotated with whether each model's key is present. */
@@ -59,6 +61,7 @@ async function renderWithModel(
   const model = getImageModel(id)
   if (!model) return { url: null, error: `Unknown image model "${id}"` }
   if (model.provider === 'fal') return generateFalImage(prompt, aspectRatio)
+  if (model.provider === 'kie') return generateKieImage(id, prompt, aspectRatio)
   if (model.provider === 'higgsfield') {
     const url = await higgsfieldImage(prompt, aspectRatio)
     return { url, error: url ? undefined : 'Higgsfield returned no image' }
