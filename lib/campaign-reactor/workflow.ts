@@ -84,6 +84,8 @@ export type PhaseId =
   | 'copy'
   | 'memory'
   | 'synthesis'
+  | 'render'
+  | 'pretest'
   | 'concepts'
   | 'complete'
 
@@ -104,6 +106,8 @@ export const PHASE_DEFS: PhaseDef[] = [
   { id: 'copy', label: 'Copy Analysis', agent: 'echo' },
   { id: 'memory', label: 'Strategic Memory', agent: 'oracle' },
   { id: 'synthesis', label: 'Synthesis' },
+  { id: 'render', label: 'Render Creative' },
+  { id: 'pretest', label: 'NEURO Pre-Test' },
   { id: 'concepts', label: 'Generate Concepts' },
   { id: 'complete', label: 'Complete' },
 ]
@@ -163,6 +167,11 @@ export interface WorkflowState {
   /** Increments each time a finding lands at OPUS (drives the receive flare). */
   receiveCount: number
   generationStarted: boolean
+  /** A visual creative (image/video) render has been kicked off this run. */
+  renderStarted: boolean
+  /** The NEURO predicted-response pre-test has begun / finished. */
+  pretestStarted: boolean
+  pretestComplete: boolean
   startedAt: number | null
   endedAt: number | null
   error: string | null
@@ -195,6 +204,9 @@ export function startWorkflow(seed: WorkflowSeed = {}): WorkflowState {
     retrievals: [],
     receiveCount: 0,
     generationStarted: false,
+    renderStarted: false,
+    pretestStarted: false,
+    pretestComplete: false,
     startedAt: Date.now(),
     endedAt: null,
     error: null,
@@ -277,6 +289,15 @@ export function reduceWorkflow(prev: WorkflowState, ev: Record<string, unknown>)
       if (/generating still|rendering |render(ing)?\b/i.test(text)) {
         state.opusPhase = bump(state.opusPhase, 'generating')
         state.generationStarted = true
+        state.renderStarted = true
+      }
+      // NEURO predicted-response pre-test lifecycle — its own visible stage so
+      // the back half of the run keeps advancing instead of resting on one node.
+      if (/neuro[\s—-]+pre-?test complete|pre-test complete/i.test(text)) {
+        state.pretestStarted = true
+        state.pretestComplete = true
+      } else if (/neuro|pre-?test|predicted response/i.test(text)) {
+        state.pretestStarted = true
       }
       return state
     }
@@ -332,12 +353,17 @@ export function reduceWorkflow(prev: WorkflowState, ev: Record<string, unknown>)
 
     case 'media': {
       state.generationStarted = true
+      state.renderStarted = true
       state.opusPhase = bump(state.opusPhase, 'generating')
       return state
     }
 
     case 'concept': {
       state.generationStarted = true
+      // Concepts only stream once NEURO has passed them, so their arrival
+      // confirms the pre-test stage landed.
+      state.pretestStarted = true
+      state.pretestComplete = true
       state.opusPhase = bump(state.opusPhase, 'generating')
       const concept = ev.concept as { type?: string } | undefined
       if (concept?.type) pushPacket(state, 'opus', 'output', clip(concept.type, 22))
@@ -406,8 +432,19 @@ export function derivePhases(state: WorkflowState): PhaseEntry[] {
       else if (anyAgentTouched || reachedSynthesis || state.finished) status = 'complete'
       else if (state.active) status = 'active'
     } else if (def.id === 'synthesis') {
-      if (reachedGenerate || state.opusPhase === 'ready') status = 'complete'
+      if (state.renderStarted || state.pretestStarted || reachedGenerate || state.opusPhase === 'ready')
+        status = 'complete'
       else if (reachedSynthesis) status = 'active'
+      else if (state.finished) status = 'skipped'
+    } else if (def.id === 'render') {
+      // Optional stage — only visual runs render creative. Complete once the
+      // pre-test/concepts move past it; skipped if the run finishes copy-only.
+      if (state.pretestStarted || state.opusPhase === 'ready') status = state.renderStarted ? 'complete' : 'skipped'
+      else if (state.renderStarted) status = 'active'
+      else if (state.finished) status = 'skipped'
+    } else if (def.id === 'pretest') {
+      if (state.pretestComplete || state.opusPhase === 'ready') status = 'complete'
+      else if (state.pretestStarted) status = 'active'
       else if (state.finished) status = 'skipped'
     } else if (def.id === 'concepts') {
       if (state.opusPhase === 'ready') status = 'complete'
