@@ -313,6 +313,10 @@ body {
   border: 1px solid rgba(96, 162, 225, 0.28);
   border-radius: 1.5rem;
   background:
+    /* glossy diagonal glare streak — the approved liquid-glass shine */
+    linear-gradient(122deg, transparent 30%, rgba(216, 238, 255, 0.11) 43%, rgba(216, 238, 255, 0.02) 49%, transparent 61%),
+    /* always-on top gloss */
+    linear-gradient(180deg, rgba(226, 242, 255, 0.10), transparent 22%),
     linear-gradient(115deg, rgba(255, 255, 255, 0.06), transparent 24%),
     radial-gradient(560px 200px at 6% -4%, rgba(56, 142, 240, 0.13), transparent 70%),
     radial-gradient(420px 220px at 100% 4%, rgba(124, 92, 246, 0.08), transparent 72%),
@@ -320,8 +324,9 @@ body {
   backdrop-filter: blur(28px) saturate(145%);
   -webkit-backdrop-filter: blur(28px) saturate(145%);
   box-shadow:
-    inset 0 1px 0 rgba(185, 225, 255, 0.13),
-    inset 0 0 0 1px rgba(255, 255, 255, 0.02),
+    inset 0 1.5px 0 rgba(210, 236, 255, 0.30),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.03),
+    inset 0 14px 30px rgba(150, 200, 255, 0.06),
     inset 0 -34px 60px rgba(0, 0, 0, 0.22),
     0 1px 1px rgba(0, 0, 0, 0.4),
     0 28px 64px -38px rgba(0, 0, 0, 0.92),
@@ -337,14 +342,14 @@ body {
   border-radius: inherit;
   background: linear-gradient(
     128deg,
-    rgba(180, 220, 255, 0.1) 0%,
-    rgba(160, 205, 255, 0.03) 14%,
+    rgba(196, 228, 255, 0.16) 0%,
+    rgba(170, 210, 255, 0.05) 14%,
     transparent 32%,
     transparent 74%,
-    rgba(110, 165, 220, 0.04) 100%
+    rgba(120, 175, 230, 0.05) 100%
   );
   mix-blend-mode: screen;
-  opacity: 0.85;
+  opacity: 1;
 }
 .glass > *, .reactor-panel > * { position: relative; z-index: 1; }
 .glass-hover { transition: border-color 0.22s ease, box-shadow 0.22s ease, transform 0.22s ease; }
@@ -352,17 +357,87 @@ body {
   transform: translateY(-2px);
   border-color: rgba(76, 170, 255, 0.5);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.09),
+    inset 0 1.5px 0 rgba(220, 240, 255, 0.34),
+    inset 0 12px 26px rgba(150, 200, 255, 0.08),
     0 0 0 1px rgba(76, 156, 255, 0.09),
     0 24px 50px -32px rgba(30, 120, 255, 0.75);
 }
+/* ----------------------------------------------------------------------------
+   Liquid Glass — opt-in hero treatment. Real refraction bends the light behind
+   the element (feTurbulence -> feDisplacementMap, registered in the root layout
+   as #liquid-glass). Reserved for primary CTAs/feature cards so it stays a
+   moment, not the whole page. Degrades to a bright frosted-glass finish where
+   backdrop SVG filters aren't supported (Safari).
+---------------------------------------------------------------------------- */
+.liquid-glass {
+  position: relative;
+  isolation: isolate;
+  border: 1px solid rgba(180, 214, 255, 0.34);
+  color: #eaf3ff;
+  background:
+    linear-gradient(122deg, transparent 26%, rgba(255, 255, 255, 0.14) 40%, rgba(255, 255, 255, 0.04) 47%, transparent 58%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0.03) 46%, rgba(255, 255, 255, 0.08));
+  -webkit-backdrop-filter: blur(2px) saturate(150%);
+  backdrop-filter: blur(2px) saturate(150%);
+  box-shadow:
+    inset 0 1.5px 0 rgba(255, 255, 255, 0.7),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.12),
+    inset 0 14px 26px rgba(180, 214, 255, 0.14),
+    inset 0 -12px 24px rgba(6, 12, 28, 0.5),
+    0 18px 40px -18px rgba(0, 0, 0, 0.6),
+    0 0 40px -20px rgba(94, 168, 255, 0.6);
+  transition: transform 0.28s cubic-bezier(0.2, 0.9, 0.25, 1), box-shadow 0.28s ease, border-color 0.28s ease;
+}
+/* Real backdrop refraction where supported (Chromium/Edge/Firefox). */
+@supports (backdrop-filter: url(#liquid-glass)) {
+  .liquid-glass {
+    -webkit-backdrop-filter: blur(1px) url(#liquid-glass);
+    backdrop-filter: blur(1px) url(#liquid-glass);
+  }
+}
+/* Always-on top gloss + pointer-tracked hotspot (JS sets --mx/--my). */
+.liquid-glass::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  border-radius: inherit;
+  pointer-events: none;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.26), rgba(255, 255, 255, 0) 34%),
+    radial-gradient(130px 84px at var(--mx, 50%) var(--my, 0%), rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0) 60%);
+  opacity: 0.82;
+  mix-blend-mode: screen;
+}
+/* Accent neon bleeding up through the glass body. */
+.liquid-glass::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(180deg, transparent 42%, rgb(var(--acc, 94 168 255) / 0.34));
+  opacity: 0.9;
+  mix-blend-mode: screen;
+}
+.liquid-glass > * { position: relative; z-index: 3; }
+.liquid-glass:hover { transform: translateY(-3px) scale(1.015); border-color: rgba(200, 226, 255, 0.5); }
+.liquid-glass:active { transform: translateY(0) scale(0.985); }
+.liquid-glass:focus-visible { outline: 2px solid rgb(var(--acc-hi, 147 197 253)); outline-offset: 4px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .liquid-glass { transition: none; }
+  .liquid-glass:hover { transform: none; }
+}
+
 .panel-sheen {
   position: absolute;
   inset: 0 0 auto;
   height: 52%;
   pointer-events: none;
   border-radius: 1.5rem 1.5rem 0 0;
-  background: linear-gradient(168deg, rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.02) 36%, transparent 62%);
+  background: linear-gradient(168deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.03) 36%, transparent 62%);
   -webkit-mask-image: linear-gradient(#000, transparent);
   mask-image: linear-gradient(#000, transparent);
 }
@@ -412,7 +487,10 @@ body {
 }
 .command-surface button,
 .command-surface a[class*='border-primary'] {
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 0 18px -12px rgba(40, 140, 255, 0.8);
+  box-shadow:
+    inset 0 1px 0 rgba(220, 240, 255, 0.22),
+    inset 0 8px 16px rgba(160, 205, 255, 0.05),
+    0 0 18px -12px rgba(40, 140, 255, 0.8);
 }
 .command-surface input,
 .command-surface textarea,
