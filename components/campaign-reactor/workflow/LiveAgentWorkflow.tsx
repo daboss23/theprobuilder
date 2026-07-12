@@ -34,6 +34,8 @@ export interface WorkflowControls {
   onAnimate: (c: Concept, image: string) => void
   onGenerateUGC: (c: Concept) => void
   onConfigureInStudio: (c: Concept) => void
+  onLaunchCanvas: (c: Concept) => void
+  onPushToMeta: (c: Concept) => Promise<{ ok: boolean; message: string }>
   onRetry: () => void
 }
 
@@ -298,6 +300,8 @@ export function LiveAgentWorkflow(controls: WorkflowControls) {
               onAnimate={(img) => controls.onAnimate(c, img)}
               onGenerateUGC={() => controls.onGenerateUGC(c)}
               onConfigureInStudio={() => controls.onConfigureInStudio(c)}
+              onLaunchCanvas={() => controls.onLaunchCanvas(c)}
+              onPushToMeta={() => controls.onPushToMeta(c)}
             />
           ))}
         </div>

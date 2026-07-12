@@ -563,6 +563,41 @@ export function Workbench() {
     setView('studio')
   }, [])
 
+  // "Creative Canvas" — take the run into the structured direction layer to
+  // shape, branch, and reassign the concept's parts before finishing.
+  const launchCanvas = useCallback((_c: Concept) => {
+    setCanvasTab(undefined)
+    setView('canvas')
+  }, [])
+
+  // "Push to Meta" fast lane straight from the card — publishes the concept's
+  // launch-ready ad unit (adPackage + rendered still) into the Meta creative
+  // library, bypassing the Studio pre-test. Returns a status for inline feedback.
+  const pushConceptToMeta = useCallback(
+    async (c: Concept): Promise<{ ok: boolean; message: string }> => {
+      if (!c.adPackage) {
+        return { ok: false, message: 'This concept has no ad package to push.' }
+      }
+      try {
+        const res = await fetch('/api/meta/publish', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ pkg: c.adPackage, imageUrl: imageFor(c), name: c.type }),
+        }).then((r) => r.json())
+        if (res.ok) {
+          return {
+            ok: true,
+            message: `Creative ${res.creativeId ? `#${res.creativeId} ` : ''}is in your Meta library — attach it to an ad set in Ads Manager.`,
+          }
+        }
+        return { ok: false, message: res.error || 'Meta rejected the creative.' }
+      } catch {
+        return { ok: false, message: 'Could not reach Meta — try again.' }
+      }
+    },
+    [imageFor],
+  )
+
   // Keep the custom audience/offer DirectiveOption in sync with the typed text so
   // its directive instructs OPUS to treat the value as a hard constraint.
   const applyCustomAudience = (v: string) =>
@@ -763,6 +798,8 @@ export function Workbench() {
     onAnimate: runAnimate,
     onGenerateUGC: runUGC,
     onConfigureInStudio: configureInStudio,
+    onLaunchCanvas: launchCanvas,
+    onPushToMeta: pushConceptToMeta,
     onRetry: fire,
   }
 
