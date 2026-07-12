@@ -288,9 +288,11 @@ function buildTools(
   const videoModelIds = listVideoModels()
     .filter((m) => m.configured)
     .map((m) => m.id)
-  const imageModelIds = listImageModels()
-    .filter((m) => m.configured)
-    .map((m) => m.id)
+  const configuredImageModels = listImageModels().filter((m) => m.configured)
+  const imageModelIds = configuredImageModels.map((m) => m.id)
+  const imageModelGuide = configuredImageModels.length
+    ? configuredImageModels.map((m) => `${m.id} = ${m.notes}`).join(' ')
+    : 'fal-flux = photoreal humans/scenes via fal.'
   const tools: Anthropic.Beta.Messages.BetaToolUnion[] = [
     {
       name: 'consult_intelligence',
@@ -331,8 +333,7 @@ function buildTools(
           model: {
             type: 'string',
             enum: imageModelIds.length ? imageModelIds : ['fal-flux'],
-            description:
-              'Image model: fal-flux = photoreal humans/scenes in-house via fal; higgsfield-soul = premium photographic ad look.',
+            description: `Image model — pick the best fit for the concept. Options: ${imageModelGuide} Omit to let the platform choose the recommended model.`,
           },
           aspectRatio: { type: 'string', enum: ['1:1', '9:16', '16:9'], description: 'Defaults to 1:1.' },
         },
