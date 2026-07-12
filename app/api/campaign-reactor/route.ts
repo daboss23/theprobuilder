@@ -87,6 +87,13 @@ const NEURO_MODEL = INTELLIGENCE_MODEL
 const MAX_NEURO_REVISIONS = 1
 const MAX_TURNS = 12
 
+// The Creative Learnings rubric is a static, documented list — it does not change
+// within a process, so build the get_learnings tool-result string once and reuse
+// it across every run instead of re-mapping the array on each self-critique call.
+const LEARNINGS_RUBRIC = learnings
+  .map((l) => `• ${l.insight} — ${l.recommendation} (evidence: ${l.evidence})`)
+  .join('\n')
+
 // MCP connector (Messages API) beta — lets the coordinator call remote MCP
 // tools (Meta Ads) that Anthropic executes server-side.
 const MCP_BETA = 'mcp-client-2025-11-20'
@@ -1086,7 +1093,11 @@ export async function POST(request: NextRequest) {
         // NEURO (Predicted Response pre-test) run state: the grounding rubric is
         // retrieved once and reused across any revision, and a bounded counter
         // caps how many times OPUS is sent back to fix weak-scoring concepts.
-        let neuroPrinciples: string | null = null
+        // Warm the retrieval NOW — the moment the run starts — so it resolves in
+        // parallel with the agent's intelligence loop + copy generation instead
+        // of adding a serial wait at submit time. It's cached across runs too, so
+        // repeat fires resolve instantly. Errors are swallowed inside the helper.
+        const neuroPrinciplesPromise = retrieveNeuroPrinciples(body.angle ?? '', body.builderId ?? null)
         let neuroRevisions = 0
 
         // The model actually driving this run. Starts on the orchestrator tier
@@ -1232,7 +1243,7 @@ export async function POST(request: NextRequest) {
               results.push({
                 type: 'tool_result',
                 tool_use_id: tu.id,
-                content: learnings.map((l) => `• ${l.insight} — ${l.recommendation} (evidence: ${l.evidence})`).join('\n'),
+                content: LEARNINGS_RUBRIC,
               })
             } else if (tu.name === 'generate_image') {
               const { prompt, conceptType, aspectRatio, model } = tu.input as {
@@ -1346,9 +1357,7 @@ export async function POST(request: NextRequest) {
                 type: 'step',
                 text: 'NEURO — pre-testing concepts against neuromarketing principles (predicted response)…',
               })
-              if (neuroPrinciples === null) {
-                neuroPrinciples = await retrieveNeuroPrinciples(body.angle ?? '', body.builderId ?? null)
-              }
+              const neuroPrinciples = await neuroPrinciplesPromise
               const scores = await scoreConceptsNeuro(anthropic, NEURO_MODEL, concepts, neuroPrinciples)
               const weak = weakConceptIndices(scores)
               const avg = (k: 'attention' | 'hook') =>

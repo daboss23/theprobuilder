@@ -50,14 +50,32 @@ export const NEURO_PRINCIPLES = `ESTABLISHED NEUROMARKETING PRINCIPLES (the grou
 - Loss aversion & problem framing: the brain weighs potential losses more heavily than equivalent gains; a sharply framed problem can out-pull a gain promise.`
 
 /**
+ * Cross-run cache for the resolved neuro principles. The curated rubric never
+ * changes and the Vault's neuro/creative knowledge changes rarely, so re-running
+ * the retrieval on every reactor fire is pure waste. We key by angle + builder so
+ * two different briefs don't share each other's vault-weighted rubric, and expire
+ * entries after a TTL so freshly uploaded knowledge is still picked up within the
+ * same server process. Never affects OUTPUT quality — the same principles string
+ * the retrieval would have produced, just served from memory.
+ */
+const NEURO_PRINCIPLES_TTL_MS = 10 * 60 * 1000
+const neuroPrinciplesCache = new Map<string, { value: string; at: number }>()
+
+/**
  * Retrieve any TPB-specific neuromarketing knowledge from the Vault (learning +
  * creative systems), appended to the curated principles. Never throws — returns
- * the curated rubric alone if retrieval is unavailable.
+ * the curated rubric alone if retrieval is unavailable. Cached per angle+builder
+ * across runs (see NEURO_PRINCIPLES_TTL_MS) so the retrieval is skipped on repeat
+ * fires without changing the resolved rubric.
  */
 export async function retrieveNeuroPrinciples(
   angle: string,
   builderId: string | null,
 ): Promise<string> {
+  const cacheKey = `${builderId ?? '_'}::${angle}`
+  const cached = neuroPrinciplesCache.get(cacheKey)
+  if (cached && Date.now() - cached.at < NEURO_PRINCIPLES_TTL_MS) return cached.value
+
   try {
     const query = `neuromarketing attention emotion memory hook principles for ${angle} creative`
     const hits = (
@@ -66,9 +84,14 @@ export async function retrieveNeuroPrinciples(
         searchKnowledge(query, { system: 'creative', k: 2, builderId }),
       ])
     ).flat()
-    if (hits.length === 0) return NEURO_PRINCIPLES
-    const vault = hits.map((h) => `- [${h.system}] ${h.title}: ${h.content}`).join('\n')
-    return `${NEURO_PRINCIPLES}\n\nTPB VAULT — uploaded neuro/creative knowledge relevant to this run (weight these heavily):\n${vault}`
+    const value =
+      hits.length === 0
+        ? NEURO_PRINCIPLES
+        : `${NEURO_PRINCIPLES}\n\nTPB VAULT — uploaded neuro/creative knowledge relevant to this run (weight these heavily):\n${hits
+            .map((h) => `- [${h.system}] ${h.title}: ${h.content}`)
+            .join('\n')}`
+    neuroPrinciplesCache.set(cacheKey, { value, at: Date.now() })
+    return value
   } catch {
     return NEURO_PRINCIPLES
   }
@@ -151,7 +174,11 @@ ${list}`
     const res = await anthropic.messages.create({
       model,
       max_tokens: 1600,
-      system,
+      // Cache the system prompt: it carries the full neuromarketing principles
+      // block (large + identical across every concept batch and every revision
+      // pass of a run), so the second+ NEURO call bills its input as a cache
+      // read instead of full-price tokens. Same grading, lower input-token time.
+      system: [{ type: 'text', text: system, cache_control: { type: 'ephemeral' } }],
       messages: [{ role: 'user', content: userMsg }],
     })
     const block = res.content.find((b): b is Anthropic.TextBlock => b.type === 'text')
