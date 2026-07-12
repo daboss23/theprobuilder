@@ -297,7 +297,7 @@ function buildTools(
     {
       name: 'consult_intelligence',
       description:
-        'Delegate a focused question to one of your intelligence layers. Each one searches its slice of the knowledge layer and reports findings. Always consult nova (market) and oracle (pattern), plus at least one of spark/echo, before drafting concepts.',
+        'Delegate a focused question to one of your intelligence layers. Each one searches its slice of the knowledge layer and reports findings. Always consult atlas (knowledge foundation) FIRST, then nova (market) and oracle (pattern), plus at least one of spark/echo, before drafting concepts.',
       input_schema: {
         type: 'object',
         properties: {
@@ -482,7 +482,7 @@ Your intelligence network:
 - ORACLE — Strategic Memory: the memory of every winning strategic configuration (angle, audience, offer, awareness, creative + copy structure) — which patterns win, which lose, and what is most likely to work next.
 
 Process:
-1. Consult your network with consult_intelligence. Always consult NOVA and ORACLE, plus at least one of SPARK/ECHO. Use their findings as evidence — don't guess.${metaAdsLine}
+1. Consult your network with consult_intelligence. ALWAYS consult ATLAS FIRST — she is the knowledge foundation (frameworks, SOPs, calls, uploaded assets); every build is grounded in the Vault before anything else. Then ALWAYS consult NOVA and ORACLE, plus at least one of SPARK/ECHO. Use their findings as evidence — don't guess.${metaAdsLine}
 2. Call get_learnings and self-score every concept against that rubric. Revise or drop anything below 7.${imageLine}${videoLine}
 3. Call submit_concepts with concepts ONLY for these requested output types: ${outputs.join(', ')}. Each concept cites which intelligence layer its evidence came from, and each concept carries a complete adPackage — the launch-ready Meta ad unit.
 
@@ -499,7 +499,7 @@ const SOPHISTICATION_BLOCK =
   'MARKET SOPHISTICATION: This is a highly sophisticated market. Direct claims and basic mechanism claims are exhausted. Differentiate through a named proprietary mechanism, a contrarian angle, or identification so precise the prospect feels seen. Avoid generic claims any competitor could make. If the Vault contains Unique Mechanism documents, retrieve the most relevant one for this angle and awareness stage and anchor the concept on it.'
 
 const INTELLIGENCE_BLOCK =
-  'INTELLIGENCE NETWORK: Use your judgment to select which intelligence layers to consult (via consult_intelligence) based on the campaign angle, audience type, and brief. You are not restricted to specific layers — query whichever will give you the most relevant evidence for this run.'
+  'INTELLIGENCE NETWORK: ATLAS (the Knowledge Vault) is ALWAYS active and consulted first on every run — she is the foundation the build stands on, never skipped, never asleep. Beyond ATLAS, NOVA, and ORACLE (always consulted), use your judgment to select which of the remaining layers (SPARK/ECHO) to consult based on the campaign angle, audience type, and brief — query whichever will give you the most relevant evidence for this run.'
 
 const COMPLIANCE_BLOCK = `HARD COMPLIANCE CONSTRAINTS — these override all creative instructions:
 - Attribute every income or results figure to a named individual as THEIR result. Never imply typical or guaranteed outcomes for the viewer.
@@ -794,13 +794,15 @@ async function runDemo(controller: ReadableStreamDefaultController, body: Reacto
   }
 
   const demoSummaries: Partial<Record<IntelligenceId, string>> = {
+    atlas: 'Vault grounded: TPB frameworks, SOPs and member-call assets retrieved as the foundation for this build',
     nova: 'Builders fear margin erosion despite record revenue; "profit leak" language resonates',
     spark: 'Founder videos (71% win) + static proof ads outperform; specific figures beat claims',
     echo: 'Top hook: "Most builders don\'t have a revenue problem. They have a profit leak."',
     oracle: 'Dominant winning pattern: Time Freedom — owner-dependency relief beats raw growth claims',
   }
 
-  for (const id of ['nova', 'spark', 'echo', 'oracle'] as IntelligenceId[]) {
+  // ATLAS leads every build — the Knowledge Vault is the foundation, never asleep.
+  for (const id of ['atlas', 'nova', 'spark', 'echo', 'oracle'] as IntelligenceId[]) {
     const agent = INTELLIGENCE[id]
     sse(controller, { type: 'delegate', agent: agent.codename, id: agent.id, label: agent.intelligenceLabel, status: 'start' })
     await pace(1300)
