@@ -32,9 +32,9 @@ const RECORD_URL = `${API_BASE}/jobs/recordInfo`
 const KIE_MODEL_SLUGS: Record<string, string> = {
   'kie-nano-banana-pro': process.env.KIE_MODEL_NANO_BANANA_PRO || 'google/nano-banana-pro',
   'kie-nano-banana': process.env.KIE_MODEL_NANO_BANANA || 'google/nano-banana',
-  'kie-seedream-v4': process.env.KIE_MODEL_SEEDREAM || 'bytedance/seedream-v4',
+  'kie-seedream-v4': process.env.KIE_MODEL_SEEDREAM || 'bytedance/seedream-v4-text-to-image',
   'kie-flux-kontext-max': process.env.KIE_MODEL_FLUX_KONTEXT || 'black-forest-labs/flux-kontext-max',
-  'kie-gpt-image': process.env.KIE_MODEL_GPT_IMAGE || 'openai/gpt-image-1',
+  'kie-gpt-image': process.env.KIE_MODEL_GPT_IMAGE || 'gpt-image-2-text-to-image',
 }
 
 function kieKey(): string | undefined {

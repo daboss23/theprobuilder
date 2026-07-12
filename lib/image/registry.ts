@@ -38,11 +38,11 @@ export const IMAGE_MODELS: ImageModel[] = [
   },
   {
     id: 'kie-gpt-image',
-    label: 'GPT Image (Kie)',
+    label: 'GPT Image 2 (Kie)',
     provider: 'kie',
     aspectRatios: ['1:1', '16:9', '9:16'],
     tier: 'flagship',
-    notes: 'OpenAI GPT Image via Kie — instruction-following and clean in-image text for headline/offer creatives.',
+    notes: 'OpenAI GPT Image 2 via Kie — next-gen photorealism, sharp in-image text and instruction-following for headline/offer creatives.',
   },
   {
     id: 'kie-nano-banana',
