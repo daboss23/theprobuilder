@@ -627,12 +627,19 @@ function buildInputBlocks(inputs: ReactorInputs | undefined): string {
       }
     }
 
-    // Block 7c — Creative variations. Each visual deliverable ships as N
-    // genuinely different concepts, never paraphrases of one another.
+    // Block 7c — Concept count per deliverable. The variation count is the ONLY
+    // knob that controls how many concepts each deliverable produces: ×1 → exactly
+    // one concept per selected output type, ×N → exactly N. Always state the count
+    // explicitly so the agent never invents extra concepts or splits one
+    // deliverable into several internal categories.
     const variations = Math.min(Math.max(inputs.variations ?? 1, 1), 4)
     if (variations > 1) {
       parts.push(
-        `CREATIVE VARIATIONS: Produce exactly ${variations} distinct variations of EVERY visual deliverable (static, video, UGC, and carousel concepts). Each variation must take a genuinely different creative approach — a different hook, a different winning pattern or proof asset, a different visual construction. Never submit a paraphrase of another variation. Submit each variation as its own concept with its own production brief and ad package.`,
+        `CONCEPT COUNT: Produce exactly ${variations} distinct concepts for EACH selected output type — no more, no less. The concepts for one output type must each take a genuinely different creative approach (a different hook, winning pattern or proof asset, or visual construction), never a paraphrase of another. Do not split a single output type into multiple internal concept categories. Submit each concept with its own production brief and ad package.`,
+      )
+    } else {
+      parts.push(
+        'CONCEPT COUNT: Produce exactly ONE concept per selected output type — no more, no less. Do not submit alternates, and do not split a single output type into multiple internal concept categories.',
       )
     }
   }
@@ -894,13 +901,17 @@ async function runDemo(controller: ReadableStreamDefaultController, body: Reacto
   // internal concept taxonomy here. Legacy exact-type requests pass through.
   const expand = (o: string): string[] => {
     const l = o.toLowerCase()
-    if (/montage|scene/.test(l)) return ['Video Concept', 'Founder Concept']
-    if (/variation/.test(l)) return ['Static Concept', 'Video Concept']
-    if (/recommend/.test(l)) return ['Campaign Concept', 'Founder Concept']
-    if (l.includes('static')) return ['Static Concept', 'Founder Concept']
-    if (l.includes('ugc')) return ['Testimonial Concept', 'Video Concept']
-    if (l.includes('carousel')) return ['Campaign Concept', 'Static Concept']
-    if (l.includes('video')) return ['Video Concept', 'Founder Concept']
+    // Each selected deliverable maps to EXACTLY ONE base concept type. The
+    // variation count below is the only knob that fans a deliverable out into
+    // multiple concepts (×1 → 1 concept, ×N → N). Never split one deliverable
+    // into several internal categories here — that silently doubles the total.
+    if (/montage|scene/.test(l)) return ['Video Concept']
+    if (/variation/.test(l)) return ['Static Concept']
+    if (/recommend/.test(l)) return ['Campaign Concept']
+    if (l.includes('static')) return ['Static Concept']
+    if (l.includes('ugc')) return ['Testimonial Concept']
+    if (l.includes('carousel')) return ['Static Concept']
+    if (l.includes('video')) return ['Video Concept']
     return [o]
   }
   const wanted = outputs.flatMap(expand).map(norm)
