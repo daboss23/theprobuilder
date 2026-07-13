@@ -221,7 +221,7 @@ function StrategicSelect({ field }: { field: StrategicField }) {
         className={`flex w-full items-center justify-between gap-2 rounded-xl border px-4 py-3.5 text-left text-[15px] outline-none transition-all ${
           isRecommendedSelected
             ? 'border-[#4D8DFF]/55 bg-[#4D8DFF]/[0.08] text-white shadow-[0_0_0_1px_rgba(77, 141, 255,0.16),0_0_26px_-6px_rgba(77, 141, 255,0.5)]'
-            : 'border-white/12 bg-black/40 text-white hover:border-[#38E8FF]/40'
+            : 'border-white/12 bg-white/[0.05] text-white hover:border-[#38E8FF]/40'
         }`}
       >
         <span className="flex min-w-0 items-center gap-2.5">
@@ -250,7 +250,7 @@ function StrategicSelect({ field }: { field: StrategicField }) {
       </button>
 
       {open && (
-        <div className="absolute z-[70] mt-2 max-h-80 w-full overflow-y-auto rounded-xl border border-white/12 bg-[#0B0B12] p-1.5 shadow-2xl">
+        <div className="absolute z-[70] mt-2 max-h-80 w-full overflow-y-auto rounded-xl border border-white/12 bg-[#0b1024]/90 backdrop-blur-xl p-1.5 shadow-2xl">
           {ordered.map((opt) => {
             const isRec = opt === recommended
             const isSel = !custom.active && !noPreference && opt === value
@@ -411,7 +411,7 @@ function ModelSelect({
         className={`flex w-full items-center justify-between gap-2 rounded-xl border px-3.5 py-2.5 text-left text-[13px] outline-none transition-all ${
           isRecommendedSelected
             ? 'border-[#4D8DFF]/45 bg-[#4D8DFF]/[0.06] text-white'
-            : 'border-white/12 bg-black/40 text-white hover:border-[#38E8FF]/40'
+            : 'border-white/12 bg-white/[0.05] text-white hover:border-[#38E8FF]/40'
         }`}
       >
         <span className="flex min-w-0 items-center gap-2">
@@ -430,7 +430,7 @@ function ModelSelect({
       </button>
 
       {open && (
-        <div className="absolute z-[70] mt-2 max-h-72 w-full overflow-y-auto rounded-xl border border-white/12 bg-[#0B0B12] p-1.5 shadow-2xl">
+        <div className="absolute z-[70] mt-2 max-h-72 w-full overflow-y-auto rounded-xl border border-white/12 bg-[#0b1024]/90 backdrop-blur-xl p-1.5 shadow-2xl">
           {ordered.map((o) => {
             const isRec = o.id === menu.recommendedId
             const isSel = o.id === current.id
@@ -1085,7 +1085,7 @@ export function ReactorModal({ open, onClose, onFire, form }: ReactorModalProps)
 
           {step === 6 && (
             <div className="animate-fade-up space-y-5">
-              <div className="space-y-2 rounded-2xl border border-white/10 bg-black/30 p-5">
+              <div className="space-y-2 rounded-2xl border border-white/10 bg-white/[0.035] p-5">
                 <SummaryRow label="Campaign" value={form.campaignName.trim() || 'Untitled campaign'} />
                 <SummaryRow label="Audience" value={fieldSummary(form.audienceField)} />
                 <SummaryRow label="Awareness" value={fieldSummary(form.awarenessField)} />
