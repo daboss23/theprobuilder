@@ -2281,18 +2281,22 @@ body {
   position: relative;
   isolation: isolate;
   overflow: hidden;
-  border: 1px solid rgba(255, 124, 84, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 1.25rem;
+  /* Translucent liquid glass so the aurora behind (canvas-immersive / the app)
+     bleeds through instead of a flat ember slab. */
   background:
-    radial-gradient(900px 380px at 50% -12%, rgba(255, 94, 58, 0.12), transparent 64%),
-    radial-gradient(560px 260px at 4% 0%, rgba(59, 130, 246, 0.06), transparent 70%),
-    linear-gradient(180deg, rgba(17, 14, 17, 0.97), rgba(8, 8, 13, 0.985));
+    radial-gradient(900px 380px at 50% -12%, rgb(var(--lg-cyan) / 0.1), transparent 64%),
+    radial-gradient(620px 300px at 4% 0%, rgb(var(--lg-violet) / 0.1), transparent 70%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.012));
+  backdrop-filter: blur(20px) saturate(160%);
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
   box-shadow:
-    inset 0 1px 0 rgba(255, 214, 186, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.16),
     0 40px 110px -50px #000,
-    0 0 90px -55px rgba(255, 94, 58, 0.55);
+    0 0 90px -55px rgb(var(--lg-azure) / 0.55);
 }
-/* The same faded criss-cross squares as the campaign brief panel */
+/* Faded criss-cross squares — neon, matching every other surface */
 .canvas-shell::before {
   content: '';
   position: absolute;
@@ -2300,8 +2304,8 @@ body {
   z-index: 0;
   pointer-events: none;
   background-image:
-    linear-gradient(rgba(255, 150, 110, 0.05) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 150, 110, 0.05) 1px, transparent 1px);
+    linear-gradient(rgba(150, 200, 255, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(150, 200, 255, 0.05) 1px, transparent 1px);
   background-size: 30px 30px;
   -webkit-mask-image: radial-gradient(130% 96% at 50% 0%, #000, transparent 88%);
   mask-image: radial-gradient(130% 96% at 50% 0%, #000, transparent 88%);
@@ -2316,20 +2320,26 @@ body {
 .canvas-node {
   width: 250px;
   border-radius: 0.9rem;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: linear-gradient(180deg, rgba(22, 20, 26, 0.94), rgba(12, 11, 16, 0.96));
-  box-shadow: 0 18px 44px -26px rgba(0, 0, 0, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  /* Translucent liquid glass node with a readable dark bed for the copy. */
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.03)),
+    linear-gradient(180deg, var(--glass-shade), var(--glass-shade-strong));
+  backdrop-filter: blur(18px) saturate(170%);
+  -webkit-backdrop-filter: blur(18px) saturate(170%);
+  box-shadow: inset 0 1px 0 var(--glass-rim), 0 18px 44px -26px rgba(2, 4, 14, 0.85);
   transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
 }
 .canvas-node:hover {
-  border-color: rgba(255, 157, 77, 0.35);
+  border-color: rgb(var(--lg-cyan) / 0.4);
 }
 .canvas-node[data-selected='true'] {
-  border-color: rgba(255, 124, 84, 0.65);
+  border-color: rgb(var(--lg-cyan) / 0.65);
   box-shadow:
-    0 0 0 1px rgba(255, 94, 58, 0.25),
-    0 0 34px -8px rgba(255, 94, 58, 0.5),
-    0 18px 44px -26px rgba(0, 0, 0, 0.9);
+    0 0 0 1px rgb(var(--lg-cyan) / 0.25),
+    0 0 34px -8px rgb(var(--lg-cyan) / 0.5),
+    inset 0 1px 0 var(--glass-rim),
+    0 18px 44px -26px rgba(2, 4, 14, 0.85);
 }
 .canvas-node[data-branch='true'] {
   border-style: dashed;
@@ -2339,10 +2349,10 @@ body {
   border-color: rgba(52, 211, 153, 0.5);
 }
 
-/* React Flow chrome inside the canvas shell stays dark and quiet */
+/* React Flow chrome inside the canvas shell — neon, translucent */
 .canvas-shell .react-flow__attribution { display: none; }
 .canvas-shell .react-flow__edge-path {
-  stroke: rgba(255, 150, 110, 0.35);
+  stroke: rgb(var(--lg-cyan) / 0.4);
   stroke-width: 1.5;
 }
 .canvas-shell .react-flow__edge[data-branch='true'] .react-flow__edge-path {
@@ -2352,8 +2362,8 @@ body {
 .canvas-shell .react-flow__handle {
   height: 7px;
   width: 7px;
-  border: 1px solid rgba(255, 157, 77, 0.5);
-  background: #14110f;
+  border: 1px solid rgb(var(--lg-cyan) / 0.6);
+  background: #0a1226;
 }
 .canvas-shell .react-flow__controls {
   border-radius: 0.6rem;
@@ -2362,12 +2372,12 @@ body {
   box-shadow: none;
 }
 .canvas-shell .react-flow__controls-button {
-  background: rgba(14, 12, 18, 0.92);
+  background: rgba(12, 18, 36, 0.85);
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   fill: rgba(255, 255, 255, 0.6);
 }
 .canvas-shell .react-flow__controls-button:hover {
-  background: rgba(255, 94, 58, 0.15);
+  background: rgb(var(--lg-cyan) / 0.15);
 }
 
 .canvas-shell .canvas-edge-branch .react-flow__edge-path {
@@ -2379,8 +2389,48 @@ body {
    every app surface (nav, topbar, dialogs). The shell inside fills it edge to
    edge, no rounding/border since there is no surrounding page to frame it against. */
 .canvas-immersive {
-  background: #030409;
+  overflow: hidden;
+  /* Same luminous liquid atmosphere as the app so the full-screen canvas reads
+     as the same world, with its own drifting aurora (::before / ::after). */
+  background:
+    radial-gradient(1100px 700px at 78% -10%, rgb(var(--lg-azure) / 0.16), transparent 60%),
+    radial-gradient(1000px 720px at -6% 108%, rgb(var(--lg-violet) / 0.14), transparent 58%),
+    radial-gradient(820px 560px at 104% 82%, rgb(var(--lg-magenta) / 0.1), transparent 60%),
+    linear-gradient(160deg, var(--bg-base), var(--bg-base-2) 52%, var(--bg-base));
   animation: canvas-immersive-in 0.22s ease-out;
+}
+.canvas-immersive::before,
+.canvas-immersive::after {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  pointer-events: none;
+  border-radius: 50%;
+  mix-blend-mode: screen;
+  filter: blur(60px);
+  will-change: transform;
+}
+.canvas-immersive::before {
+  width: 58vw;
+  height: 58vw;
+  left: -6vw;
+  top: -12vh;
+  background: radial-gradient(circle, rgb(var(--lg-cyan) / 0.55), transparent 66%);
+  opacity: 0.4;
+  animation: aurora-cyan 34s ease-in-out infinite;
+}
+.canvas-immersive::after {
+  width: 60vw;
+  height: 60vw;
+  right: -8vw;
+  bottom: -16vh;
+  background: radial-gradient(circle, rgb(var(--lg-violet) / 0.55), transparent 66%);
+  opacity: 0.38;
+  animation: aurora-violet 46s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .canvas-immersive::before,
+  .canvas-immersive::after { animation: none !important; }
 }
 @keyframes canvas-immersive-in {
   from { opacity: 0; }

@@ -383,7 +383,7 @@ function CampaignShell({
               { Icon: GitBranch, t: 'Branch', d: 'Alternate hooks and CTAs as controlled variants.' },
               { Icon: RefreshCw, t: 'Regenerate', d: 'One node at a time, strategy held constant.' },
             ].map(({ Icon, t, d }) => (
-              <div key={t} className="rounded-xl border border-white/10 bg-white/[0.02] p-3">
+              <div key={t} className="rounded-xl border border-white/12 bg-white/[0.05] p-3 backdrop-blur-md">
                 <Icon size={14} className="mb-1.5 text-[#38E8FF]" />
                 <p className="text-xs font-semibold text-white">{t}</p>
                 <p className="mt-0.5 text-[10px] leading-snug text-white/40">{d}</p>
@@ -417,7 +417,7 @@ function CampaignShell({
           {tracks.length > 1 ? (
             // One campaign → one tab per selected format. Same strategy layer
             // powers every tab; only the creative flow inside differs.
-            <div className="inline-flex rounded-full border border-[#4D8DFF]/25 bg-black/30 p-1">
+            <div className="inline-flex rounded-full border border-[#4D8DFF]/25 bg-white/[0.04] p-1">
               {tracks.map((t) => (
                 <button
                   key={t.id}
@@ -1156,7 +1156,7 @@ function CanvasInner({ mode, concepts, active, strategy, imageModel, videoModel,
                   disabled={selected.data.locked}
                   rows={selected.data.kind === 'cta' ? 2 : 7}
                   placeholder={def.hint}
-                  className="w-full resize-none rounded-xl border border-white/12 bg-black/40 px-3 py-2.5 text-[12px] leading-relaxed text-white placeholder:text-white/25 outline-none transition-colors focus:border-[#38E8FF]/40 disabled:opacity-50"
+                  className="w-full resize-none rounded-xl border border-white/12 bg-white/[0.05] px-3 py-2.5 text-[12px] leading-relaxed text-white placeholder:text-white/25 outline-none transition-colors focus:border-[#38E8FF]/40 disabled:opacity-50"
                 />
 
                 {def.regen && (
@@ -1164,7 +1164,7 @@ function CanvasInner({ mode, concepts, active, strategy, imageModel, videoModel,
                     value={direction}
                     onChange={(e) => setDirection(e.target.value)}
                     placeholder={`Optional steer — e.g. "harder on identity, no numbers"`}
-                    className="w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-[11px] text-white placeholder:text-white/25 outline-none transition-colors focus:border-[#38E8FF]/35"
+                    className="w-full rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-[11px] text-white placeholder:text-white/25 outline-none transition-colors focus:border-[#38E8FF]/35"
                   />
                 )}
 
@@ -1333,7 +1333,7 @@ function ReassignModal({
 
   return (
     <div className="absolute inset-0 z-30 grid place-items-center bg-black/60 p-6 backdrop-blur-sm">
-      <div className="canvas-node w-[380px] !cursor-default border-[#4D8DFF]/35 bg-[#0d0c11] p-5">
+      <div className="canvas-node w-[380px] !cursor-default border-[#4D8DFF]/35 bg-[#0b1024]/85 backdrop-blur-xl p-5">
         <p className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.14em] text-[#38E8FF]">
           <GitBranch size={12} /> Position changed role
         </p>
@@ -1442,7 +1442,7 @@ function CanvasContextMenu({
     <div
       ref={ref}
       style={{ left: menu.x, top: menu.y }}
-      className="fixed z-[110] w-48 overflow-hidden rounded-xl border border-white/12 bg-[#0B0B12] py-1.5 shadow-2xl"
+      className="fixed z-[110] w-48 overflow-hidden rounded-xl border border-white/12 bg-[#0b1024]/90 backdrop-blur-xl py-1.5 shadow-2xl"
     >
       <p className="px-3 py-1.5 text-[9px] font-bold uppercase tracking-wider text-white/30">{def.label}</p>
       {def.regen && item('Regenerate', () => onRegenerate(node.id))}
