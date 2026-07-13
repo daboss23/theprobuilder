@@ -391,13 +391,13 @@ export function LiveAgentWorkflow(controls: WorkflowControls) {
                 <defs>
                   <radialGradient id="conv-bloom">
                     <stop offset="0%" stopColor="#FFE3C8" stopOpacity="0.95" />
-                    <stop offset="45%" stopColor="#FF8A4D" stopOpacity="0.45" />
+                    <stop offset="45%" stopColor="#38E8FF" stopOpacity="0.45" />
                     <stop offset="100%" stopColor="#FF6A3D" stopOpacity="0" />
                   </radialGradient>
                   <radialGradient id="conv-core">
                     <stop offset="0%" stopColor="#FFF3E8" stopOpacity="1" />
                     <stop offset="55%" stopColor="#FFB07A" stopOpacity="0.5" />
-                    <stop offset="100%" stopColor="#FF8A4D" stopOpacity="0" />
+                    <stop offset="100%" stopColor="#38E8FF" stopOpacity="0" />
                   </radialGradient>
                 </defs>
 

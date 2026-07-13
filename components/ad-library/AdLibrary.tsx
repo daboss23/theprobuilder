@@ -165,7 +165,7 @@ export function AdLibrary({
             type="button"
             onClick={() => setTab(t.id)}
             className={`inline-flex items-center gap-1.5 rounded-full px-4 py-1.5 text-sm font-medium transition-colors ${
-              tab === t.id ? 'bg-amber-500 text-black' : 'text-white/60 hover:text-white/85'
+              tab === t.id ? 'bg-cyan text-black' : 'text-white/60 hover:text-white/85'
             }`}
           >
             <t.icon size={14} /> {t.label}
@@ -177,7 +177,7 @@ export function AdLibrary({
         <Panel>
           <PanelHeader
             icon={<Trophy size={16} />}
-            accent="amber"
+            accent="cyan"
             title="Our Winners"
             subtitle="Proven ads from ORACLE, ranked by winner score. Clone one to regenerate fresh creative on the same structure."
             accessory={
@@ -217,13 +217,13 @@ export function AdLibrary({
                 onChange={(e) => setPaste(e.target.value)}
                 rows={4}
                 placeholder="Paste the ad's primary text, script, or transcript here…"
-                className="w-full resize-none rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-[13px] text-white/80 placeholder:text-white/30 focus:border-amber-500/40 focus:outline-none"
+                className="w-full resize-none rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-[13px] text-white/80 placeholder:text-white/30 focus:border-cyan/40 focus:outline-none"
               />
               <button
                 type="button"
                 onClick={() => extractToEditor(paste, 'Pasted ad')}
                 disabled={paste.trim().length < 20 || extracting}
-                className="mt-2.5 inline-flex items-center gap-2 rounded-full bg-amber-500 px-4 py-2 text-sm font-semibold text-black transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+                className="mt-2.5 inline-flex items-center gap-2 rounded-full bg-cyan px-4 py-2 text-sm font-semibold text-black transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {extracting ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
                 Extract &amp; Clone
@@ -238,7 +238,7 @@ export function AdLibrary({
                   onChange={(e) => setQuery(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && search()}
                   placeholder="Search competitor ads (e.g. a brand or product)…"
-                  className="flex-1 rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-[13px] text-white/80 placeholder:text-white/30 focus:border-amber-500/40 focus:outline-none"
+                  className="flex-1 rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-[13px] text-white/80 placeholder:text-white/30 focus:border-cyan/40 focus:outline-none"
                 />
                 <button
                   type="button"
@@ -335,7 +335,7 @@ function WinnerTile({ winner, onClone }: { winner: WinnerCard; onClone: () => vo
               className={`rounded-md px-1.5 py-0.5 text-[10px] font-semibold uppercase ${
                 winner.scoreConfidence === 'high'
                   ? 'bg-white/10 text-white/60'
-                  : 'bg-amber-500/15 text-amber-300'
+                  : 'bg-cyan/15 text-cyan'
               }`}
             >
               {winner.scoreConfidence}
@@ -353,7 +353,7 @@ function WinnerTile({ winner, onClone }: { winner: WinnerCard; onClone: () => vo
       <button
         type="button"
         onClick={onClone}
-        className="mt-1 inline-flex items-center justify-center gap-2 rounded-full border border-amber-500/40 bg-amber-500/10 px-4 py-2 text-sm font-semibold text-amber-300 transition-colors hover:bg-amber-500/20"
+        className="mt-1 inline-flex items-center justify-center gap-2 rounded-full border border-cyan/40 bg-cyan/10 px-4 py-2 text-sm font-semibold text-cyan transition-colors hover:bg-cyan/20"
       >
         <Copy size={14} /> Clone &amp; Iterate
       </button>
@@ -403,7 +403,7 @@ function CloneEditor({
       <div className="my-8 w-full max-w-2xl rounded-2xl border border-white/10 bg-[#0a0a0a] shadow-2xl">
         <div className="flex items-center justify-between gap-3 border-b border-white/10 px-6 py-4">
           <div className="flex items-center gap-2">
-            <Copy size={16} className="text-amber-400" />
+            <Copy size={16} className="text-cyan" />
             <p className="font-display text-sm font-semibold text-white">
               Review Creative DNA{reference.sourceLabel ? ` — ${reference.sourceLabel}` : ''}
             </p>
@@ -431,13 +431,13 @@ function CloneEditor({
                   value={reference[f.key]}
                   onChange={(e) => set(f.key, e.target.value)}
                   rows={2}
-                  className="w-full resize-none rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-[13px] text-white/85 focus:border-amber-500/40 focus:outline-none"
+                  className="w-full resize-none rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-[13px] text-white/85 focus:border-cyan/40 focus:outline-none"
                 />
               ) : (
                 <input
                   value={reference[f.key]}
                   onChange={(e) => set(f.key, e.target.value)}
-                  className="w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-[13px] text-white/85 focus:border-amber-500/40 focus:outline-none"
+                  className="w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-[13px] text-white/85 focus:border-cyan/40 focus:outline-none"
                 />
               )}
             </label>
@@ -455,7 +455,7 @@ function CloneEditor({
           <button
             type="button"
             onClick={onSend}
-            className="inline-flex items-center gap-2 rounded-full bg-amber-500 px-5 py-2.5 text-sm font-semibold text-black transition-opacity hover:opacity-90"
+            className="inline-flex items-center gap-2 rounded-full bg-cyan px-5 py-2.5 text-sm font-semibold text-black transition-opacity hover:opacity-90"
           >
             Send to Reactor <ArrowRight size={15} />
           </button>

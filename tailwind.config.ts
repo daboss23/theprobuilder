@@ -10,19 +10,24 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        background: '#04060C',
-        card: '#0A0F1B',
-        surface: '#0E1626',
-        border: '#1B2840',
-        primary: '#3B82F6',
-        glow: '#5EA8FF',
-        cyan: '#22D3EE',
-        violet: '#A78BFA',
-        emerald: '#34D399',
-        pink: '#F472B6',
-        success: '#34D399',
-        warning: '#FBBF24',
-        danger: '#FB7185',
+        // Liquid Glass palette — see DESIGN.md. Kept as the same token names so
+        // every existing `bg-surface` / `text-glow` / `from-primary` utility
+        // across the app shifts to the neon aurora ramp in one move.
+        background: '#080B1A',
+        card: '#0E1428',
+        surface: '#141B33',
+        border: '#2A3656',
+        primary: '#4D8DFF',
+        glow: '#38E8FF',
+        cyan: '#38E8FF',
+        azure: '#4D8DFF',
+        violet: '#A882FF',
+        magenta: '#FF6AD6',
+        emerald: '#2FE6B0',
+        pink: '#FF6AD6',
+        success: '#2FE6B0',
+        warning: '#FFC24B',
+        danger: '#FF6A8B',
       },
       fontFamily: {
         sans: ['var(--font-inter)', 'system-ui', 'sans-serif'],
@@ -34,9 +39,9 @@ const config: Config = {
         panel: '1.5rem',
       },
       boxShadow: {
-        glow: '0 0 0 1px rgba(94,168,255,0.18), 0 0 26px -6px rgba(59,130,246,0.45)',
-        'glow-lg': '0 0 0 1px rgba(94,168,255,0.25), 0 0 52px -10px rgba(59,130,246,0.6)',
-        panel: '0 1px 0 0 rgba(255,255,255,0.05) inset, 0 20px 50px -28px rgba(0,0,0,0.9)',
+        glow: '0 0 0 1px rgba(56,232,255,0.18), 0 0 26px -6px rgba(77,141,255,0.5)',
+        'glow-lg': '0 0 0 1px rgba(56,232,255,0.25), 0 0 52px -10px rgba(168,130,255,0.6)',
+        panel: '0 1px 0 0 rgba(255,255,255,0.14) inset, 0 24px 60px -30px rgba(2,4,14,0.9)',
       },
       keyframes: {
         'pulse-glow': {

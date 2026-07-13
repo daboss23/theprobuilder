@@ -246,23 +246,21 @@ export function KpiCard({
     <div className={cn('kpi-card group p-4', accentClass[accent])}>
       <span className="kpi-bloom" aria-hidden="true" />
       <span className="kpi-grid" aria-hidden="true" />
-      <div className="relative flex items-start justify-between gap-2">
-        <div className="flex min-w-0 items-center gap-3">
-          <span className="kpi-icon">
-            <Icon size={21} />
-          </span>
-          <p className="truncate text-[10px] font-semibold uppercase tracking-[0.2em] text-white/75">
-            {label}
-          </p>
-        </div>
+      <div className="relative flex items-center justify-between gap-2">
+        <span className="kpi-icon">
+          <Icon size={21} />
+        </span>
         <span className="accent-chip tabular">
           <TrendIcon size={12} />
           {delta.replace('+', '')}
         </span>
       </div>
+      <p className="relative mt-3 truncate text-[10px] font-semibold uppercase tracking-[0.2em] text-white/75">
+        {label}
+      </p>
       <CountUp
         value={value}
-        className="count-up relative mt-3 block font-display text-[2.45rem] font-bold leading-none tracking-tight tabular text-white drop-shadow-[0_2px_14px_rgba(0,0,0,0.65)]"
+        className="count-up relative mt-1 block font-display text-[2.45rem] font-bold leading-none tracking-tight tabular text-white drop-shadow-[0_2px_14px_rgba(0,0,0,0.65)]"
       />
       <Sparkline seed={label.length + value} series={spark} />
     </div>

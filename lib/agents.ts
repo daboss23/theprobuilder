@@ -42,7 +42,7 @@ export const OPUS: AgentDef = {
     'Synthesize every intelligence layer into strategic direction, rank concepts, and drive launch-ready creative.',
   systems: [],
   intelligenceLabel: 'Strategic Intelligence',
-  accent: '#FF5E3A',
+  accent: '#4D8DFF',
 }
 
 /** The five consultable intelligence layers, keyed by id. */

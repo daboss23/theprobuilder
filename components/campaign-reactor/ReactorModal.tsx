@@ -167,7 +167,7 @@ function SectionLabel({
     <div className="mb-2.5 flex items-center gap-2">
       <p className="sec-label">{children}</p>
       {thinking ? (
-        <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wide text-[#FF9D4D]/80">
+        <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wide text-[#38E8FF]/80">
           <Loader2 size={10} className="animate-spin" /> analyzing…
         </span>
       ) : null}
@@ -220,12 +220,12 @@ function StrategicSelect({ field }: { field: StrategicField }) {
         onClick={() => setOpen((o) => !o)}
         className={`flex w-full items-center justify-between gap-2 rounded-xl border px-4 py-3.5 text-left text-[15px] outline-none transition-all ${
           isRecommendedSelected
-            ? 'border-[#FF7C54]/55 bg-[#FF5E3A]/[0.08] text-white shadow-[0_0_0_1px_rgba(255,94,58,0.16),0_0_26px_-6px_rgba(255,94,58,0.5)]'
-            : 'border-white/12 bg-black/40 text-white hover:border-[#FF9D4D]/40'
+            ? 'border-[#4D8DFF]/55 bg-[#4D8DFF]/[0.08] text-white shadow-[0_0_0_1px_rgba(77, 141, 255,0.16),0_0_26px_-6px_rgba(77, 141, 255,0.5)]'
+            : 'border-white/12 bg-black/40 text-white hover:border-[#38E8FF]/40'
         }`}
       >
         <span className="flex min-w-0 items-center gap-2.5">
-          {isRecommendedSelected && <Sparkles size={15} className="shrink-0 text-[#FF9D4D]" />}
+          {isRecommendedSelected && <Sparkles size={15} className="shrink-0 text-[#38E8FF]" />}
           <span className="truncate">
             {custom.active ? (
               custom.value || 'Custom…'
@@ -235,7 +235,7 @@ function StrategicSelect({ field }: { field: StrategicField }) {
               <>
                 {value}
                 {isRecommendedSelected && (
-                  <span className="ml-2 text-[13px] text-[#FF9D4D]">• Recommended</span>
+                  <span className="ml-2 text-[13px] text-[#38E8FF]">• Recommended</span>
                 )}
               </>
             ) : (
@@ -261,13 +261,13 @@ function StrategicSelect({ field }: { field: StrategicField }) {
                 onClick={() => choose(opt)}
                 className={`flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2.5 text-left text-sm transition-colors ${
                   isRec
-                    ? 'bg-[#FF5E3A]/[0.09] text-white hover:bg-[#FF5E3A]/15'
+                    ? 'bg-[#4D8DFF]/[0.09] text-white hover:bg-[#4D8DFF]/15'
                     : 'text-white/80 hover:bg-white/[0.06]'
                 }`}
               >
                 <span className="flex min-w-0 flex-1 items-start gap-2">
                   {isRec ? (
-                    <Check size={14} className="mt-0.5 shrink-0 text-[#FF9D4D]" />
+                    <Check size={14} className="mt-0.5 shrink-0 text-[#38E8FF]" />
                   ) : isSel ? (
                     <Check size={14} className="mt-0.5 shrink-0 text-white/60" />
                   ) : (
@@ -283,7 +283,7 @@ function StrategicSelect({ field }: { field: StrategicField }) {
                   </span>
                 </span>
                 {isRec && (
-                  <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-[#FF7C54]/40 bg-[#FF5E3A]/10 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-[#FF9D4D]">
+                  <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-[#4D8DFF]/40 bg-[#4D8DFF]/10 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-[#38E8FF]">
                     <Sparkles size={9} /> Recommended
                   </span>
                 )}
@@ -410,16 +410,16 @@ function ModelSelect({
         onClick={() => setOpen((o) => !o)}
         className={`flex w-full items-center justify-between gap-2 rounded-xl border px-3.5 py-2.5 text-left text-[13px] outline-none transition-all ${
           isRecommendedSelected
-            ? 'border-[#FF7C54]/45 bg-[#FF5E3A]/[0.06] text-white'
-            : 'border-white/12 bg-black/40 text-white hover:border-[#FF9D4D]/40'
+            ? 'border-[#4D8DFF]/45 bg-[#4D8DFF]/[0.06] text-white'
+            : 'border-white/12 bg-black/40 text-white hover:border-[#38E8FF]/40'
         }`}
       >
         <span className="flex min-w-0 items-center gap-2">
-          {isRecommendedSelected && <Sparkles size={13} className="shrink-0 text-[#FF9D4D]" />}
+          {isRecommendedSelected && <Sparkles size={13} className="shrink-0 text-[#38E8FF]" />}
           <span className="truncate">
             {current.label}
             {isRecommendedSelected && (
-              <span className="ml-2 text-[12px] text-[#FF9D4D]">• Recommended</span>
+              <span className="ml-2 text-[12px] text-[#38E8FF]">• Recommended</span>
             )}
           </span>
         </span>
@@ -444,13 +444,13 @@ function ModelSelect({
                 }}
                 className={`flex w-full items-start justify-between gap-2 rounded-lg px-3 py-2.5 text-left text-[13px] transition-colors ${
                   isRec
-                    ? 'bg-[#FF5E3A]/[0.09] text-white hover:bg-[#FF5E3A]/15'
+                    ? 'bg-[#4D8DFF]/[0.09] text-white hover:bg-[#4D8DFF]/15'
                     : 'text-white/80 hover:bg-white/[0.06]'
                 }`}
               >
                 <span className="flex min-w-0 flex-1 items-start gap-2">
                   {isSel ? (
-                    <Check size={13} className={`mt-0.5 shrink-0 ${isRec ? 'text-[#FF9D4D]' : 'text-white/60'}`} />
+                    <Check size={13} className={`mt-0.5 shrink-0 ${isRec ? 'text-[#38E8FF]' : 'text-white/60'}`} />
                   ) : (
                     <span className="w-[13px] shrink-0" />
                   )}
@@ -467,7 +467,7 @@ function ModelSelect({
                   </span>
                 </span>
                 {isRec && (
-                  <span className="mt-0.5 inline-flex shrink-0 items-center gap-1 rounded-full border border-[#FF7C54]/40 bg-[#FF5E3A]/10 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-[#FF9D4D]">
+                  <span className="mt-0.5 inline-flex shrink-0 items-center gap-1 rounded-full border border-[#4D8DFF]/40 bg-[#4D8DFF]/10 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-[#38E8FF]">
                     <Sparkles size={9} /> Recommended
                   </span>
                 )}
@@ -479,7 +479,7 @@ function ModelSelect({
 
       {isRecommendedSelected && (
         <p className="mt-1.5 flex items-start gap-1.5 text-[11px] leading-snug text-white/35">
-          <Sparkles size={10} className="mt-0.5 shrink-0 text-[#FF9D4D]/70" />
+          <Sparkles size={10} className="mt-0.5 shrink-0 text-[#38E8FF]/70" />
           {menu.reason}
         </p>
       )}
@@ -641,7 +641,7 @@ export function ReactorModal({ open, onClose, onFire, form }: ReactorModalProps)
         <div className="border-b border-white/10 px-7 pb-5 pt-5">
           <div className="mb-5 flex items-center justify-between gap-3">
             <span className="launch-eyebrow">
-              <Atom size={14} className="text-[#FF9D4D]" />
+              <Atom size={14} className="text-[#38E8FF]" />
               New Creative Campaign
             </span>
             <div className="flex items-center gap-2">
@@ -650,7 +650,7 @@ export function ReactorModal({ open, onClose, onFire, form }: ReactorModalProps)
                 onClick={() => setMode('quick')}
                 className="launch-nav !px-3 !py-1.5 !text-[11px]"
               >
-                <Zap size={13} className="text-[#FF9D4D]" /> Quick Launch
+                <Zap size={13} className="text-[#38E8FF]" /> Quick Launch
               </button>
               <button
                 type="button"
@@ -683,7 +683,7 @@ export function ReactorModal({ open, onClose, onFire, form }: ReactorModalProps)
                     <span
                       className={`hidden whitespace-nowrap text-[10px] font-semibold uppercase tracking-[0.1em] sm:block ${
                         state === 'active'
-                          ? 'text-[#FF9D4D]'
+                          ? 'text-[#38E8FF]'
                           : state === 'done'
                             ? 'text-white/55'
                             : 'text-white/25'
@@ -783,7 +783,7 @@ export function ReactorModal({ open, onClose, onFire, form }: ReactorModalProps)
                         <p className="font-display text-base font-semibold text-white">{o}</p>
                         <p className="mt-1 text-xs leading-relaxed text-white/45">{blurb}</p>
                         {rec && (
-                          <span className="mt-2.5 inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-[#FF9D4D]">
+                          <span className="mt-2.5 inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-[#38E8FF]">
                             <Sparkles size={10} /> Recommended
                           </span>
                         )}
@@ -793,7 +793,7 @@ export function ReactorModal({ open, onClose, onFire, form }: ReactorModalProps)
                 </div>
                 {form.deliverablesReason && form.recommendedDeliverables.length > 0 && (
                   <p className="mt-3 flex items-start gap-1.5 text-xs text-white/45">
-                    <Sparkles size={12} className="mt-0.5 shrink-0 text-[#FF9D4D]" />
+                    <Sparkles size={12} className="mt-0.5 shrink-0 text-[#38E8FF]" />
                     <span>{form.deliverablesReason}</span>
                   </p>
                 )}
@@ -835,7 +835,7 @@ export function ReactorModal({ open, onClose, onFire, form }: ReactorModalProps)
                             </span>
                           </SectionLabel>
                           <div className="flex items-start gap-2 rounded-lg border border-white/10 bg-white/[0.02] px-3 py-2.5">
-                            <Film size={13} className="mt-0.5 shrink-0 text-[#FF9D4D]" />
+                            <Film size={13} className="mt-0.5 shrink-0 text-[#38E8FF]" />
                             <span className="min-w-0">
                               <span className="text-[12px] font-semibold text-white">{OPENMONTAGE_BADGE.label}</span>
                               <span className="mt-0.5 block text-[11px] leading-snug text-white/45">
@@ -898,9 +898,9 @@ export function ReactorModal({ open, onClose, onFire, form }: ReactorModalProps)
                           </span>
                         </SectionLabel>
                         {menu === null ? (
-                          <div className="rounded-xl border border-[#FF7C54]/20 bg-[#FF5E3A]/[0.04] px-4 py-3.5">
+                          <div className="rounded-xl border border-[#4D8DFF]/20 bg-[#4D8DFF]/[0.04] px-4 py-3.5">
                             <p className="flex items-start gap-2 text-sm text-white/60">
-                              <Wand2 size={14} className="mt-0.5 shrink-0 text-[#FF9D4D]" />
+                              <Wand2 size={14} className="mt-0.5 shrink-0 text-[#38E8FF]" />
                               The reactor picks the winning format for this brief — model and sizes
                               are decided by the system, grounded in what has already worked.
                             </p>
@@ -964,7 +964,7 @@ export function ReactorModal({ open, onClose, onFire, form }: ReactorModalProps)
                               {n === 1 ? 'Single' : `${n} versions`}
                             </span>
                             {n === 2 && (
-                              <span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-[#FF9D4D]">
+                              <span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-[#38E8FF]">
                                 <Sparkles size={9} /> Recommended
                               </span>
                             )}
@@ -1065,7 +1065,7 @@ export function ReactorModal({ open, onClose, onFire, form }: ReactorModalProps)
                 </div>
                 <span
                   className={`mt-1 flex h-7 w-12 shrink-0 items-center rounded-full p-0.5 transition-colors ${
-                    form.onBrand ? 'bg-[#FF5E3A]' : 'bg-white/15'
+                    form.onBrand ? 'bg-[#4D8DFF]' : 'bg-white/15'
                   }`}
                 >
                   <span
@@ -1222,7 +1222,7 @@ function QuickLaunch({
 
       <div className="flex items-center justify-between gap-3 px-7 pb-4 pt-5">
         <span className="launch-eyebrow">
-          <Zap size={14} className="text-[#FF9D4D]" />
+          <Zap size={14} className="text-[#38E8FF]" />
           Quick Launch
         </span>
         <button
@@ -1305,14 +1305,14 @@ function QuickLaunch({
           </div>
 
           {/* Live read of what the reactor inferred from the brief */}
-          <div className="rounded-xl border border-[#FF7C54]/20 bg-[#FF5E3A]/[0.05] px-4 py-3">
+          <div className="rounded-xl border border-[#4D8DFF]/20 bg-[#4D8DFF]/[0.05] px-4 py-3">
             {form.suggesting ? (
               <p className="flex items-center gap-2 text-xs text-white/55">
-                <Loader2 size={13} className="animate-spin text-[#FF9D4D]" /> Reading your brief…
+                <Loader2 size={13} className="animate-spin text-[#38E8FF]" /> Reading your brief…
               </p>
             ) : showReads ? (
               <div className="space-y-2">
-                <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-[#FF9D4D]">
+                <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-[#38E8FF]">
                   <Sparkles size={11} /> Reactor read
                 </p>
                 <div className="flex flex-wrap gap-1.5">
@@ -1327,7 +1327,7 @@ function QuickLaunch({
                   {form.recommendedDeliverables.map((d) => (
                     <span
                       key={d}
-                      className="inline-flex items-center gap-1 rounded-full border border-[#FF7C54]/30 bg-[#FF5E3A]/10 px-2.5 py-1 text-[11px] text-[#FF9D4D]"
+                      className="inline-flex items-center gap-1 rounded-full border border-[#4D8DFF]/30 bg-[#4D8DFF]/10 px-2.5 py-1 text-[11px] text-[#38E8FF]"
                     >
                       {d}
                     </span>
