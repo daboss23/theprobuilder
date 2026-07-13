@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import './globals.css'
+import { LiquidGlassBackdrop } from '@/components/reactor/LiquidGlassBackdrop'
 
 export const metadata: Metadata = {
   title: 'TPB Creative Reactor — Engineered For Performance',
@@ -23,7 +24,7 @@ export default function RootLayout({
         />
       </head>
       <body className="font-sans antialiased text-[#e6edf6]">
-        <div className="reactor-bg" aria-hidden="true" />
+        <LiquidGlassBackdrop />
         <div className="reactor-nodes" aria-hidden="true" />
         {children}
       </body>

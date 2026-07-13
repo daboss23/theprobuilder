@@ -1,11 +1,13 @@
 import type { ReactNode } from 'react'
 import { Sidebar } from '@/components/reactor/Sidebar'
 import { Topbar } from '@/components/reactor/Topbar'
+import { LiquidGlassFX } from '@/components/reactor/LiquidGlassFX'
 import { ReactorRunProvider } from '@/components/campaign-reactor/ReactorRunContext'
 
 export default function PlatformLayout({ children }: { children: ReactNode }) {
   return (
     <ReactorRunProvider>
+      <LiquidGlassFX />
       <div className="reactor-platform flex min-h-screen">
         <Sidebar />
         <div className="reactor-stage flex min-w-0 flex-1 flex-col">
