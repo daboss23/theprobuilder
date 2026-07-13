@@ -21,18 +21,19 @@ export function LiquidGlassFX() {
   useEffect(() => {
     const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches
 
+    const SEL = '.liquid-glass, .glass, .reactor-panel'
     function onMove(e: PointerEvent) {
-      const el = (e.target as HTMLElement | null)?.closest<HTMLElement>('.liquid-glass')
+      const el = (e.target as HTMLElement | null)?.closest<HTMLElement>(SEL)
       if (!el) return
       const r = el.getBoundingClientRect()
       el.style.setProperty('--mx', `${((e.clientX - r.left) / r.width) * 100}%`)
       el.style.setProperty('--my', `${((e.clientY - r.top) / r.height) * 100}%`)
     }
     function onLeave(e: PointerEvent) {
-      const el = (e.target as HTMLElement | null)?.closest<HTMLElement>('.liquid-glass')
+      const el = (e.target as HTMLElement | null)?.closest<HTMLElement>(SEL)
       if (!el) return
       el.style.setProperty('--mx', '50%')
-      el.style.setProperty('--my', '0%')
+      el.style.setProperty('--my', '-10%')
     }
 
     if (!reduce) {
@@ -74,6 +75,22 @@ export function LiquidGlassFX() {
         </feTurbulence>
         <feGaussianBlur in="noise" stdDeviation="1.1" result="soft" />
         <feDisplacementMap in="SourceGraphic" in2="soft" scale="42" xChannelSelector="R" yChannelSelector="G" />
+      </filter>
+
+      {/* Static, gentler refraction used sitewide on panels + buttons. No
+          per-frame turbulence recompute (that would be costly across dozens of
+          backdrop-filtered surfaces); the drifting backdrop supplies the motion. */}
+      <filter
+        id="liquid-glass-soft"
+        x="-20%"
+        y="-20%"
+        width="140%"
+        height="140%"
+        colorInterpolationFilters="sRGB"
+      >
+        <feTurbulence type="fractalNoise" baseFrequency="0.011 0.015" numOctaves={2} seed={4} result="n" />
+        <feGaussianBlur in="n" stdDeviation="1" result="s" />
+        <feDisplacementMap in="SourceGraphic" in2="s" scale="16" xChannelSelector="R" yChannelSelector="G" />
       </filter>
     </svg>
   )

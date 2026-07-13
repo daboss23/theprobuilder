@@ -15,7 +15,7 @@ const config: Config = {
         surface: '#0E1626',
         border: '#1B2840',
         primary: '#3B82F6',
-        glow: '#5EA8FF',
+        glow: '#38E8FF',
         cyan: '#22D3EE',
         violet: '#A78BFA',
         emerald: '#34D399',
@@ -34,8 +34,8 @@ const config: Config = {
         panel: '1.5rem',
       },
       boxShadow: {
-        glow: '0 0 0 1px rgba(94,168,255,0.18), 0 0 26px -6px rgba(59,130,246,0.45)',
-        'glow-lg': '0 0 0 1px rgba(94,168,255,0.25), 0 0 52px -10px rgba(59,130,246,0.6)',
+        glow: '0 0 0 1px rgba(56,232,255,0.20), 0 0 26px -6px rgba(56,232,255,0.5)',
+        'glow-lg': '0 0 0 1px rgba(56,232,255,0.28), 0 0 52px -10px rgba(56,232,255,0.65)',
         panel: '0 1px 0 0 rgba(255,255,255,0.05) inset, 0 20px 50px -28px rgba(0,0,0,0.9)',
       },
       keyframes: {
