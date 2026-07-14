@@ -367,35 +367,43 @@ function CampaignShell({
         >
           <X size={13} /> Exit Canvas
         </button>
-        <div className="canvas-lift max-w-lg">
-          <span className="mx-auto mb-5 grid h-14 w-14 place-items-center rounded-2xl border border-[#FF7C54]/25 bg-[#FF5E3A]/[0.06]">
-            <Workflow size={26} className="text-[#FF9D4D]" />
+        <div className="canvas-lift w-full max-w-3xl">
+          <span className="mx-auto mb-8 grid h-20 w-20 place-items-center rounded-3xl border border-[#FF7C54]/30 bg-gradient-to-br from-[#FF5E3A]/[0.14] to-transparent shadow-[inset_0_1px_0_rgba(255,255,255,0.14),0_24px_60px_-30px_rgba(255,94,58,0.55)] backdrop-blur-xl">
+            <Workflow size={38} className="text-[#FF9D4D]" />
           </span>
-          <h3 className="font-display text-xl font-bold text-white">The Creative Canvas</h3>
-          <p className="mx-auto mt-2 text-sm leading-relaxed text-white/50">
+          <h3 className="font-display text-4xl font-bold tracking-tight text-white sm:text-5xl">
+            The Creative Canvas
+          </h3>
+          <p className="mx-auto mt-5 max-w-2xl text-base leading-relaxed text-white/55 sm:text-lg">
             Where strategy becomes creative structure. Fire the reactor and the system builds the
             first structure for you — hooks, message, proof, scenes, and CTA as connected nodes you
             can shape, branch, and regenerate one piece at a time.
           </p>
-          <div className="mx-auto mt-6 grid max-w-md grid-cols-3 gap-2.5 text-left">
+          <div className="mx-auto mt-10 grid max-w-2xl grid-cols-1 gap-4 text-left sm:grid-cols-3">
             {[
               { Icon: Sparkles, t: 'Pre-structured', d: 'Never a blank board — the run arrives organized.' },
               { Icon: GitBranch, t: 'Branch', d: 'Alternate hooks and CTAs as controlled variants.' },
               { Icon: RefreshCw, t: 'Regenerate', d: 'One node at a time, strategy held constant.' },
             ].map(({ Icon, t, d }) => (
-              <div key={t} className="rounded-xl border border-white/10 bg-white/[0.02] p-3">
-                <Icon size={14} className="mb-1.5 text-[#FF9D4D]" />
-                <p className="text-xs font-semibold text-white">{t}</p>
-                <p className="mt-0.5 text-[10px] leading-snug text-white/40">{d}</p>
+              <div
+                key={t}
+                className="group relative overflow-hidden rounded-2xl border border-white/15 bg-gradient-to-br from-white/[0.12] via-white/[0.04] to-transparent p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.16),inset_0_-30px_50px_-30px_rgba(0,0,0,0.5),0_24px_60px_-34px_rgba(0,0,0,0.85)] backdrop-blur-2xl transition-all duration-300 hover:-translate-y-1 hover:border-[#FF7C54]/40 hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.22),0_28px_64px_-30px_rgba(255,94,58,0.4)]"
+              >
+                <span className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/40 to-transparent" />
+                <span className="mb-3 grid h-11 w-11 place-items-center rounded-xl border border-[#FF7C54]/25 bg-[#FF5E3A]/[0.08]">
+                  <Icon size={20} className="text-[#FF9D4D]" />
+                </span>
+                <p className="text-sm font-semibold text-white">{t}</p>
+                <p className="mt-1.5 text-xs leading-relaxed text-white/45">{d}</p>
               </div>
             ))}
           </div>
           <button
             type="button"
             onClick={onConfigure}
-            className="mt-7 inline-flex items-center gap-2 rounded-full border border-[#FF7C54]/35 bg-[#FF5E3A]/10 px-5 py-2.5 text-sm font-semibold text-[#FF9D4D] transition-colors hover:bg-[#FF5E3A]/20"
+            className="mt-10 inline-flex items-center gap-2 rounded-full border border-[#FF7C54]/35 bg-gradient-to-br from-[#FF5E3A]/20 to-[#FF5E3A]/[0.06] px-7 py-3.5 text-base font-semibold text-[#FF9D4D] shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_18px_44px_-26px_rgba(255,94,58,0.6)] backdrop-blur-xl transition-all duration-300 hover:-translate-y-0.5 hover:border-[#FF7C54]/55 hover:from-[#FF5E3A]/30"
           >
-            <Atom size={14} /> Open the campaign brief
+            <Atom size={16} /> Open the campaign brief
           </button>
         </div>
       </div>
