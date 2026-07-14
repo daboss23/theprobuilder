@@ -8,56 +8,153 @@
    ========================================================================== */
 
 :root {
-  --background: #03070d;
-  --foreground: #f3f8ff;
+  --background: #080b1a;
+  --foreground: #eef3ff;
   --font-inter: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-  --font-space-grotesk: 'Space Grotesk', 'Inter', system-ui, sans-serif;
+  /* Display face = Orbitron (wide, futuristic — the "VERSA" cinematic look).
+     Var name kept so every existing font-display / var(--font-space-grotesk)
+     usage flips at once; Inter stays the readable body face. */
+  --font-space-grotesk: 'Orbitron', 'Space Grotesk', 'Inter', sans-serif;
+
+  /* ── Liquid Glass system — see DESIGN.md ──────────────────────────────────
+     Aurora neon ramp: the ONE decorative color story (cyan → azure → violet →
+     magenta). Everything colored bends toward these four stops. */
+  --lg-cyan: 56 232 255;
+  --lg-azure: 77 141 255;
+  --lg-violet: 168 130 255;
+  --lg-magenta: 255 106 214;
+
+  /* Base atmosphere — lifted off near-black so the glass reads see-through. */
+  --bg-base: #080b1a;
+  --bg-base-2: #0b1024;
+
+  /* Glass material tokens — every surface is tint + rim + sheen + glow. */
+  --glass-tint: rgba(255, 255, 255, 0.06);
+  --glass-tint-2: rgba(255, 255, 255, 0.10);
+  --glass-rim: rgba(255, 255, 255, 0.55);
+  --glass-sheen: rgba(255, 255, 255, 0.14);
+  --glass-shadow: rgba(2, 4, 14, 0.55);
+  /* Readability scrim — a translucent dark bed layered UNDER the white tint so
+     text keeps contrast even where the aurora behind the glass is brightest.
+     The glass stays see-through; the body just reads a touch deeper. */
+  --glass-shade: rgba(7, 11, 27, 0.34);
+  --glass-shade-strong: rgba(7, 11, 27, 0.52);
+
+  /* Pointer-tracked gloss position (updated by GlossTracker; centered default). */
+  --mx: 50%;
+  --my: -10%;
 }
 
 html { color-scheme: dark; }
 body {
   color: var(--foreground);
-  /* Deep navy-to-black base with soft blue/purple light bloom — sits behind the
-     fixed .reactor-bg so the app reads dimensional even where layers are sparse. */
+  /* Luminous deep-indigo base washed with the aurora ramp — sits behind the
+     fixed .reactor-aurora so the app reads dimensional and never near-black. */
   background:
-    radial-gradient(1200px 820px at 80% -12%, rgba(37, 99, 235, 0.12), transparent 60%),
-    radial-gradient(960px 720px at -8% 110%, rgba(124, 58, 237, 0.09), transparent 56%),
-    radial-gradient(760px 520px at 100% 80%, rgba(34, 211, 238, 0.05), transparent 60%),
-    linear-gradient(162deg, #03070d, #06111f 52%, #03070d);
+    radial-gradient(1200px 820px at 78% -12%, rgb(var(--lg-azure) / 0.14), transparent 60%),
+    radial-gradient(1000px 760px at -6% 108%, rgb(var(--lg-violet) / 0.12), transparent 58%),
+    radial-gradient(820px 560px at 104% 82%, rgb(var(--lg-magenta) / 0.08), transparent 60%),
+    linear-gradient(160deg, var(--bg-base), var(--bg-base-2) 52%, var(--bg-base));
   background-attachment: fixed;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
 
 /* ----------------------------------------------------------------------------
-   Accent channels — every neon-tinted module reads its colour from --acc.
-   Apply one .acc-* class, all child glow/border/text utilities follow.
+   Accent channels — small-detail tints only (icon / sparkline / gauge), never
+   the panel body. All six live inside the aurora neon family so a grid of glass
+   tiles reads as ONE material catching different light, not eight loud colors.
 ---------------------------------------------------------------------------- */
-.acc-blue    { --acc: 79 141 255;  --acc-hi: 147 197 253; }
-.acc-cyan    { --acc: 34 211 238;  --acc-hi: 134 239 252; }
-.acc-violet  { --acc: 167 139 250; --acc-hi: 199 181 255; }
-.acc-emerald { --acc: 52 211 153;  --acc-hi: 122 231 192; }
-.acc-pink    { --acc: 244 114 182; --acc-hi: 249 168 212; }
-.acc-amber   { --acc: 251 191 36;  --acc-hi: 253 224 71;  }
+.acc-blue    { --acc: 77 141 255;  --acc-hi: 150 190 255; }
+.acc-cyan    { --acc: 56 232 255;  --acc-hi: 150 245 255; }
+.acc-violet  { --acc: 168 130 255; --acc-hi: 205 185 255; }
+.acc-emerald { --acc: 47 230 176;  --acc-hi: 140 245 210; }
+.acc-pink    { --acc: 255 106 214; --acc-hi: 255 170 232; }
+.acc-amber   { --acc: 255 194 75;  --acc-hi: 255 220 140; }
 
 .acc-text    { color: rgb(var(--acc)); }
 .acc-text-hi { color: rgb(var(--acc-hi)); }
 
 /* ----------------------------------------------------------------------------
-   Environment — deep space backdrop with engineering grid + reactor glows
+   Environment — moving neon AURORA behind translucent glass.
+   Three fixed layers stack behind all content:
+     .reactor-aurora  (z -3) → 4 drifting cyan/azure/violet/magenta light blobs
+     .reactor-bg      (z -2) → engineering grid + edge vignette for contrast
+     .reactor-nodes   (z -1) → faint drifting intelligence dots
+   The aurora is what makes the see-through glass read as glass — colored light
+   bends and bleeds through every panel and shifts hue across the viewport.
 ---------------------------------------------------------------------------- */
+.reactor-aurora {
+  position: fixed;
+  inset: -18%;
+  z-index: -3;
+  pointer-events: none;
+  overflow: hidden;
+  filter: blur(46px) saturate(150%);
+}
+.aurora-blob {
+  position: absolute;
+  border-radius: 50%;
+  mix-blend-mode: screen;
+  opacity: 0.42;
+  will-change: transform;
+}
+.aurora-blob--cyan {
+  width: 52vw;
+  height: 52vw;
+  left: 2%;
+  top: 2%;
+  background: radial-gradient(circle, rgb(var(--lg-cyan) / 0.9), rgb(var(--lg-cyan) / 0.28) 42%, transparent 68%);
+  animation: aurora-cyan 34s ease-in-out infinite;
+}
+.aurora-blob--violet {
+  width: 58vw;
+  height: 58vw;
+  right: 0%;
+  top: -8%;
+  background: radial-gradient(circle, rgb(var(--lg-violet) / 0.85), rgb(var(--lg-violet) / 0.26) 42%, transparent 68%);
+  animation: aurora-violet 46s ease-in-out infinite;
+}
+.aurora-blob--magenta {
+  width: 50vw;
+  height: 50vw;
+  left: 16%;
+  bottom: -18%;
+  background: radial-gradient(circle, rgb(var(--lg-magenta) / 0.78), rgb(var(--lg-magenta) / 0.22) 42%, transparent 68%);
+  animation: aurora-magenta 40s ease-in-out infinite;
+}
+.aurora-blob--azure {
+  width: 46vw;
+  height: 46vw;
+  right: 10%;
+  bottom: -10%;
+  background: radial-gradient(circle, rgb(var(--lg-azure) / 0.82), rgb(var(--lg-azure) / 0.24) 42%, transparent 68%);
+  animation: aurora-azure 38s ease-in-out infinite;
+}
+@keyframes aurora-cyan {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+  33% { transform: translate3d(14vw, 10vh, 0) scale(1.18); }
+  66% { transform: translate3d(6vw, 20vh, 0) scale(0.92); }
+}
+@keyframes aurora-violet {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1.05); }
+  33% { transform: translate3d(-16vw, 12vh, 0) scale(0.9); }
+  66% { transform: translate3d(-6vw, -6vh, 0) scale(1.2); }
+}
+@keyframes aurora-magenta {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+  50% { transform: translate3d(12vw, -16vh, 0) scale(1.16); }
+}
+@keyframes aurora-azure {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1.08); }
+  50% { transform: translate3d(-14vw, -12vh, 0) scale(0.92); }
+}
+
 .reactor-bg {
   position: fixed;
   inset: 0;
   z-index: -2;
   overflow: hidden;
-  background:
-    radial-gradient(1100px 600px at 72% -16%, rgba(37, 99, 235, 0.24), transparent 60%),
-    radial-gradient(820px 560px at 4% 102%, rgba(124, 58, 237, 0.16), transparent 56%),
-    radial-gradient(720px 460px at 100% 78%, rgba(34, 211, 238, 0.10), transparent 58%),
-    radial-gradient(560px 420px at -4% 8%, rgba(0, 213, 255, 0.07), transparent 60%),
-    radial-gradient(640px 480px at 96% 4%, rgba(167, 139, 250, 0.07), transparent 62%),
-    linear-gradient(150deg, #02040a, #040912 46%, #02040a);
 }
 .reactor-bg::before,
 .reactor-bg::after {
@@ -68,18 +165,18 @@ body {
 /* Engineering grid, faded toward the edges */
 .reactor-bg::before {
   background-image:
-    linear-gradient(to right, rgba(86, 140, 214, 0.07) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(86, 140, 214, 0.07) 1px, transparent 1px);
-  background-size: 46px 46px;
-  mask-image: radial-gradient(circle at 58% 28%, black, transparent 82%);
+    linear-gradient(to right, rgba(150, 190, 255, 0.05) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(150, 190, 255, 0.05) 1px, transparent 1px);
+  background-size: 48px 48px;
+  mask-image: radial-gradient(circle at 58% 30%, black, transparent 84%);
 }
-/* Very faint horizontal scanline texture */
+/* Edge vignette — keeps the aurora luminous at center, deepens the corners so
+   glass edges and text keep contrast. */
 .reactor-bg::after {
-  background: repeating-linear-gradient(0deg, transparent 0 3px, rgba(255, 255, 255, 0.008) 3px 4px);
-  opacity: 0.4;
+  background: radial-gradient(130% 120% at 50% 26%, transparent 46%, rgba(4, 6, 18, 0.55) 100%);
 }
 
-/* Drifting intelligence nodes + circuit lines — slow, ambient, premium.
+/* Drifting intelligence nodes — slow, ambient, premium.
    Mounted as a sibling layer in the root layout so it can animate freely. */
 .reactor-nodes {
   position: fixed;
@@ -87,7 +184,7 @@ body {
   z-index: -1;
   pointer-events: none;
   overflow: hidden;
-  opacity: 0.55;
+  opacity: 0.5;
 }
 .reactor-nodes::before,
 .reactor-nodes::after {
@@ -98,21 +195,21 @@ body {
 /* Tiny node dots scattered on a wide field, slowly drifting */
 .reactor-nodes::before {
   background-image:
-    radial-gradient(1.4px 1.4px at 18% 22%, rgba(120, 200, 255, 0.55), transparent),
-    radial-gradient(1.4px 1.4px at 72% 36%, rgba(167, 139, 250, 0.5), transparent),
-    radial-gradient(1.2px 1.2px at 44% 64%, rgba(34, 211, 238, 0.5), transparent),
-    radial-gradient(1.6px 1.6px at 86% 74%, rgba(120, 200, 255, 0.45), transparent),
-    radial-gradient(1.2px 1.2px at 28% 84%, rgba(236, 72, 153, 0.4), transparent),
-    radial-gradient(1.3px 1.3px at 62% 14%, rgba(94, 168, 255, 0.5), transparent);
+    radial-gradient(1.4px 1.4px at 18% 22%, rgba(150, 235, 255, 0.6), transparent),
+    radial-gradient(1.4px 1.4px at 72% 36%, rgba(205, 185, 255, 0.55), transparent),
+    radial-gradient(1.2px 1.2px at 44% 64%, rgba(56, 232, 255, 0.5), transparent),
+    radial-gradient(1.6px 1.6px at 86% 74%, rgba(150, 190, 255, 0.5), transparent),
+    radial-gradient(1.2px 1.2px at 28% 84%, rgba(255, 106, 214, 0.42), transparent),
+    radial-gradient(1.3px 1.3px at 62% 14%, rgba(168, 130, 255, 0.5), transparent);
   background-size: 620px 620px;
-  mask-image: radial-gradient(circle at 60% 36%, black, transparent 78%);
+  mask-image: radial-gradient(circle at 60% 36%, black, transparent 80%);
   animation: nodes-drift 70s linear infinite;
 }
 /* Faint diagonal circuit traces */
 .reactor-nodes::after {
   background-image:
-    linear-gradient(118deg, transparent 48%, rgba(64, 156, 255, 0.06) 49%, transparent 51%),
-    linear-gradient(62deg, transparent 48%, rgba(167, 139, 250, 0.05) 49%, transparent 51%);
+    linear-gradient(118deg, transparent 48%, rgba(56, 232, 255, 0.06) 49%, transparent 51%),
+    linear-gradient(62deg, transparent 48%, rgba(168, 130, 255, 0.05) 49%, transparent 51%);
   background-size: 280px 280px, 360px 360px;
   mask-image: radial-gradient(circle at 50% 40%, black, transparent 80%);
   animation: nodes-drift 110s linear infinite reverse;
@@ -120,6 +217,32 @@ body {
 @keyframes nodes-drift {
   from { transform: translate3d(0, 0, 0); }
   to { transform: translate3d(-160px, -120px, 0); }
+}
+
+/* Pointer-tracked light — a neon spot that follows the cursor BEHIND the glass
+   (GlossTracker feeds --mx/--my). Sits above the aurora so panel backdrop-filters
+   sample it and refract the moving light through the frosted surface. */
+.lg-pointer-glow {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: radial-gradient(
+    440px 440px at var(--mx) var(--my),
+    rgb(var(--lg-cyan) / 0.08),
+    rgb(var(--lg-azure) / 0.04) 40%,
+    transparent 62%
+  );
+  transition: background 0.18s ease-out;
+}
+
+/* Respect reduced-motion — freeze all ambient drift, keep the color. */
+@media (prefers-reduced-motion: reduce) {
+  .aurora-blob,
+  .reactor-nodes::before,
+  .reactor-nodes::after {
+    animation: none !important;
+  }
 }
 
 .reactor-platform { min-height: 100vh; }
@@ -134,15 +257,18 @@ body {
   isolation: isolate;
   min-height: calc(100vh - 104px);
   padding: clamp(1rem, 2vw, 1.75rem);
-  border: 1px solid rgba(82, 146, 222, 0.26);
+  border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 1.5rem;
+  /* Very light frosted frame — translucent so the moving aurora glows through
+     the gaps between panels. This is the "not so dark, see-through" surface. */
   background:
-    radial-gradient(960px 340px at 50% -12%, rgba(37, 110, 235, 0.10), transparent 64%),
-    linear-gradient(150deg, rgba(7, 13, 24, 0.84), rgba(3, 7, 14, 0.94));
+    linear-gradient(150deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.015) 60%, rgba(255, 255, 255, 0.03));
+  backdrop-filter: blur(12px) saturate(140%);
+  -webkit-backdrop-filter: blur(12px) saturate(140%);
   box-shadow:
-    inset 0 1px 0 rgba(165, 215, 255, 0.10),
+    inset 0 1px 0 rgba(255, 255, 255, 0.18),
     0 30px 80px -48px #000,
-    0 0 70px -50px rgba(37, 99, 235, 0.9);
+    0 0 80px -50px rgb(var(--lg-azure) / 0.6);
 }
 .command-surface::before {
   content: '';
@@ -152,9 +278,9 @@ body {
   pointer-events: none;
   border-radius: inherit;
   background-image:
-    linear-gradient(rgba(86, 140, 214, 0.028) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(86, 140, 214, 0.028) 1px, transparent 1px);
-  background-size: 28px 28px;
+    linear-gradient(rgba(150, 190, 255, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(150, 190, 255, 0.03) 1px, transparent 1px);
+  background-size: 30px 30px;
   mask-image: linear-gradient(black, transparent 82%);
 }
 .command-surface::after {
@@ -162,8 +288,8 @@ body {
   position: absolute;
   inset: -1px 18% auto;
   height: 1px;
-  background: linear-gradient(90deg, transparent, #5db4ff, transparent);
-  box-shadow: 0 0 20px rgba(80, 170, 255, 0.7);
+  background: linear-gradient(90deg, transparent, rgb(var(--lg-cyan)), transparent);
+  box-shadow: 0 0 22px rgb(var(--lg-cyan) / 0.7);
 }
 
 /* ----------------------------------------------------------------------------
@@ -173,42 +299,44 @@ body {
   position: sticky;
   top: 0;
   height: 100vh;
-  border-right: 1px solid rgba(70, 132, 200, 0.22);
-  background: linear-gradient(180deg, rgba(4, 8, 16, 0.97), rgba(3, 6, 12, 0.99));
-  box-shadow: inset -1px 0 0 rgba(130, 195, 255, 0.05), 20px 0 60px -48px rgba(37, 130, 255, 0.85);
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
+  background: linear-gradient(180deg, rgba(10, 14, 30, 0.72), rgba(8, 11, 24, 0.82));
+  backdrop-filter: blur(26px) saturate(150%);
+  -webkit-backdrop-filter: blur(26px) saturate(150%);
+  box-shadow: inset -1px 0 0 rgba(255, 255, 255, 0.06), 20px 0 60px -48px rgb(var(--lg-violet) / 0.7);
 }
 .reactor-brand {
-  border-bottom: 1px solid rgba(74, 140, 210, 0.16);
-  background: radial-gradient(circle at 22% 40%, rgba(34, 120, 230, 0.12), transparent 62%);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  background: radial-gradient(circle at 22% 40%, rgb(var(--lg-cyan) / 0.10), transparent 62%);
 }
 
 .reactor-nav-item {
-  border: 1px solid rgba(126, 168, 220, 0.07);
-  background: linear-gradient(180deg, rgba(13, 21, 36, 0.62), rgba(7, 12, 22, 0.55));
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.025);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.01));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
 }
 .reactor-nav-item:hover {
-  border-color: rgba(90, 160, 235, 0.28);
-  background: linear-gradient(180deg, rgba(18, 38, 64, 0.6), rgba(9, 18, 32, 0.55));
+  border-color: rgba(255, 255, 255, 0.14);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.03));
 }
 .reactor-nav-item.is-active {
-  border-color: rgba(74, 152, 255, 0.55);
+  border-color: rgb(var(--lg-cyan) / 0.5);
   background:
-    radial-gradient(circle at 10% 50%, rgba(40, 130, 235, 0.22), transparent 58%),
-    linear-gradient(90deg, rgba(17, 56, 102, 0.72), rgba(7, 20, 38, 0.66));
+    radial-gradient(circle at 10% 50%, rgb(var(--lg-cyan) / 0.2), transparent 58%),
+    linear-gradient(90deg, rgb(var(--lg-azure) / 0.22), rgb(var(--lg-violet) / 0.10));
   box-shadow:
-    inset 0 1px 0 rgba(160, 215, 255, 0.10),
-    0 0 26px -12px rgba(56, 145, 255, 0.95);
+    inset 0 1px 0 rgba(255, 255, 255, 0.16),
+    0 0 26px -12px rgb(var(--lg-cyan) / 0.9);
 }
 .nav-icon-chip {
-  border: 1px solid rgba(140, 180, 230, 0.10);
-  background: linear-gradient(180deg, rgba(22, 34, 54, 0.7), rgba(10, 16, 28, 0.7));
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
 }
 .reactor-nav-item.is-active .nav-icon-chip {
-  border-color: rgba(96, 168, 255, 0.5);
-  background: radial-gradient(circle, rgba(45, 130, 235, 0.35), rgba(10, 24, 44, 0.85));
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 0 16px -4px rgba(72, 156, 255, 0.9);
+  border-color: rgb(var(--lg-cyan) / 0.5);
+  background: radial-gradient(circle, rgb(var(--lg-cyan) / 0.32), rgb(var(--lg-azure) / 0.14));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16), 0 0 16px -4px rgb(var(--lg-cyan) / 0.9);
 }
 
 /* Console modules at the foot of the sidebar (agents + system status) */
@@ -288,18 +416,19 @@ body {
    Topbar — command rail
 ---------------------------------------------------------------------------- */
 .reactor-topbar {
-  border-bottom: 1px solid rgba(73, 142, 212, 0.18);
-  background: rgba(3, 8, 16, 0.82);
-  backdrop-filter: blur(22px) saturate(135%);
-  box-shadow: 0 12px 36px -30px rgba(40, 140, 255, 0.9);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(10, 14, 30, 0.6);
+  backdrop-filter: blur(26px) saturate(150%);
+  -webkit-backdrop-filter: blur(26px) saturate(150%);
+  box-shadow: 0 12px 36px -30px rgb(var(--lg-cyan) / 0.9);
 }
 .topbar-control {
-  background: linear-gradient(180deg, rgba(16, 30, 50, 0.7), rgba(7, 14, 25, 0.72));
-  border-color: rgba(86, 150, 215, 0.22);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.045);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.02));
+  border-color: rgba(255, 255, 255, 0.12);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
 .topbar-avatar {
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.32), 0 0 22px -6px rgba(56, 150, 255, 0.85);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 0 22px -6px rgb(var(--lg-cyan) / 0.85);
 }
 .mobile-reactor-nav { backdrop-filter: blur(20px); }
 
@@ -310,22 +439,24 @@ body {
 .reactor-panel {
   position: relative;
   overflow: hidden;
-  border: 1px solid rgba(96, 162, 225, 0.28);
+  border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 1.5rem;
+  /* True liquid glass: milky translucent tint (aurora bleeds through) + a warm
+     and cool light wash pulled from the ramp. Deliberately low opacity so the
+     moving background stays visible inside every panel. */
   background:
-    linear-gradient(115deg, rgba(255, 255, 255, 0.06), transparent 24%),
-    radial-gradient(560px 200px at 6% -4%, rgba(56, 142, 240, 0.13), transparent 70%),
-    radial-gradient(420px 220px at 100% 4%, rgba(124, 92, 246, 0.08), transparent 72%),
-    linear-gradient(180deg, rgba(13, 22, 40, 0.86), rgba(5, 10, 20, 0.93));
-  backdrop-filter: blur(28px) saturate(145%);
-  -webkit-backdrop-filter: blur(28px) saturate(145%);
+    linear-gradient(135deg, rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.025) 46%, rgba(255, 255, 255, 0.05)),
+    radial-gradient(600px 220px at 4% -6%, rgb(var(--lg-cyan) / 0.09), transparent 70%),
+    radial-gradient(460px 240px at 100% 6%, rgb(var(--lg-violet) / 0.09), transparent 72%),
+    linear-gradient(180deg, var(--glass-shade), var(--glass-shade-strong));
+  backdrop-filter: blur(30px) saturate(175%);
+  -webkit-backdrop-filter: blur(30px) saturate(175%);
   box-shadow:
-    inset 0 1px 0 rgba(185, 225, 255, 0.13),
-    inset 0 0 0 1px rgba(255, 255, 255, 0.02),
-    inset 0 -34px 60px rgba(0, 0, 0, 0.22),
-    0 1px 1px rgba(0, 0, 0, 0.4),
-    0 28px 64px -38px rgba(0, 0, 0, 0.92),
-    0 0 60px -44px rgba(56, 142, 240, 0.7);
+    inset 0 1px 0 var(--glass-rim),                    /* bright top refraction edge */
+    inset 1px 0 0 rgba(255, 255, 255, 0.16),           /* left refraction edge */
+    inset 0 -40px 70px -40px rgba(6, 12, 40, 0.5),     /* soft inner floor */
+    0 26px 64px -34px var(--glass-shadow),             /* floating drop */
+    0 0 64px -42px rgb(var(--lg-azure) / 0.75);        /* aurora edge glow */
 }
 .glass::after,
 .reactor-panel::after {
@@ -337,24 +468,34 @@ body {
   border-radius: inherit;
   background: linear-gradient(
     128deg,
-    rgba(180, 220, 255, 0.1) 0%,
-    rgba(160, 205, 255, 0.03) 14%,
-    transparent 32%,
+    rgba(255, 255, 255, 0.16) 0%,
+    rgba(255, 255, 255, 0.04) 14%,
+    transparent 34%,
     transparent 74%,
-    rgba(110, 165, 220, 0.04) 100%
+    rgb(var(--lg-magenta) / 0.05) 100%
   );
   mix-blend-mode: screen;
-  opacity: 0.85;
+  opacity: 0.9;
 }
 .glass > *, .reactor-panel > * { position: relative; z-index: 1; }
+/* Legibility — lift headings, values and the wide display face off the glass so
+   text stays sharp even over the brightest part of the aurora. */
+.command-surface h1,
+.command-surface h2,
+.command-surface h3,
+.command-surface .font-display {
+  text-shadow: 0 1px 3px rgba(2, 4, 14, 0.5);
+}
 .glass-hover { transition: border-color 0.22s ease, box-shadow 0.22s ease, transform 0.22s ease; }
 .glass-hover:hover {
   transform: translateY(-2px);
-  border-color: rgba(76, 170, 255, 0.5);
+  border-color: rgba(255, 255, 255, 0.28);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.09),
-    0 0 0 1px rgba(76, 156, 255, 0.09),
-    0 24px 50px -32px rgba(30, 120, 255, 0.75);
+    inset 0 1px 0 rgba(255, 255, 255, 0.6),
+    inset 1px 0 0 rgba(255, 255, 255, 0.2),
+    0 0 0 1px rgba(var(--lg-cyan) / 0.12),
+    0 28px 56px -30px var(--glass-shadow),
+    0 0 70px -34px rgb(var(--lg-cyan) / 0.7);
 }
 .panel-sheen {
   position: absolute;
@@ -362,13 +503,13 @@ body {
   height: 52%;
   pointer-events: none;
   border-radius: 1.5rem 1.5rem 0 0;
-  background: linear-gradient(168deg, rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.02) 36%, transparent 62%);
+  background: linear-gradient(168deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.03) 36%, transparent 62%);
   -webkit-mask-image: linear-gradient(#000, transparent);
   mask-image: linear-gradient(#000, transparent);
 }
 .panel-header {
-  border-color: rgba(104, 168, 225, 0.14);
-  background: linear-gradient(90deg, rgba(20, 52, 86, 0.22), transparent 64%);
+  border-color: rgba(255, 255, 255, 0.08);
+  background: linear-gradient(90deg, rgb(var(--lg-cyan) / 0.06), transparent 64%);
 }
 .panel-icon {
   border: 1px solid rgb(var(--acc, 79 141 255) / 0.42);
@@ -387,8 +528,8 @@ body {
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
-  border-top: 1px solid rgba(104, 168, 225, 0.13);
-  background: linear-gradient(180deg, rgba(14, 30, 52, 0.35), rgba(8, 16, 30, 0.5));
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.01));
   padding: 0.7rem 1rem;
   font-size: 11px;
   font-weight: 600;
@@ -398,28 +539,29 @@ body {
   transition: color 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
 }
 .panel-footer-btn:hover {
-  color: #aad6ff;
-  background: linear-gradient(180deg, rgba(24, 58, 100, 0.45), rgba(10, 22, 40, 0.6));
-  box-shadow: inset 0 0 24px -14px rgba(72, 156, 255, 0.9);
+  color: rgb(var(--lg-cyan));
+  background: linear-gradient(180deg, rgb(var(--lg-cyan) / 0.14), rgb(var(--lg-azure) / 0.06));
+  box-shadow: inset 0 0 24px -14px rgb(var(--lg-cyan) / 0.9);
 }
 
-/* Nested sub-modules inside panels keep the same material everywhere */
+/* Nested sub-modules inside panels keep the same translucent glass material —
+   never a dark navy box floating on the aurora. */
 .command-surface [class*='border-border'][class*='bg-surface'],
 .command-surface [class*='border-border'][class*='bg-background'] {
-  border-color: rgba(84, 150, 210, 0.2);
-  background: linear-gradient(150deg, rgba(15, 32, 54, 0.58), rgba(5, 12, 22, 0.7));
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.10);
+  background: linear-gradient(150deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.02));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.10);
 }
 .command-surface button,
 .command-surface a[class*='border-primary'] {
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 0 18px -12px rgba(40, 140, 255, 0.8);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 0 18px -12px rgb(var(--lg-cyan) / 0.8);
 }
 .command-surface input,
 .command-surface textarea,
 .command-surface select {
-  border-color: rgba(84, 150, 215, 0.26) !important;
-  background-color: rgba(4, 12, 23, 0.74) !important;
-  box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.5);
+  border-color: rgba(255, 255, 255, 0.14) !important;
+  background-color: rgba(255, 255, 255, 0.04) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), inset 0 2px 8px rgba(4, 8, 22, 0.4);
 }
 
 /* ----------------------------------------------------------------------------
@@ -437,26 +579,24 @@ body {
   isolation: isolate;
   min-height: 9.25rem;
   border-radius: 1.4rem;
-  border: 1px solid rgb(var(--acc) / 0.4);
-  /* Multi-layer glass base: accent corner wash · cool top-light · accent
-     up-glow from the floor · deep navy body. Never a single flat fill. */
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  /* UNIFORM liquid-glass body across every tile — the aurora behind supplies
+     the color, so the grid reads as one sheet of glass, not eight loud cards.
+     The accent survives only as a faint up-glow from the floor + a soft halo. */
   background:
-    radial-gradient(120% 92% at 12% -12%, rgb(var(--acc) / 0.3), transparent 44%),
-    radial-gradient(150% 130% at 88% -8%, rgba(255, 255, 255, 0.09), transparent 46%),
-    radial-gradient(170% 150% at 50% 124%, rgb(var(--acc) / 0.16), transparent 60%),
-    linear-gradient(158deg, rgba(23, 35, 60, 0.78), rgba(8, 14, 28, 0.9) 55%, rgba(4, 8, 16, 0.96));
-  backdrop-filter: blur(26px) saturate(155%);
-  -webkit-backdrop-filter: blur(26px) saturate(155%);
+    linear-gradient(135deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.03) 46%, rgba(255, 255, 255, 0.06)),
+    radial-gradient(150% 140% at 50% 120%, rgb(var(--acc) / 0.1), transparent 60%),
+    linear-gradient(180deg, var(--glass-shade), var(--glass-shade-strong));
+  backdrop-filter: blur(30px) saturate(180%);
+  -webkit-backdrop-filter: blur(30px) saturate(180%);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.24),          /* bright top edge */
-    inset 0 0 0 1px rgba(255, 255, 255, 0.04),         /* thin inner rim */
-    inset 0 3px 16px -8px rgba(255, 255, 255, 0.1),    /* upper glass glow */
-    inset 0 -44px 70px -36px rgba(0, 0, 0, 0.62),      /* deep inner floor shadow */
-    inset 0 -1px 0 rgba(0, 0, 0, 0.45),
-    0 2px 4px rgba(0, 0, 0, 0.5),
-    0 0 42px -14px rgb(var(--acc) / 0.5),              /* accent halo */
-    0 26px 48px -22px rgb(var(--acc) / 0.42),          /* colored downward bloom */
-    0 36px 62px -26px rgba(0, 0, 0, 0.96);             /* floating drop shadow */
+    inset 0 1px 0 var(--glass-rim),                    /* bright top refraction edge */
+    inset 1px 0 0 rgba(255, 255, 255, 0.2),            /* left refraction edge */
+    inset 0 3px 16px -8px rgba(255, 255, 255, 0.14),   /* upper glass glow */
+    inset 0 -44px 70px -40px rgba(8, 14, 36, 0.45),    /* soft inner floor */
+    0 2px 4px rgba(4, 8, 22, 0.3),
+    0 0 44px -18px rgb(var(--acc) / 0.35),             /* faint accent halo (not a border) */
+    0 26px 52px -26px var(--glass-shadow);             /* floating drop shadow */
   transition: transform 0.32s cubic-bezier(0.2, 0.7, 0.2, 1), box-shadow 0.32s ease, filter 0.32s ease;
 }
 /* Diagonal glossy reflection sweeping across the glass surface */
@@ -469,18 +609,17 @@ body {
   border-radius: inherit;
   background: linear-gradient(
     122deg,
-    rgba(255, 255, 255, 0.2) 0%,
-    rgba(255, 255, 255, 0.05) 15%,
+    rgba(255, 255, 255, 0.28) 0%,
+    rgba(255, 255, 255, 0.06) 15%,
     transparent 33%,
     transparent 70%,
-    rgba(255, 255, 255, 0.05) 100%
+    rgba(255, 255, 255, 0.06) 100%
   );
-  opacity: 0.7;
+  opacity: 0.75;
   mix-blend-mode: screen;
 }
-/* Soft accent reflection pooled on the page just below the tile — reads as
-   the card floating above a dark surface (sits outside the card box, so the
-   backdrop-filter stacking context doesn't trap it). */
+/* Soft accent reflection pooled just below the tile — reads as the glass
+   floating above the aurora. Kept subtle so tiles don't rainbow the floor. */
 .kpi-card::after {
   content: '';
   position: absolute;
@@ -489,33 +628,33 @@ body {
   top: 99%;
   height: 46%;
   pointer-events: none;
-  background: radial-gradient(60% 100% at 50% 0%, rgb(var(--acc) / 0.5), transparent 72%);
+  background: radial-gradient(60% 100% at 50% 0%, rgb(var(--acc) / 0.4), transparent 72%);
   filter: blur(22px);
-  opacity: 0.45;
+  opacity: 0.4;
   transition: opacity 0.32s ease;
 }
 .kpi-card:hover {
   transform: translateY(-5px);
-  filter: saturate(1.14) brightness(1.04);
+  filter: saturate(1.12) brightness(1.05);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.3),
-    inset 0 0 0 1px rgba(255, 255, 255, 0.06),
-    inset 0 3px 18px -8px rgba(255, 255, 255, 0.14),
-    inset 0 -48px 76px -34px rgba(0, 0, 0, 0.64),
-    0 2px 4px rgba(0, 0, 0, 0.5),
-    0 0 58px -10px rgb(var(--acc) / 0.64),
-    0 46px 74px -26px rgba(0, 0, 0, 0.98);
+    inset 0 1px 0 rgba(255, 255, 255, 0.65),
+    inset 1px 0 0 rgba(255, 255, 255, 0.24),
+    inset 0 3px 18px -8px rgba(255, 255, 255, 0.18),
+    inset 0 -48px 76px -38px rgba(8, 14, 36, 0.5),
+    0 2px 4px rgba(4, 8, 22, 0.3),
+    0 0 60px -14px rgb(var(--acc) / 0.5),
+    0 46px 74px -30px var(--glass-shadow);
 }
-.kpi-card:hover::after { opacity: 0.86; }
+.kpi-card:hover::after { opacity: 0.7; }
 .kpi-card--compact { min-height: 6.9rem; }
-/* Accent corner bloom — contained inside the glass */
+/* Accent corner bloom — a whisper of accent light, contained inside the glass */
 .kpi-bloom {
   position: absolute;
   inset: 0;
   z-index: 0;
   pointer-events: none;
   border-radius: inherit;
-  background: radial-gradient(56% 46% at 86% -8%, rgb(var(--acc) / 0.44), transparent 56%);
+  background: radial-gradient(56% 46% at 86% -8%, rgb(var(--acc) / 0.18), transparent 58%);
 }
 /* Faint engineered grid so the glass body never reads empty */
 .kpi-grid {
@@ -525,12 +664,12 @@ body {
   pointer-events: none;
   border-radius: inherit;
   background-image:
-    linear-gradient(rgba(170, 210, 255, 0.05) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(170, 210, 255, 0.05) 1px, transparent 1px);
+    linear-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
   background-size: 22px 22px;
   -webkit-mask-image: radial-gradient(120% 92% at 82% 6%, #000, transparent 76%);
   mask-image: radial-gradient(120% 92% at 82% 6%, #000, transparent 76%);
-  opacity: 0.55;
+  opacity: 0.5;
 }
 /* Icon tile — embedded into the glass with a bevel + colored bloom behind */
 .kpi-icon {
@@ -679,60 +818,61 @@ body {
 /* Recommendation modules */
 .recommendation-card {
   position: relative;
-  background: linear-gradient(150deg, rgba(16, 40, 64, 0.66), rgba(4, 13, 23, 0.78));
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.055), 0 16px 32px -26px #000;
+  background:
+    linear-gradient(150deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.015)),
+    linear-gradient(180deg, var(--glass-shade), var(--glass-shade-strong));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.10), 0 16px 32px -26px rgba(2, 4, 14, 0.7);
 }
 .recommendation-card::before {
   content: '';
   position: absolute;
   inset: 8% auto 8% 0;
   width: 1px;
-  background: linear-gradient(transparent, rgba(80, 170, 255, 0.75), transparent);
+  background: linear-gradient(transparent, rgb(var(--lg-cyan) / 0.8), transparent);
 }
 
-/* Campaign Reactor console — "hot to touch" 3D push button */
+/* Campaign Reactor CTA — neon liquid-glass 3D push button (cyan → violet). */
 .fire-btn {
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.4), rgba(255, 255, 255, 0) 42%),
-    linear-gradient(180deg, #ff9d4d 0%, #ff5e3a 46%, #e11d2a 100%);
-  border: 1px solid rgba(255, 190, 140, 0.6);
-  text-shadow: 0 1px 2px rgba(120, 8, 8, 0.55);
+    linear-gradient(180deg, rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0) 44%),
+    linear-gradient(115deg, rgb(var(--lg-cyan)) 0%, rgb(var(--lg-azure)) 48%, rgb(var(--lg-violet)) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  text-shadow: 0 1px 3px rgba(12, 20, 60, 0.55);
   box-shadow:
-    inset 0 2px 1px rgba(255, 255, 255, 0.6),
-    inset 0 -7px 14px rgba(150, 12, 12, 0.5),
-    0 7px 0 #8f1414,
-    0 12px 26px -4px rgba(255, 80, 45, 0.8),
-    0 0 30px -2px rgba(255, 95, 45, 0.7);
+    inset 0 2px 1px rgba(255, 255, 255, 0.7),
+    inset 0 -8px 16px rgba(40, 30, 120, 0.4),
+    0 7px 0 rgb(var(--lg-violet) / 0.5),
+    0 12px 26px -4px rgb(var(--lg-azure) / 0.7),
+    0 0 34px -2px rgb(var(--lg-cyan) / 0.7);
   transition: box-shadow 0.12s ease, transform 0.08s ease, filter 0.2s ease;
 }
 .fire-btn:hover:not(:disabled) {
-  filter: saturate(1.18) brightness(1.06);
+  filter: saturate(1.14) brightness(1.06);
   box-shadow:
-    inset 0 2px 1px rgba(255, 255, 255, 0.65),
-    inset 0 -7px 14px rgba(150, 12, 12, 0.5),
-    0 7px 0 #8f1414,
-    0 16px 34px -4px rgba(255, 90, 50, 0.95),
-    0 0 44px -2px rgba(255, 110, 55, 0.85);
+    inset 0 2px 1px rgba(255, 255, 255, 0.75),
+    inset 0 -8px 16px rgba(40, 30, 120, 0.4),
+    0 7px 0 rgb(var(--lg-violet) / 0.5),
+    0 16px 34px -4px rgb(var(--lg-azure) / 0.85),
+    0 0 50px -2px rgb(var(--lg-cyan) / 0.85);
 }
 /* Pressed: the cap travels down onto its base and the glow tightens */
 .fire-btn:active:not(:disabled) {
   transform: translateY(6px);
   box-shadow:
-    inset 0 2px 1px rgba(255, 255, 255, 0.5),
-    inset 0 -3px 8px rgba(150, 12, 12, 0.5),
-    0 1px 0 #8f1414,
-    0 4px 12px -4px rgba(255, 70, 40, 0.7),
-    0 0 20px -2px rgba(255, 90, 45, 0.6);
+    inset 0 2px 1px rgba(255, 255, 255, 0.55),
+    inset 0 -3px 8px rgba(40, 30, 120, 0.4),
+    0 1px 0 rgb(var(--lg-violet) / 0.5),
+    0 4px 12px -4px rgb(var(--lg-azure) / 0.7),
+    0 0 22px -2px rgb(var(--lg-cyan) / 0.6);
 }
 .fire-btn:disabled {
   filter: saturate(0.55) brightness(0.8);
 }
 .telemetry-console {
-  border: 1px solid rgba(78, 148, 215, 0.24);
+  border: 1px solid rgba(255, 255, 255, 0.10);
   border-radius: 0.9rem;
-  background:
-    linear-gradient(180deg, rgba(4, 10, 20, 0.92), rgba(3, 7, 14, 0.96));
-  box-shadow: inset 0 1px 0 rgba(150, 210, 255, 0.07), inset 0 0 32px -18px rgba(40, 130, 235, 0.5);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.015));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), inset 0 0 32px -18px rgb(var(--lg-azure) / 0.4);
 }
 
 /* Knowledge Vault launcher — anchored at the foot of the sidebar */
@@ -1624,17 +1764,17 @@ body {
   align-items: center;
   gap: 0.55rem;
   border-radius: 0.85rem;
-  border: 1px solid rgba(86, 150, 215, 0.24);
-  background: linear-gradient(180deg, rgba(10, 22, 40, 0.78), rgba(5, 12, 24, 0.82));
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.02));
   padding: 0.5rem 0.8rem;
   color: rgba(226, 239, 255, 0.5);
-  box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), inset 0 2px 8px rgba(4, 8, 22, 0.35);
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 .topbar-search:hover,
 .topbar-search:focus-within {
-  border-color: rgba(94, 168, 255, 0.5);
-  box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.55), 0 0 22px -10px rgba(64, 156, 255, 0.95);
+  border-color: rgb(var(--lg-cyan) / 0.5);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 0 22px -10px rgb(var(--lg-cyan) / 0.9);
 }
 .topbar-search input {
   flex: 1;
@@ -1747,8 +1887,8 @@ body {
   gap: 0.4rem;
   width: 100%;
   border-radius: 0.7rem;
-  border: 1px solid rgba(94, 168, 255, 0.34);
-  background: linear-gradient(180deg, rgba(30, 64, 110, 0.55), rgba(12, 26, 48, 0.6));
+  border: 1px solid rgb(var(--lg-cyan) / 0.34);
+  background: linear-gradient(180deg, rgb(var(--lg-azure) / 0.2), rgb(var(--lg-violet) / 0.12));
   padding: 0.55rem 0.9rem;
   font-family: var(--font-space-grotesk);
   font-size: 12px;
@@ -1760,9 +1900,9 @@ body {
 }
 .brief-cta:hover {
   transform: translateY(-1px);
-  border-color: rgba(124, 196, 255, 0.65);
+  border-color: rgb(var(--lg-cyan) / 0.65);
   color: #fff;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1), 0 0 28px -8px rgba(64, 156, 255, 0.95);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14), 0 0 28px -8px rgb(var(--lg-cyan) / 0.95);
 }
 .brief-cta:active { transform: translateY(0); }
 /* Priority-tinted left glow on briefing cards */
@@ -1782,8 +1922,8 @@ body {
   align-items: center;
   gap: 0.3rem;
   border-radius: 9999px;
-  border: 1px solid rgba(94, 168, 255, 0.2);
-  background: rgba(20, 40, 68, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.05);
   padding: 0.16rem 0.55rem;
   font-size: 10px;
   font-weight: 500;
@@ -1796,21 +1936,21 @@ body {
   border-radius: 0.5rem;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), inset 0 -10px 18px rgba(0, 0, 0, 0.25);
 }
-.heat-l0 { background: linear-gradient(160deg, rgba(30, 44, 70, 0.7), rgba(18, 28, 46, 0.7)); color: rgba(255,255,255,0.4); }
-.heat-l1 { background: linear-gradient(160deg, rgba(37, 99, 235, 0.4), rgba(30, 64, 160, 0.3)); }
-.heat-l2 { background: linear-gradient(160deg, rgba(59, 130, 246, 0.62), rgba(37, 99, 235, 0.45)); }
+.heat-l0 { background: linear-gradient(160deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.015)); color: rgba(255,255,255,0.4); }
+.heat-l1 { background: linear-gradient(160deg, rgb(var(--lg-violet) / 0.38), rgb(var(--lg-violet) / 0.22)); }
+.heat-l2 { background: linear-gradient(160deg, rgb(var(--lg-azure) / 0.6), rgb(var(--lg-violet) / 0.42)); }
 .heat-l3 {
-  background: linear-gradient(160deg, rgba(56, 152, 255, 0.85), rgba(34, 160, 230, 0.6));
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22), 0 0 16px -3px rgba(64, 160, 255, 0.7);
+  background: linear-gradient(160deg, rgb(var(--lg-azure) / 0.85), rgb(var(--lg-cyan) / 0.58));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22), 0 0 16px -3px rgb(var(--lg-azure) / 0.7);
 }
 .heat-l4 {
-  background: linear-gradient(160deg, rgba(34, 211, 238, 0.95), rgba(64, 156, 255, 0.78));
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.32), 0 0 20px -2px rgba(34, 211, 238, 0.85);
+  background: linear-gradient(160deg, rgb(var(--lg-cyan) / 0.95), rgb(var(--lg-azure) / 0.78));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.32), 0 0 20px -2px rgb(var(--lg-cyan) / 0.85);
   animation: heat-pulse 3.2s ease-in-out infinite;
 }
 @keyframes heat-pulse {
-  0%, 100% { box-shadow: inset 0 1px 0 rgba(255,255,255,0.32), 0 0 18px -3px rgba(34, 211, 238, 0.75); }
-  50% { box-shadow: inset 0 1px 0 rgba(255,255,255,0.4), 0 0 26px 0 rgba(34, 211, 238, 0.95); }
+  0%, 100% { box-shadow: inset 0 1px 0 rgba(255,255,255,0.32), 0 0 18px -3px rgb(var(--lg-cyan) / 0.75); }
+  50% { box-shadow: inset 0 1px 0 rgba(255,255,255,0.4), 0 0 26px 0 rgb(var(--lg-cyan) / 0.95); }
 }
 
 /* Count-up numerals draw attention without layout shift ----------------------*/
@@ -1888,10 +2028,11 @@ body {
    ========================================================================== */
 .launch-overlay {
   background:
-    radial-gradient(1100px 720px at 50% -14%, rgba(255, 94, 58, 0.12), transparent 60%),
-    rgba(3, 4, 9, 0.74);
-  backdrop-filter: blur(14px) saturate(120%);
-  -webkit-backdrop-filter: blur(14px) saturate(120%);
+    radial-gradient(1100px 720px at 50% -14%, rgb(var(--lg-cyan) / 0.14), transparent 60%),
+    radial-gradient(900px 700px at 100% 100%, rgb(var(--lg-violet) / 0.1), transparent 62%),
+    rgba(4, 6, 16, 0.62);
+  backdrop-filter: blur(18px) saturate(135%);
+  -webkit-backdrop-filter: blur(18px) saturate(135%);
   animation: launch-overlay-in 0.28s ease-out;
 }
 @keyframes launch-overlay-in {
@@ -1903,15 +2044,19 @@ body {
   position: relative;
   isolation: isolate;
   overflow: hidden;
-  border: 1px solid rgba(255, 124, 84, 0.26);
+  border: 1px solid rgba(255, 255, 255, 0.16);
   background:
-    radial-gradient(780px 320px at 50% -10%, rgba(255, 94, 58, 0.17), transparent 64%),
-    radial-gradient(560px 260px at 6% 2%, rgba(59, 130, 246, 0.08), transparent 70%),
-    linear-gradient(180deg, rgba(20, 15, 18, 0.97), rgba(8, 8, 13, 0.985));
+    radial-gradient(780px 340px at 50% -12%, rgb(var(--lg-cyan) / 0.2), transparent 62%),
+    radial-gradient(620px 320px at 4% 0%, rgb(var(--lg-violet) / 0.16), transparent 66%),
+    radial-gradient(560px 320px at 100% 106%, rgb(var(--lg-magenta) / 0.12), transparent 68%),
+    linear-gradient(180deg, rgba(13, 19, 40, 0.72), rgba(9, 12, 28, 0.8));
+  backdrop-filter: blur(34px) saturate(180%);
+  -webkit-backdrop-filter: blur(34px) saturate(180%);
   box-shadow:
-    inset 0 1px 0 rgba(255, 214, 186, 0.16),
+    inset 0 1px 0 var(--glass-rim),
+    inset 1px 0 0 rgba(255, 255, 255, 0.14),
     0 50px 140px -50px #000,
-    0 0 110px -55px rgba(255, 94, 58, 0.72);
+    0 0 130px -50px rgb(var(--lg-azure) / 0.8);
   animation: launch-panel-in 0.34s cubic-bezier(0.2, 0.7, 0.2, 1);
 }
 @keyframes launch-panel-in {
@@ -1926,8 +2071,8 @@ body {
   z-index: 0;
   pointer-events: none;
   background-image:
-    linear-gradient(rgba(255, 150, 110, 0.05) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 150, 110, 0.05) 1px, transparent 1px);
+    linear-gradient(rgba(150, 200, 255, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(150, 200, 255, 0.05) 1px, transparent 1px);
   background-size: 30px 30px;
   -webkit-mask-image: radial-gradient(130% 80% at 50% 0%, #000, transparent 74%);
   mask-image: radial-gradient(130% 80% at 50% 0%, #000, transparent 74%);
@@ -1943,8 +2088,8 @@ body {
 .launch-progress > i {
   display: block;
   height: 100%;
-  background: linear-gradient(90deg, #ff9d4d, #ff5e3a 58%, #e11d2a);
-  box-shadow: 0 0 18px rgba(255, 94, 58, 0.8);
+  background: linear-gradient(90deg, rgb(var(--lg-cyan)), rgb(var(--lg-azure)) 58%, rgb(var(--lg-violet)));
+  box-shadow: 0 0 18px rgb(var(--lg-cyan) / 0.8);
   transition: width 0.45s cubic-bezier(0.2, 0.7, 0.2, 1);
 }
 
@@ -1957,7 +2102,7 @@ body {
   font-weight: 700;
   letter-spacing: 0.24em;
   text-transform: uppercase;
-  color: rgba(255, 200, 170, 0.85);
+  color: rgb(var(--lg-cyan) / 0.9);
 }
 
 /* Step orbs */
@@ -1978,22 +2123,22 @@ body {
     border-color 0.3s ease, color 0.3s ease, box-shadow 0.3s ease;
 }
 .launch-orb[data-state='done'] {
-  border-color: rgba(255, 124, 84, 0.5);
-  background: linear-gradient(180deg, rgba(255, 120, 80, 0.22), rgba(120, 40, 24, 0.3));
-  color: #ffb98f;
+  border-color: rgb(var(--lg-cyan) / 0.5);
+  background: linear-gradient(180deg, rgb(var(--lg-cyan) / 0.22), rgb(var(--lg-azure) / 0.3));
+  color: #b6ecff;
 }
 .launch-orb[data-state='done']:hover {
-  border-color: rgba(255, 150, 110, 0.75);
-  box-shadow: 0 0 18px -6px rgba(255, 94, 58, 0.8);
+  border-color: rgb(var(--lg-cyan) / 0.75);
+  box-shadow: 0 0 18px -6px rgb(var(--lg-cyan) / 0.8);
 }
 .launch-orb[data-state='active'] {
-  border-color: rgba(255, 160, 120, 0.9);
-  background: linear-gradient(180deg, #ff9d4d, #ff5e3a 72%);
+  border-color: rgba(255, 255, 255, 0.6);
+  background: linear-gradient(180deg, rgb(var(--lg-cyan)), rgb(var(--lg-azure)) 72%);
   color: #fff;
   transform: scale(1.14);
   box-shadow:
-    0 0 0 4px rgba(255, 94, 58, 0.14),
-    0 0 26px -4px rgba(255, 94, 58, 0.9);
+    0 0 0 4px rgb(var(--lg-cyan) / 0.16),
+    0 0 26px -4px rgb(var(--lg-cyan) / 0.9);
 }
 .launch-orb-line {
   height: 2px;
@@ -2003,8 +2148,8 @@ body {
   transition: background 0.4s ease, box-shadow 0.4s ease;
 }
 .launch-orb-line[data-done='true'] {
-  background: linear-gradient(90deg, rgba(255, 124, 84, 0.7), rgba(255, 94, 58, 0.45));
-  box-shadow: 0 0 12px -2px rgba(255, 94, 58, 0.6);
+  background: linear-gradient(90deg, rgb(var(--lg-cyan) / 0.7), rgb(var(--lg-azure) / 0.45));
+  box-shadow: 0 0 12px -2px rgb(var(--lg-cyan) / 0.6);
 }
 
 .sec-label {
@@ -2020,22 +2165,22 @@ body {
   position: relative;
   overflow: hidden;
   border-radius: 1rem;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: linear-gradient(180deg, rgba(24, 22, 28, 0.7), rgba(12, 11, 16, 0.72));
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.02));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
   transition: border-color 0.22s ease, box-shadow 0.22s ease, transform 0.18s ease,
     background 0.22s ease;
 }
 .pick-card:hover {
-  border-color: rgba(255, 150, 110, 0.42);
+  border-color: rgb(var(--lg-cyan) / 0.42);
   transform: translateY(-2px);
 }
 .pick-card.is-on {
-  border-color: rgba(255, 124, 84, 0.7);
-  background: linear-gradient(180deg, rgba(255, 94, 58, 0.12), rgba(40, 18, 14, 0.5));
+  border-color: rgb(var(--lg-cyan) / 0.7);
+  background: linear-gradient(180deg, rgb(var(--lg-cyan) / 0.14), rgb(var(--lg-violet) / 0.1));
   box-shadow:
-    inset 0 1px 0 rgba(255, 210, 180, 0.14),
-    0 0 30px -8px rgba(255, 94, 58, 0.6);
+    inset 0 1px 0 rgba(255, 255, 255, 0.16),
+    0 0 30px -8px rgb(var(--lg-cyan) / 0.6);
 }
 .pick-ic {
   display: grid;
@@ -2044,15 +2189,15 @@ body {
   width: 2.6rem;
   border-radius: 0.8rem;
   border: 1px solid rgba(255, 255, 255, 0.12);
-  background: radial-gradient(circle at 50% 30%, rgba(255, 120, 80, 0.18), rgba(10, 10, 16, 0.85));
-  color: rgba(255, 180, 150, 0.9);
+  background: radial-gradient(circle at 50% 30%, rgb(var(--lg-cyan) / 0.16), rgba(255, 255, 255, 0.03));
+  color: rgb(var(--lg-cyan) / 0.9);
   transition: border-color 0.22s ease, background 0.22s ease, box-shadow 0.22s ease, color 0.22s ease;
 }
 .pick-card.is-on .pick-ic {
-  border-color: rgba(255, 150, 110, 0.6);
-  background: radial-gradient(circle at 50% 30%, rgba(255, 120, 80, 0.4), rgba(30, 14, 12, 0.85));
-  color: #ffd9c4;
-  box-shadow: 0 0 18px -4px rgba(255, 94, 58, 0.8);
+  border-color: rgb(var(--lg-cyan) / 0.6);
+  background: radial-gradient(circle at 50% 30%, rgb(var(--lg-cyan) / 0.38), rgb(var(--lg-violet) / 0.18));
+  color: #d9f6ff;
+  box-shadow: 0 0 18px -4px rgb(var(--lg-cyan) / 0.8);
 }
 .pick-check {
   display: grid;
@@ -2066,9 +2211,9 @@ body {
 }
 .pick-card.is-on .pick-check {
   border-color: transparent;
-  background: #ff5e3a;
-  color: #fff;
-  box-shadow: 0 0 14px -2px rgba(255, 94, 58, 0.9);
+  background: linear-gradient(135deg, rgb(var(--lg-cyan)), rgb(var(--lg-azure)));
+  color: #05121f;
+  box-shadow: 0 0 14px -2px rgb(var(--lg-cyan) / 0.9);
 }
 
 /* Footer navigation buttons */
@@ -2090,31 +2235,33 @@ body {
   border-color: rgba(255, 255, 255, 0.26);
 }
 .launch-nav--primary {
-  border-color: rgba(255, 124, 84, 0.5);
-  color: #ffb98f;
-  background: rgba(255, 94, 58, 0.1);
+  border-color: rgb(var(--lg-cyan) / 0.5);
+  color: #b6ecff;
+  background: rgb(var(--lg-cyan) / 0.1);
 }
 .launch-nav--primary:hover {
   color: #fff;
-  background: rgba(255, 94, 58, 0.2);
-  border-color: rgba(255, 150, 110, 0.7);
-  box-shadow: 0 0 22px -8px rgba(255, 94, 58, 0.85);
+  background: rgb(var(--lg-cyan) / 0.2);
+  border-color: rgb(var(--lg-cyan) / 0.7);
+  box-shadow: 0 0 22px -8px rgb(var(--lg-cyan) / 0.85);
 }
 
 /* Text inputs inside the launch modal */
 .launch-input {
   width: 100%;
   border-radius: 0.85rem;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(10, 10, 16, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.025));
+  backdrop-filter: blur(12px) saturate(150%);
+  -webkit-backdrop-filter: blur(12px) saturate(150%);
   color: #fff;
   outline: none;
-  box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.45);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), inset 0 -8px 20px -12px rgba(4, 8, 22, 0.5);
   transition: border-color 0.18s ease, box-shadow 0.18s ease;
 }
 .launch-input:focus {
-  border-color: rgba(255, 124, 84, 0.6);
-  box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.45), 0 0 0 3px rgba(255, 94, 58, 0.1);
+  border-color: rgb(var(--lg-cyan) / 0.6);
+  box-shadow: inset 0 2px 8px rgba(4, 8, 22, 0.4), 0 0 0 3px rgb(var(--lg-cyan) / 0.12);
 }
 .launch-input::placeholder { color: rgba(255, 255, 255, 0.3); }
 
@@ -2134,18 +2281,22 @@ body {
   position: relative;
   isolation: isolate;
   overflow: hidden;
-  border: 1px solid rgba(255, 124, 84, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 1.25rem;
+  /* Translucent liquid glass so the aurora behind (canvas-immersive / the app)
+     bleeds through instead of a flat ember slab. */
   background:
-    radial-gradient(900px 380px at 50% -12%, rgba(255, 94, 58, 0.12), transparent 64%),
-    radial-gradient(560px 260px at 4% 0%, rgba(59, 130, 246, 0.06), transparent 70%),
-    linear-gradient(180deg, rgba(17, 14, 17, 0.97), rgba(8, 8, 13, 0.985));
+    radial-gradient(900px 380px at 50% -12%, rgb(var(--lg-cyan) / 0.1), transparent 64%),
+    radial-gradient(620px 300px at 4% 0%, rgb(var(--lg-violet) / 0.1), transparent 70%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.012));
+  backdrop-filter: blur(20px) saturate(160%);
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
   box-shadow:
-    inset 0 1px 0 rgba(255, 214, 186, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.16),
     0 40px 110px -50px #000,
-    0 0 90px -55px rgba(255, 94, 58, 0.55);
+    0 0 90px -55px rgb(var(--lg-azure) / 0.55);
 }
-/* The same faded criss-cross squares as the campaign brief panel */
+/* Faded criss-cross squares — neon, matching every other surface */
 .canvas-shell::before {
   content: '';
   position: absolute;
@@ -2153,8 +2304,8 @@ body {
   z-index: 0;
   pointer-events: none;
   background-image:
-    linear-gradient(rgba(255, 150, 110, 0.05) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 150, 110, 0.05) 1px, transparent 1px);
+    linear-gradient(rgba(150, 200, 255, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(150, 200, 255, 0.05) 1px, transparent 1px);
   background-size: 30px 30px;
   -webkit-mask-image: radial-gradient(130% 96% at 50% 0%, #000, transparent 88%);
   mask-image: radial-gradient(130% 96% at 50% 0%, #000, transparent 88%);
@@ -2169,20 +2320,26 @@ body {
 .canvas-node {
   width: 250px;
   border-radius: 0.9rem;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: linear-gradient(180deg, rgba(22, 20, 26, 0.94), rgba(12, 11, 16, 0.96));
-  box-shadow: 0 18px 44px -26px rgba(0, 0, 0, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  /* Translucent liquid glass node with a readable dark bed for the copy. */
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.03)),
+    linear-gradient(180deg, var(--glass-shade), var(--glass-shade-strong));
+  backdrop-filter: blur(18px) saturate(170%);
+  -webkit-backdrop-filter: blur(18px) saturate(170%);
+  box-shadow: inset 0 1px 0 var(--glass-rim), 0 18px 44px -26px rgba(2, 4, 14, 0.85);
   transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
 }
 .canvas-node:hover {
-  border-color: rgba(255, 157, 77, 0.35);
+  border-color: rgb(var(--lg-cyan) / 0.4);
 }
 .canvas-node[data-selected='true'] {
-  border-color: rgba(255, 124, 84, 0.65);
+  border-color: rgb(var(--lg-cyan) / 0.65);
   box-shadow:
-    0 0 0 1px rgba(255, 94, 58, 0.25),
-    0 0 34px -8px rgba(255, 94, 58, 0.5),
-    0 18px 44px -26px rgba(0, 0, 0, 0.9);
+    0 0 0 1px rgb(var(--lg-cyan) / 0.25),
+    0 0 34px -8px rgb(var(--lg-cyan) / 0.5),
+    inset 0 1px 0 var(--glass-rim),
+    0 18px 44px -26px rgba(2, 4, 14, 0.85);
 }
 .canvas-node[data-branch='true'] {
   border-style: dashed;
@@ -2192,10 +2349,10 @@ body {
   border-color: rgba(52, 211, 153, 0.5);
 }
 
-/* React Flow chrome inside the canvas shell stays dark and quiet */
+/* React Flow chrome inside the canvas shell — neon, translucent */
 .canvas-shell .react-flow__attribution { display: none; }
 .canvas-shell .react-flow__edge-path {
-  stroke: rgba(255, 150, 110, 0.35);
+  stroke: rgb(var(--lg-cyan) / 0.4);
   stroke-width: 1.5;
 }
 .canvas-shell .react-flow__edge[data-branch='true'] .react-flow__edge-path {
@@ -2205,8 +2362,8 @@ body {
 .canvas-shell .react-flow__handle {
   height: 7px;
   width: 7px;
-  border: 1px solid rgba(255, 157, 77, 0.5);
-  background: #14110f;
+  border: 1px solid rgb(var(--lg-cyan) / 0.6);
+  background: #0a1226;
 }
 .canvas-shell .react-flow__controls {
   border-radius: 0.6rem;
@@ -2215,12 +2372,12 @@ body {
   box-shadow: none;
 }
 .canvas-shell .react-flow__controls-button {
-  background: rgba(14, 12, 18, 0.92);
+  background: rgba(12, 18, 36, 0.85);
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   fill: rgba(255, 255, 255, 0.6);
 }
 .canvas-shell .react-flow__controls-button:hover {
-  background: rgba(255, 94, 58, 0.15);
+  background: rgb(var(--lg-cyan) / 0.15);
 }
 
 .canvas-shell .canvas-edge-branch .react-flow__edge-path {
@@ -2232,8 +2389,48 @@ body {
    every app surface (nav, topbar, dialogs). The shell inside fills it edge to
    edge, no rounding/border since there is no surrounding page to frame it against. */
 .canvas-immersive {
-  background: #030409;
+  overflow: hidden;
+  /* Same luminous liquid atmosphere as the app so the full-screen canvas reads
+     as the same world, with its own drifting aurora (::before / ::after). */
+  background:
+    radial-gradient(1100px 700px at 78% -10%, rgb(var(--lg-azure) / 0.16), transparent 60%),
+    radial-gradient(1000px 720px at -6% 108%, rgb(var(--lg-violet) / 0.14), transparent 58%),
+    radial-gradient(820px 560px at 104% 82%, rgb(var(--lg-magenta) / 0.1), transparent 60%),
+    linear-gradient(160deg, var(--bg-base), var(--bg-base-2) 52%, var(--bg-base));
   animation: canvas-immersive-in 0.22s ease-out;
+}
+.canvas-immersive::before,
+.canvas-immersive::after {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  pointer-events: none;
+  border-radius: 50%;
+  mix-blend-mode: screen;
+  filter: blur(60px);
+  will-change: transform;
+}
+.canvas-immersive::before {
+  width: 58vw;
+  height: 58vw;
+  left: -6vw;
+  top: -12vh;
+  background: radial-gradient(circle, rgb(var(--lg-cyan) / 0.55), transparent 66%);
+  opacity: 0.4;
+  animation: aurora-cyan 34s ease-in-out infinite;
+}
+.canvas-immersive::after {
+  width: 60vw;
+  height: 60vw;
+  right: -8vw;
+  bottom: -16vh;
+  background: radial-gradient(circle, rgb(var(--lg-violet) / 0.55), transparent 66%);
+  opacity: 0.38;
+  animation: aurora-violet 46s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .canvas-immersive::before,
+  .canvas-immersive::after { animation: none !important; }
 }
 @keyframes canvas-immersive-in {
   from { opacity: 0; }

@@ -134,12 +134,12 @@ export function FaceLibrary({
         disabled={!configured || uploading}
         className={`mt-2.5 flex w-full flex-col items-center justify-center gap-1 rounded-lg border border-dashed px-3 py-4 text-[11px] transition-colors disabled:opacity-50 ${
           dragOver
-            ? 'border-[#FF7C54] bg-[#FF5E3A]/10 text-[#FF9D4D]'
+            ? 'border-[#4D8DFF] bg-[#4D8DFF]/10 text-[#38E8FF]'
             : 'border-white/15 text-white/40 hover:border-white/30'
         }`}
       >
         {uploading ? (
-          <Loader2 size={16} className="animate-spin text-[#FF9D4D]" />
+          <Loader2 size={16} className="animate-spin text-[#38E8FF]" />
         ) : (
           <UploadCloud size={16} />
         )}
@@ -168,7 +168,7 @@ export function FaceLibrary({
               <div
                 key={f.id}
                 className={`group relative aspect-square overflow-hidden rounded-lg border ${
-                  on ? 'border-[#FF7C54] ring-1 ring-[#FF5E3A]' : 'border-white/12'
+                  on ? 'border-[#4D8DFF] ring-1 ring-[#4D8DFF]' : 'border-white/12'
                 }`}
               >
                 <button type="button" onClick={() => toggle(f.id)} className="block h-full w-full">
@@ -179,7 +179,7 @@ export function FaceLibrary({
                     <img src={f.url} alt={f.name} className="h-full w-full object-cover" />
                   )}
                   {on && (
-                    <span className="absolute left-1 top-1 grid h-4 w-4 place-items-center rounded bg-[#FF5E3A] text-white">
+                    <span className="absolute left-1 top-1 grid h-4 w-4 place-items-center rounded bg-[#4D8DFF] text-white">
                       <Check size={11} />
                     </span>
                   )}

@@ -185,7 +185,7 @@ function CanvasNodeView({ id, data, selected }: NodeProps<CanvasRFNode>) {
           </span>
         </span>
         <span className="flex shrink-0 items-center gap-1">
-          {busy && <Loader2 size={11} className="animate-spin text-[#FF9D4D]" />}
+          {busy && <Loader2 size={11} className="animate-spin text-[#38E8FF]" />}
           {data.locked && <Lock size={10} className="text-white/45" />}
           {data.approved && <Check size={11} className="text-emerald-400" />}
         </span>
@@ -215,7 +215,7 @@ function CanvasNodeView({ id, data, selected }: NodeProps<CanvasRFNode>) {
               </span>
             ) : media.status === 'rendering' ? (
               <span className="grid h-20 w-full place-items-center rounded-lg border border-white/10 bg-white/[0.02]">
-                <Loader2 size={15} className="animate-spin text-[#FF9D4D]" />
+                <Loader2 size={15} className="animate-spin text-[#38E8FF]" />
               </span>
             ) : (
               <button
@@ -224,7 +224,7 @@ function CanvasNodeView({ id, data, selected }: NodeProps<CanvasRFNode>) {
                   e.stopPropagation()
                   renderStill(id)
                 }}
-                className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.03] px-2 py-1.5 text-[10px] font-semibold text-white/55 transition-colors hover:border-[#FF9D4D]/40 hover:text-white"
+                className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.03] px-2 py-1.5 text-[10px] font-semibold text-white/55 transition-colors hover:border-[#38E8FF]/40 hover:text-white"
               >
                 <ImageIcon size={11} /> Render this {data.kind}
               </button>
@@ -250,7 +250,7 @@ function CanvasNodeView({ id, data, selected }: NodeProps<CanvasRFNode>) {
               <img src={media.imageUrl} alt={data.title} className="w-full rounded-lg border border-white/10 object-cover" />
             ) : (
               <span className="grid h-16 w-full place-items-center rounded-lg border border-white/10 bg-white/[0.02]">
-                <Loader2 size={14} className="animate-spin text-[#FF9D4D]" />
+                <Loader2 size={14} className="animate-spin text-[#38E8FF]" />
               </span>
             )}
             <p className="mt-1 text-[9px] text-white/25">⚡ From your run</p>
@@ -368,8 +368,8 @@ function CampaignShell({
           <X size={13} /> Exit Canvas
         </button>
         <div className="canvas-lift w-full max-w-3xl">
-          <span className="mx-auto mb-8 grid h-20 w-20 place-items-center rounded-3xl border border-[#FF7C54]/30 bg-gradient-to-br from-[#FF5E3A]/[0.14] to-transparent shadow-[inset_0_1px_0_rgba(255,255,255,0.14),0_24px_60px_-30px_rgba(255,94,58,0.55)] backdrop-blur-xl">
-            <Workflow size={38} className="text-[#FF9D4D]" />
+          <span className="mx-auto mb-8 grid h-20 w-20 place-items-center rounded-3xl border border-[#4D8DFF]/30 bg-gradient-to-br from-[#4D8DFF]/[0.14] to-transparent shadow-[inset_0_1px_0_rgba(255,255,255,0.14),0_24px_60px_-30px_rgba(56,232,255,0.55)] backdrop-blur-xl">
+            <Workflow size={38} className="text-[#38E8FF]" />
           </span>
           <h3 className="font-display text-4xl font-bold tracking-tight text-white sm:text-5xl">
             The Creative Canvas
@@ -387,11 +387,11 @@ function CampaignShell({
             ].map(({ Icon, t, d }) => (
               <div
                 key={t}
-                className="group relative overflow-hidden rounded-2xl border border-white/15 bg-gradient-to-br from-white/[0.12] via-white/[0.04] to-transparent p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.16),inset_0_-30px_50px_-30px_rgba(0,0,0,0.5),0_24px_60px_-34px_rgba(0,0,0,0.85)] backdrop-blur-2xl transition-all duration-300 hover:-translate-y-1 hover:border-[#FF7C54]/40 hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.22),0_28px_64px_-30px_rgba(255,94,58,0.4)]"
+                className="group relative overflow-hidden rounded-2xl border border-white/15 bg-gradient-to-br from-white/[0.12] via-white/[0.04] to-transparent p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.16),inset_0_-30px_50px_-30px_rgba(0,0,0,0.5),0_24px_60px_-34px_rgba(0,0,0,0.85)] backdrop-blur-2xl transition-all duration-300 hover:-translate-y-1 hover:border-[#4D8DFF]/40 hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.22),0_28px_64px_-30px_rgba(56,232,255,0.4)]"
               >
                 <span className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/40 to-transparent" />
-                <span className="mb-3 grid h-11 w-11 place-items-center rounded-xl border border-[#FF7C54]/25 bg-[#FF5E3A]/[0.08]">
-                  <Icon size={20} className="text-[#FF9D4D]" />
+                <span className="mb-3 grid h-11 w-11 place-items-center rounded-xl border border-[#4D8DFF]/25 bg-[#4D8DFF]/[0.08]">
+                  <Icon size={20} className="text-[#38E8FF]" />
                 </span>
                 <p className="text-sm font-semibold text-white">{t}</p>
                 <p className="mt-1.5 text-xs leading-relaxed text-white/45">{d}</p>
@@ -401,7 +401,7 @@ function CampaignShell({
           <button
             type="button"
             onClick={onConfigure}
-            className="mt-10 inline-flex items-center gap-2 rounded-full border border-[#FF7C54]/35 bg-gradient-to-br from-[#FF5E3A]/20 to-[#FF5E3A]/[0.06] px-7 py-3.5 text-base font-semibold text-[#FF9D4D] shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_18px_44px_-26px_rgba(255,94,58,0.6)] backdrop-blur-xl transition-all duration-300 hover:-translate-y-0.5 hover:border-[#FF7C54]/55 hover:from-[#FF5E3A]/30"
+            className="mt-10 inline-flex items-center gap-2 rounded-full border border-[#4D8DFF]/35 bg-gradient-to-br from-[#4D8DFF]/20 to-[#4D8DFF]/[0.06] px-7 py-3.5 text-base font-semibold text-[#38E8FF] shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_18px_44px_-26px_rgba(56,232,255,0.6)] backdrop-blur-xl transition-all duration-300 hover:-translate-y-0.5 hover:border-[#4D8DFF]/55 hover:from-[#4D8DFF]/30"
           >
             <Atom size={16} /> Open the campaign brief
           </button>
@@ -415,7 +415,7 @@ function CampaignShell({
       {/* --------------------- Campaign bar (shared) --------------------- */}
       <div className="canvas-lift flex flex-wrap items-center justify-between gap-3 border-b border-white/[0.08] px-5 py-3.5">
         <div className="flex min-w-0 flex-wrap items-center gap-2.5">
-          <span className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.26em] text-[#FF9D4D]/80">
+          <span className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.26em] text-[#38E8FF]/80">
             <Workflow size={13} /> Creative Canvas
           </span>
           <span className="hidden h-4 w-px bg-white/10 sm:block" />
@@ -425,7 +425,7 @@ function CampaignShell({
           {tracks.length > 1 ? (
             // One campaign → one tab per selected format. Same strategy layer
             // powers every tab; only the creative flow inside differs.
-            <div className="inline-flex rounded-full border border-[#FF7C54]/25 bg-black/30 p-1">
+            <div className="inline-flex rounded-full border border-[#4D8DFF]/25 bg-white/[0.04] p-1">
               {tracks.map((t) => (
                 <button
                   key={t.id}
@@ -435,7 +435,7 @@ function CampaignShell({
                   className={cn(
                     'rounded-full px-3.5 py-1 text-[11px] font-semibold uppercase tracking-wide transition-colors',
                     active === t.id
-                      ? 'bg-[#FF5E3A]/[0.16] text-[#FF9D4D]'
+                      ? 'bg-[#4D8DFF]/[0.16] text-[#38E8FF]'
                       : 'text-white/45 hover:text-white/75',
                   )}
                 >
@@ -444,7 +444,7 @@ function CampaignShell({
               ))}
             </div>
           ) : (
-            <span className="inline-flex items-center rounded-full border border-[#FF7C54]/30 bg-[#FF5E3A]/[0.08] px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[#FF9D4D]">
+            <span className="inline-flex items-center rounded-full border border-[#4D8DFF]/30 bg-[#4D8DFF]/[0.08] px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[#38E8FF]">
               {MODE_LABELS[tracks[0].id]}
             </span>
           )}
@@ -1164,7 +1164,7 @@ function CanvasInner({ mode, concepts, active, strategy, imageModel, videoModel,
                   disabled={selected.data.locked}
                   rows={selected.data.kind === 'cta' ? 2 : 7}
                   placeholder={def.hint}
-                  className="w-full resize-none rounded-xl border border-white/12 bg-black/40 px-3 py-2.5 text-[12px] leading-relaxed text-white placeholder:text-white/25 outline-none transition-colors focus:border-[#FF9D4D]/40 disabled:opacity-50"
+                  className="w-full resize-none rounded-xl border border-white/12 bg-white/[0.05] px-3 py-2.5 text-[12px] leading-relaxed text-white placeholder:text-white/25 outline-none transition-colors focus:border-[#38E8FF]/40 disabled:opacity-50"
                 />
 
                 {def.regen && (
@@ -1172,7 +1172,7 @@ function CanvasInner({ mode, concepts, active, strategy, imageModel, videoModel,
                     value={direction}
                     onChange={(e) => setDirection(e.target.value)}
                     placeholder={`Optional steer — e.g. "harder on identity, no numbers"`}
-                    className="w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-[11px] text-white placeholder:text-white/25 outline-none transition-colors focus:border-[#FF9D4D]/35"
+                    className="w-full rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-[11px] text-white placeholder:text-white/25 outline-none transition-colors focus:border-[#38E8FF]/35"
                   />
                 )}
 
@@ -1182,7 +1182,7 @@ function CanvasInner({ mode, concepts, active, strategy, imageModel, videoModel,
                       type="button"
                       onClick={() => regenerate(selected.id)}
                       disabled={selected.data.locked || Boolean(regenerating[selected.id])}
-                      className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-[#FF7C54]/30 bg-[#FF5E3A]/[0.08] px-3 py-2 text-[11px] font-semibold text-[#FF9D4D] transition-colors hover:bg-[#FF5E3A]/15 disabled:cursor-not-allowed disabled:opacity-45"
+                      className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-[#4D8DFF]/30 bg-[#4D8DFF]/[0.08] px-3 py-2 text-[11px] font-semibold text-[#38E8FF] transition-colors hover:bg-[#4D8DFF]/15 disabled:cursor-not-allowed disabled:opacity-45"
                     >
                       {regenerating[selected.id] ? (
                         <Loader2 size={12} className="animate-spin" />
@@ -1251,7 +1251,7 @@ function CanvasInner({ mode, concepts, active, strategy, imageModel, videoModel,
                         type="button"
                         onClick={() => renderStill(selected.id)}
                         disabled={media[selected.id]?.status === 'rendering'}
-                        className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-white/12 bg-white/[0.03] px-3 py-2 text-[11px] font-semibold text-white/65 transition-colors hover:border-[#FF9D4D]/40 hover:text-white disabled:opacity-45"
+                        className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-white/12 bg-white/[0.03] px-3 py-2 text-[11px] font-semibold text-white/65 transition-colors hover:border-[#38E8FF]/40 hover:text-white disabled:opacity-45"
                       >
                         <ImageIcon size={12} /> Render still
                       </button>
@@ -1259,7 +1259,7 @@ function CanvasInner({ mode, concepts, active, strategy, imageModel, videoModel,
                         type="button"
                         onClick={() => animateScene(selected.id)}
                         disabled={media[selected.id]?.status === 'animating'}
-                        className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-white/12 bg-white/[0.03] px-3 py-2 text-[11px] font-semibold text-white/65 transition-colors hover:border-[#FF9D4D]/40 hover:text-white disabled:opacity-45"
+                        className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-white/12 bg-white/[0.03] px-3 py-2 text-[11px] font-semibold text-white/65 transition-colors hover:border-[#38E8FF]/40 hover:text-white disabled:opacity-45"
                       >
                         <Film size={12} /> Animate
                       </button>
@@ -1286,7 +1286,7 @@ function CanvasInner({ mode, concepts, active, strategy, imageModel, videoModel,
                 <button
                   type="button"
                   onClick={() => sendLaneToStudio(selected.data.lane)}
-                  className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-[#FF7C54]/30 bg-[#FF5E3A]/[0.08] px-3 py-2.5 text-[11px] font-bold uppercase tracking-wide text-[#FF9D4D] transition-colors hover:bg-[#FF5E3A]/15"
+                  className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-[#4D8DFF]/30 bg-[#4D8DFF]/[0.08] px-3 py-2.5 text-[11px] font-bold uppercase tracking-wide text-[#38E8FF] transition-colors hover:bg-[#4D8DFF]/15"
                 >
                   Send this lane to Studio <ArrowRight size={12} />
                 </button>
@@ -1341,8 +1341,8 @@ function ReassignModal({
 
   return (
     <div className="absolute inset-0 z-30 grid place-items-center bg-black/60 p-6 backdrop-blur-sm">
-      <div className="canvas-node w-[380px] !cursor-default border-[#FF7C54]/35 bg-[#0d0c11] p-5">
-        <p className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.14em] text-[#FF9D4D]">
+      <div className="canvas-node w-[380px] !cursor-default border-[#4D8DFF]/35 bg-[#0b1024]/85 backdrop-blur-xl p-5">
+        <p className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.14em] text-[#38E8FF]">
           <GitBranch size={12} /> Position changed role
         </p>
         <p className="mt-2.5 text-[14px] leading-snug text-white">
@@ -1357,7 +1357,7 @@ function ReassignModal({
           <button
             type="button"
             onClick={() => onResolve('reassignRegenerate')}
-            className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-[#FF7C54]/40 bg-[#FF5E3A]/[0.1] px-3 py-2.5 text-[12px] font-semibold text-[#FF9D4D] transition-colors hover:bg-[#FF5E3A]/20"
+            className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-[#4D8DFF]/40 bg-[#4D8DFF]/[0.1] px-3 py-2.5 text-[12px] font-semibold text-[#38E8FF] transition-colors hover:bg-[#4D8DFF]/20"
           >
             <RefreshCw size={12} /> Reassign &amp; regenerate for the new role
           </button>
@@ -1450,7 +1450,7 @@ function CanvasContextMenu({
     <div
       ref={ref}
       style={{ left: menu.x, top: menu.y }}
-      className="fixed z-[110] w-48 overflow-hidden rounded-xl border border-white/12 bg-[#0B0B12] py-1.5 shadow-2xl"
+      className="fixed z-[110] w-48 overflow-hidden rounded-xl border border-white/12 bg-[#0b1024]/90 backdrop-blur-xl py-1.5 shadow-2xl"
     >
       <p className="px-3 py-1.5 text-[9px] font-bold uppercase tracking-wider text-white/30">{def.label}</p>
       {def.regen && item('Regenerate', () => onRegenerate(node.id))}
