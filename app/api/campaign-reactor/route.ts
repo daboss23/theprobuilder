@@ -99,13 +99,25 @@ const MAX_TURNS = 12
  * limit we control, so an overrun degrades to partial output instead of
  * vanishing.
  *
- * Default 55s clears the strictest common ceiling. Raise it wherever the host
- * genuinely allows longer (Vercel Pro serves the full 300s):
- *   REACTOR_BUDGET_MS=280000
+ * The default tracks maxDuration (see below), so it trusts the function limit
+ * the route actually declares. Override only to force a TIGHTER close than the
+ * host's real ceiling — e.g. REACTOR_BUDGET_MS=52000 on a 60s Hobby cap, so the
+ * server closes gracefully instead of being hard-killed.
  */
 const RUN_BUDGET_MS = (() => {
   const raw = Number(process.env.REACTOR_BUDGET_MS)
-  return Number.isFinite(raw) && raw >= 10_000 ? raw : 55_000
+  if (Number.isFinite(raw) && raw >= 10_000) return raw
+  // Derive from the function's OWN declared limit rather than a hardcoded
+  // number. The old fixed 55s contradicted maxDuration=300: it strangled every
+  // run to one orchestrator turn, and a single Fable-5 thinking turn can take
+  // 40-55s, so the loop could never reach briefing→learnings→submit and faulted
+  // every time. Trusting maxDuration means a host that honors it (Vercel Pro at
+  // 300s) gives the run real room. A host that silently caps LOWER (Vercel
+  // Hobby at 60s) kills the function before this trips — the client reports that
+  // honestly and preserves completed intelligence. On such a host, set
+  // REACTOR_BUDGET_MS to just under your real ceiling (e.g. 52000 for 60s) to
+  // get a graceful server-side close instead.
+  return Math.max(30_000, (maxDuration - 10) * 1000)
 })()
 
 /** Past this share of the budget, OPUS is told to stop exploring and submit. */
@@ -1219,6 +1231,14 @@ export async function POST(request: NextRequest) {
 
         const ri = body.reactorInputs
 
+        // Budget clock starts HERE — the true start of the run's work, before
+        // the pre-flight briefing and ORACLE lookup. Starting it after preflight
+        // (as it once did) hid that time from the budget, so the guard was
+        // measuring against a clock that lagged the host's by however long
+        // preflight took, and the "hit its Ns limit" message fired at times that
+        // did not match N.
+        const runStart = Date.now()
+
         // The run is live from the first byte — these announce the configured
         // engines and must not sit behind a retrieval round trip.
         sse(controller, { type: 'step', text: 'OPUS online. Directing the intelligence network…' })
@@ -1344,7 +1364,6 @@ export async function POST(request: NextRequest) {
         // ends the stream mid-sentence and loses everything the run produced.
         // Staying inside a limit we control means an overrun is something we
         // report and close on, not something that happens to us.
-        const runStart = Date.now()
         const elapsed = () => Date.now() - runStart
         const overNudge = () => elapsed() > RUN_BUDGET_MS * BUDGET_NUDGE_AT
         let nudged = false
@@ -1369,9 +1388,18 @@ export async function POST(request: NextRequest) {
           // Out of time before another round trip could land — stop here and
           // report it, rather than starting a turn the host will cut short.
           if (cannotFitAnotherTurn()) {
+            const usedS = Math.round(elapsed() / 1000)
+            const budgetS = Math.round(RUN_BUDGET_MS / 1000)
+            // Honest about WHY it stopped. The hard cap and the predictive
+            // "the next step won't finish in time" guard are different events —
+            // conflating them is what made a stop at ~30s claim a 55s limit.
+            const reason =
+              elapsed() > RUN_BUDGET_MS * BUDGET_CLOSE_AT
+                ? `reached its ${budgetS}s time budget`
+                : `ran out of room for another reasoning step within its ${budgetS}s budget (used ${usedS}s; the last step took ${Math.round(slowestTurnMs / 1000)}s)`
             sse(controller, {
               type: 'error',
-              message: `The run hit its ${Math.round(RUN_BUDGET_MS / 1000)}s time limit before OPUS submitted concepts. The intelligence below is real and complete — retry, or lower the variation count to give generation more room. (Raise REACTOR_BUDGET_MS if your hosting plan allows longer functions.)`,
+              message: `OPUS ${reason} before it could submit concepts. The intelligence below is real and complete — retry, or lower the variation count so generation needs fewer steps. If your hosting plan allows longer functions, raise REACTOR_BUDGET_MS.`,
             })
             sse(controller, { type: 'done' })
             controller.close()
