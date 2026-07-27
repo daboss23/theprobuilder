@@ -41,6 +41,7 @@ import {
 } from '@/lib/model-menu'
 import { IsolationConfigurator } from '@/components/campaign-reactor/IsolationConfigurator'
 import type { IsolateConfig } from '@/lib/taxonomy'
+import { burstFromEvent } from '@/lib/reactor-burst'
 
 // The launch sequence — six bold steps, each a moment, not a form field. `orb`
 // is the short label under the stepper node; `label` titles the step.
@@ -1157,7 +1158,10 @@ export function ReactorModal({ open, onClose, onFire, form }: ReactorModalProps)
               <div>
                 <button
                   type="button"
-                  onClick={fire}
+                  onClick={(e) => {
+                    burstFromEvent(e)
+                    fire()
+                  }}
                   className="fire-btn fire-btn--lg flex w-full items-center justify-center gap-2 font-display font-bold uppercase tracking-wide text-white"
                 >
                   <Atom size={18} /> ⚡ Fire Reactor
@@ -1380,7 +1384,10 @@ function QuickLaunch({
           <div>
             <button
               type="button"
-              onClick={onFire}
+              onClick={(e) => {
+                burstFromEvent(e)
+                onFire()
+              }}
               className="fire-btn fire-btn--lg flex w-full items-center justify-center gap-2 font-display font-bold uppercase tracking-wide text-white"
             >
               <Atom size={18} /> ⚡ Fire Reactor
