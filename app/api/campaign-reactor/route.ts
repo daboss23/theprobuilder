@@ -67,7 +67,10 @@ function memoryBlock(configs: WinningConfig[]): string {
 }
 
 export const runtime = 'nodejs'
-export const maxDuration = 300
+// The wall-clock ceiling the route asks the host for. The run budget below is
+// derived from this so the two can never drift apart.
+const MAX_DURATION_S = 300
+export const maxDuration = MAX_DURATION_S
 
 // OPUS — the Master Strategist brain (strategy + synthesis) — and the cheaper
 // model the intelligence layers (ATLAS/NOVA/SPARK/ECHO/ORACLE) run on.
@@ -99,13 +102,23 @@ const MAX_TURNS = 12
  * limit we control, so an overrun degrades to partial output instead of
  * vanishing.
  *
- * Default 55s clears the strictest common ceiling. Raise it wherever the host
- * genuinely allows longer (Vercel Pro serves the full 300s):
- *   REACTOR_BUDGET_MS=280000
+ * The default follows `maxDuration` (leaving ~20s headroom for the terminal
+ * NEURO pre-test + clean close), so on any host that honours the requested
+ * duration — local dev, Vercel Pro, most self-hosts — a normal run reaches
+ * submit_concepts instead of being cut off before it can ship anything. A
+ * fixed, pessimistic default (an earlier build hard-coded 55s) strangled those
+ * hosts: the live agent's briefing + reasoning + pre-test routinely runs past
+ * 55s, so the budget closed the run before OPUS submitted and the campaign came
+ * back with telemetry but no concepts.
+ *
+ * Hosts that kill the function EARLIER than maxDuration (Vercel Hobby caps at
+ * 60s whatever the route declares) should set REACTOR_BUDGET_MS to just under
+ * their real ceiling so the run still closes gracefully before the host does:
+ *   REACTOR_BUDGET_MS=55000
  */
 const RUN_BUDGET_MS = (() => {
   const raw = Number(process.env.REACTOR_BUDGET_MS)
-  return Number.isFinite(raw) && raw >= 10_000 ? raw : 55_000
+  return Number.isFinite(raw) && raw >= 10_000 ? raw : (MAX_DURATION_S - 20) * 1000
 })()
 
 /** Past this share of the budget, OPUS is told to stop exploring and submit. */
