@@ -1715,7 +1715,11 @@ export async function POST(request: NextRequest) {
                 type: 'step',
                 text: `Rendering ${mode} via ${model ?? 'default model'}${conceptType ? ` · ${conceptType}` : ''}…`,
               })
-              const started = await startVideoJob(model, { mode, prompt, imageUrl, aspectRatio })
+              // 4:5 is a stills-only ratio (Meta's tall feed); no video model
+              // renders it, so a request for it falls back to the nearest
+              // vertical rather than being passed through and rejected.
+              const videoRatio = aspectRatio === '4:5' ? '9:16' : aspectRatio
+              const started = await startVideoJob(model, { mode, prompt, imageUrl, aspectRatio: videoRatio })
               if (!started) {
                 return {
                   type: 'tool_result',

@@ -4,7 +4,12 @@
  * (fal / FLUX, Higgsfield) the same way.
  */
 
-export type AspectRatio = '1:1' | '9:16' | '16:9' | '4:3' | '3:4'
+/**
+ * Ratios the still pipeline can request. `4:5` is Meta's tall feed format — the
+ * largest footprint a static ad gets in the mobile feed — and is deliberately
+ * image-only: the video registry keeps its own list.
+ */
+export type AspectRatio = '1:1' | '9:16' | '16:9' | '4:3' | '3:4' | '4:5'
 
 export type ImageProvider = 'higgsfield' | 'fal' | 'kie' | 'muapi'
 

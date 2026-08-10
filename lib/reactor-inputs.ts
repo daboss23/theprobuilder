@@ -254,7 +254,7 @@ export const outputTypeOptions = [
    step shows only the sizes relevant to the deliverables the user selected.
 --------------------------------------------------------------------------- */
 
-export type CreativeRatio = '1:1' | '9:16' | '16:9'
+export type CreativeRatio = '1:1' | '4:5' | '9:16' | '16:9'
 
 export interface CreativeSize {
   ratio: CreativeRatio
@@ -265,6 +265,7 @@ export interface CreativeSize {
 
 export const CREATIVE_SIZES: Record<string, CreativeSize[]> = {
   'Static Creative': [
+    { ratio: '4:5', label: 'Tall feed', use: 'Meta feed — largest mobile footprint', dims: '1080×1350' },
     { ratio: '1:1', label: 'Square', use: 'Feed', dims: '1080×1080' },
     { ratio: '9:16', label: 'Vertical', use: 'Stories', dims: '1080×1920' },
     { ratio: '16:9', label: 'Landscape', use: 'Desktop / in-stream', dims: '1920×1080' },
@@ -279,6 +280,7 @@ export const CREATIVE_SIZES: Record<string, CreativeSize[]> = {
     { ratio: '1:1', label: 'Square', use: 'Feed', dims: '1080×1080' },
   ],
   'Carousel Creatives': [
+    { ratio: '4:5', label: 'Tall feed', use: 'Feed carousel — largest mobile footprint', dims: '1080×1350' },
     { ratio: '1:1', label: 'Square', use: 'Feed carousel', dims: '1080×1080' },
     { ratio: '9:16', label: 'Vertical', use: 'Stories carousel', dims: '1080×1920' },
   ],
@@ -288,6 +290,7 @@ export const CREATIVE_SIZES: Record<string, CreativeSize[]> = {
     { ratio: '16:9', label: 'Landscape', use: 'In-stream / YouTube', dims: '1920×1080' },
   ],
   'Creative Variations': [
+    { ratio: '4:5', label: 'Tall feed', use: 'Meta feed — largest mobile footprint', dims: '1080×1350' },
     { ratio: '1:1', label: 'Square', use: 'Feed', dims: '1080×1080' },
     { ratio: '9:16', label: 'Vertical', use: 'Stories / Reels', dims: '1080×1920' },
     { ratio: '16:9', label: 'Landscape', use: 'Desktop / in-stream', dims: '1920×1080' },
@@ -295,13 +298,17 @@ export const CREATIVE_SIZES: Record<string, CreativeSize[]> = {
 }
 
 // The size pre-selected for a deliverable so the Formats step is never blank.
+// Stills default to 4:5 — the tall feed unit occupies the most vertical space
+// a static ad can hold in the Meta mobile feed, so it is the format to beat.
+// Carousels stay square: Meta crops every card to a single ratio and 1:1 is the
+// safest across placements.
 export const DEFAULT_SIZE: Record<string, CreativeRatio> = {
-  'Static Creative': '1:1',
+  'Static Creative': '4:5',
   'Video Creative': '9:16',
   'UGC Creative': '9:16',
   'Carousel Creatives': '1:1',
   'Montage / Scene Flow': '9:16',
-  'Creative Variations': '1:1',
+  'Creative Variations': '4:5',
 }
 
 /* ------------------------------- Slide 2 ---------------------------------- */
