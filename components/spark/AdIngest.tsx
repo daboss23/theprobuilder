@@ -391,6 +391,28 @@ export function AdIngest({ variant = 'studio' }: AdIngestProps) {
             />
           </div>
 
+          {/* The ignition sits directly under the drop zone — the eye lands on
+              the box, then on the button, before any thumbnails appear. */}
+          <div className="flex justify-center">
+            <button
+              type="button"
+              onClick={analyze}
+              disabled={busy || !canAnalyze}
+              className="fire-btn fire-btn--md tap-target inline-flex items-center gap-2 font-display font-bold uppercase tracking-wide text-white"
+            >
+              {busy ? <Loader2 size={15} className="animate-spin" /> : <Wand2 size={15} />}
+              {busy
+                ? vault
+                  ? 'Ingesting…'
+                  : 'Reading the ad…'
+                : vault
+                  ? 'Ingest Visual Creative DNA'
+                  : uploads.length
+                    ? 'Read this ad'
+                    : 'Extract Creative DNA'}
+            </button>
+          </div>
+
           {uploads.length > 0 && (
             <div className="grid grid-cols-4 gap-2">
               {uploads.map((u) => (
@@ -444,24 +466,6 @@ export function AdIngest({ variant = 'studio' }: AdIngestProps) {
               />
             </div>
           )}
-
-          <button
-            type="button"
-            onClick={analyze}
-            disabled={busy || !canAnalyze}
-            className="inline-flex min-h-[44px] items-center gap-2 rounded-full border border-primary/40 bg-primary/10 px-5 py-2.5 text-sm font-semibold text-glow transition-colors hover:bg-primary/20 disabled:opacity-50"
-          >
-            {busy ? <Loader2 size={15} className="animate-spin" /> : <Wand2 size={15} />}
-            {busy
-              ? vault
-                ? 'Ingesting…'
-                : 'Reading the ad…'
-              : vault
-                ? 'Ingest Visual Creative DNA'
-                : uploads.length
-                  ? 'Read this ad'
-                  : 'Extract Creative DNA'}
-          </button>
 
           {error && (
             <p className="rounded-lg border border-danger/30 bg-danger/[0.06] p-2.5 text-[12px] text-danger">
