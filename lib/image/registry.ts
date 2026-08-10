@@ -33,6 +33,7 @@ export const IMAGE_MODELS: ImageModel[] = [
     provider: 'muapi',
     aspectRatios: ['1:1', '16:9', '4:3', '9:16', '3:4'],
     tier: 'flagship',
+    textFidelity: 'strong',
     notes: 'Google Nano Banana Pro — the strongest all-round ad still: top-tier prompt adherence, in-image text rendering and photoreal detail.',
   },
   {
@@ -41,6 +42,7 @@ export const IMAGE_MODELS: ImageModel[] = [
     provider: 'muapi',
     aspectRatios: ['1:1', '16:9', '4:3', '9:16', '3:4'],
     tier: 'flagship',
+    textFidelity: 'strong',
     notes: 'Google Nano Banana 2 — latest-generation Gemini image model. Excellent scene coherence and legible on-ad copy.',
   },
   {
@@ -49,6 +51,7 @@ export const IMAGE_MODELS: ImageModel[] = [
     provider: 'muapi',
     aspectRatios: ['1:1', '16:9', '9:16'],
     tier: 'flagship',
+    textFidelity: 'strong',
     notes: "OpenAI's latest image model — next-gen photorealism with the sharpest in-image text and instruction-following. First choice for headline/offer creatives.",
   },
   {
@@ -57,7 +60,8 @@ export const IMAGE_MODELS: ImageModel[] = [
     provider: 'muapi',
     aspectRatios: ['1:1', '16:9', '4:3', '9:16', '3:4'],
     tier: 'flagship',
-    notes: 'Midjourney — the most stylised, art-directed look. Highest scroll-stop ceiling when the angle wants a brand image rather than a literal scene.',
+    textFidelity: 'weak',
+    notes: 'Midjourney — the most stylised, art-directed look. Highest scroll-stop ceiling when the angle wants a brand image rather than a literal scene. Cannot set legible on-image copy: use it for text-free creative only.',
   },
   {
     id: 'muapi-seedream',
@@ -65,6 +69,7 @@ export const IMAGE_MODELS: ImageModel[] = [
     provider: 'muapi',
     aspectRatios: ['1:1', '16:9', '4:3', '9:16', '3:4'],
     tier: 'flagship',
+    textFidelity: 'moderate',
     notes: 'ByteDance Seedream 4.0 — cinematic photoreal realism and composition for premium proof/founder creative.',
   },
   {
@@ -73,6 +78,7 @@ export const IMAGE_MODELS: ImageModel[] = [
     provider: 'muapi',
     aspectRatios: ['1:1', '16:9', '4:3', '9:16', '3:4'],
     tier: 'flagship',
+    textFidelity: 'strong',
     notes: 'FLUX.1 Kontext Max — precise, editable photoreal generation with excellent typography control. Best when a banked design must be reproduced faithfully.',
   },
   {
@@ -81,7 +87,8 @@ export const IMAGE_MODELS: ImageModel[] = [
     provider: 'muapi',
     aspectRatios: ['1:1', '16:9', '4:3', '9:16', '3:4'],
     tier: 'fast',
-    notes: 'FLUX.1 Dev — the fast, high-volume workhorse. Lower ceiling than the models above; use it for bulk creative variations.',
+    textFidelity: 'weak',
+    notes: 'FLUX.1 Dev — the fast, high-volume workhorse. Weak at in-image text (headlines come back misspelled), so it is used for text-free variations and is the last resort for a creative that carries copy.',
   },
   // Kie.ai flagship image market — the most powerful models, one KIE_API_KEY.
   {
@@ -90,6 +97,7 @@ export const IMAGE_MODELS: ImageModel[] = [
     provider: 'kie',
     aspectRatios: ['1:1', '16:9', '4:3', '9:16', '3:4'],
     tier: 'flagship',
+    textFidelity: 'strong',
     notes: 'Google Nano Banana Pro via Kie — top-tier prompt adherence, text rendering, and photoreal detail. Best all-round ad still.',
   },
   {
@@ -98,6 +106,7 @@ export const IMAGE_MODELS: ImageModel[] = [
     provider: 'kie',
     aspectRatios: ['1:1', '16:9', '4:3', '9:16', '3:4'],
     tier: 'flagship',
+    textFidelity: 'moderate',
     notes: 'ByteDance Seedream 4.0 via Kie — cinematic realism and strong composition for premium proof/founder stills.',
   },
   {
@@ -106,6 +115,7 @@ export const IMAGE_MODELS: ImageModel[] = [
     provider: 'kie',
     aspectRatios: ['1:1', '16:9', '4:3', '9:16', '3:4'],
     tier: 'flagship',
+    textFidelity: 'strong',
     notes: 'FLUX.1 Kontext Max via Kie — precise, editable photoreal generation with excellent typography control.',
   },
   {
@@ -114,6 +124,7 @@ export const IMAGE_MODELS: ImageModel[] = [
     provider: 'kie',
     aspectRatios: ['1:1', '16:9', '9:16'],
     tier: 'flagship',
+    textFidelity: 'strong',
     notes: 'OpenAI GPT Image 2 via Kie — next-gen photorealism, sharp in-image text and instruction-following for headline/offer creatives.',
   },
   {
@@ -122,6 +133,7 @@ export const IMAGE_MODELS: ImageModel[] = [
     provider: 'kie',
     aspectRatios: ['1:1', '16:9', '4:3', '9:16', '3:4'],
     tier: 'fast',
+    textFidelity: 'moderate',
     notes: 'Google Nano Banana via Kie — fast, high-volume variant for quick creative variations.',
   },
   {
@@ -130,7 +142,8 @@ export const IMAGE_MODELS: ImageModel[] = [
     provider: 'fal',
     aspectRatios: ['1:1', '16:9', '4:3', '9:16', '3:4'],
     tier: 'flagship',
-    notes: 'Photoreal humans and scenes via fal — one FAL_KEY, no per-model subscription. Great for realistic UGC and B-roll stills.',
+    textFidelity: 'weak',
+    notes: 'Photoreal humans and scenes via fal — one FAL_KEY, no per-model subscription. Great for realistic UGC and B-roll stills; weak at in-image text, so it renders scenes rather than headline creatives.',
   },
   {
     id: 'higgsfield-soul',
@@ -138,7 +151,8 @@ export const IMAGE_MODELS: ImageModel[] = [
     provider: 'higgsfield',
     aspectRatios: ['1:1', '16:9', '4:3', '9:16', '3:4'],
     tier: 'flagship',
-    notes: 'Photographic, premium ad look — pairs with Higgsfield image-to-video.',
+    textFidelity: 'weak',
+    notes: 'Photographic, premium ad look — pairs with Higgsfield image-to-video. Weak at in-image text: best for the photographic layer with copy overlaid afterwards.',
   },
 ]
 

@@ -42,12 +42,31 @@ export interface ProductionFrame {
   description: string
 }
 
+/**
+ * A literal piece of copy that must appear ON the creative, declared separately
+ * from the prose frames so the render prompt can quote it exactly instead of
+ * digging it back out of a paragraph. See `lib/render-prompt.ts`.
+ */
+export interface OnImageTextSlot {
+  /** e.g. "Headline", "CTA button", "Compliance line". */
+  role: string
+  /** The exact words to set on the image. */
+  text: string
+  /** Where it sits, e.g. "top third, left aligned". */
+  placement?: string
+}
+
 export interface ProductionBrief {
   creativeType: string
   pattern: string
   audience: string
   awareness: string
   frames: ProductionFrame[]
+  /**
+   * The ad's on-image copy. Optional and additive — when absent the render
+   * compiler recovers the copy from the quoted strings in `frames`.
+   */
+  onImageText?: OnImageTextSlot[]
 }
 
 /**
@@ -91,14 +110,13 @@ export const NEURO_AXES: { key: keyof Pick<NeuroScore, 'attention' | 'emotion' |
   { key: 'hook', label: 'Hook' },
 ]
 
-/** Turn a production brief into a single rich generation prompt. */
-export function briefToPrompt(brief: ProductionBrief | undefined, fallback: string): string {
-  if (!brief?.frames?.length) return fallback
-  const frames = brief.frames
-    .map((f, i) => `Frame ${i + 1} — ${f.label}: ${f.description}`)
-    .join('\n')
-  return `${brief.creativeType} ad creative for The Professional Builder. Pattern: ${brief.pattern}. Audience: ${brief.audience}. Awareness: ${brief.awareness}.\n${frames}\n\nRender premium, photographic, on-site builder context, high contrast, room for text overlay.`
-}
+/*
+ * NOTE: `briefToPrompt` used to live here. It flattened every frame into one
+ * paragraph — including the ad's quoted copy — which is what produced garbled
+ * on-image text. It now lives in `lib/render-prompt.ts`, which separates the
+ * scene from the literal copy and budgets that copy so it renders correctly.
+ * Import it from there.
+ */
 
 export interface ReactorInputs {
   /** Human-facing campaign label (the first question in the guided flow). */
