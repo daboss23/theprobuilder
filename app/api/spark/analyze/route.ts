@@ -1,5 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { extractCreativeDNA, extractVisualDNA, storeCreativeDNA, type VisualDNA } from '@/lib/spark'
+import {
+  extractCreativeDNA,
+  extractVisualDNA,
+  storeCreativeDNA,
+  type CreativeDNA,
+  type VisualDNA,
+} from '@/lib/spark'
 import { extractVideoId, fetchYouTubeTranscript } from '@/lib/youtube'
 import { resolveAdImages, MAX_AD_IMAGES } from '@/lib/ad-image'
 import { classifyTaxonomy } from '@/lib/taxonomy-classify'
@@ -108,49 +114,80 @@ export async function POST(request: NextRequest) {
     //    the written DNA from the same evidence. Without them, the text path is
     //    unchanged. The taxonomy classifier runs alongside either way so the
     //    reference is comparable in ORACLE.
-    let visual: VisualDNA | null = null
+    // One shape for both reads: the written path simply has no design read.
+    let ads: { label: string; dna: CreativeDNA; visual: VisualDNA | null }[]
     let live = false
-    let dna
 
     if (images.length) {
       const analysis = await extractVisualDNA(images, text)
-      dna = analysis.dna
-      visual = analysis.visual
+      ads = analysis.ads
       live = analysis.live
     } else {
-      dna = await extractCreativeDNA(text)
+      ads = [{ label: 'Ad 1', dna: await extractCreativeDNA(text), visual: null }]
       live = Boolean(process.env.ANTHROPIC_API_KEY)
     }
 
-    // Classify from everything we know — the transcribed on-ad copy included, so
-    // an image-only reference still lands a real taxonomy tag.
-    const classifierText = [
-      text,
-      dna.hook,
-      dna.summary,
-      ...(visual?.elements.map((e) => e.text).filter(Boolean) ?? []),
-    ]
-      .filter(Boolean)
-      .join('\n')
-    const taxonomy = await classifyTaxonomy(classifierText)
+    // Each detected ad is classified and stored on its own, so a board
+    // screenshot of ten winners becomes ten retrievable patterns rather than
+    // one averaged blur. Classification runs off everything known about that
+    // ad — the transcribed on-ad copy included — so an image-only reference
+    // still lands a real taxonomy tag.
+    const results = await Promise.all(
+      ads.map(async (ad, i) => {
+        const visual = ad.visual
+        const classifierText = [
+          text,
+          ad.dna.hook,
+          ad.dna.summary,
+          ...(visual?.elements.map((e) => e.text).filter(Boolean) ?? []),
+        ]
+          .filter(Boolean)
+          .join('\n')
 
-    const stored = await storeCreativeDNA(
-      dna,
-      { url: body.url, platform: body.platform, title: body.title },
-      body.builderId ?? null,
-      visual,
+        const [taxonomy, stored] = await Promise.all([
+          classifyTaxonomy(classifierText),
+          storeCreativeDNA(
+            ad.dna,
+            {
+              url: body.url,
+              platform: body.platform,
+              // Keep each stored chunk distinguishable when one sheet yields many.
+              title: body.title
+                ? ads.length > 1
+                  ? `${body.title} — ${ad.label}`
+                  : body.title
+                : undefined,
+            },
+            body.builderId ?? null,
+            visual,
+          ),
+        ])
+
+        return {
+          label: ad.label || `Ad ${i + 1}`,
+          dna: ad.dna,
+          visual,
+          taxonomy,
+          stored: stored.stored,
+          chunks: stored.chunks,
+        }
+      }),
     )
 
+    const first = results[0]!
     return NextResponse.json({
       success: true,
-      dna,
-      visual,
-      taxonomy,
+      ads: results,
+      adCount: results.length,
+      // Back-compat with any caller expecting a single read.
+      dna: first.dna,
+      visual: first.visual,
+      taxonomy: first.taxonomy,
+      stored: results.some((r) => r.stored),
+      chunks: results.reduce((n, r) => n + r.chunks, 0),
       live,
       imageCount: images.length,
       notes,
-      stored: stored.stored,
-      chunks: stored.chunks,
     })
   } catch (err) {
     console.error('SPARK analyze error:', err)

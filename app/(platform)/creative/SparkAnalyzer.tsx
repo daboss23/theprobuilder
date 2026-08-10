@@ -15,6 +15,14 @@ import {
 import { Panel, PanelHeader, Pill } from '@/components/reactor/ui'
 import { CLONE_STORAGE_KEY, taxonomyToTags, type CreativeTaxonomy } from '@/lib/taxonomy'
 import type { CreativeDNA, LayoutZone, VisualDNA } from '@/lib/spark'
+
+/** One dissected ad as returned by /api/spark/analyze. */
+interface AnalyzedAd {
+  label: string
+  dna: CreativeDNA
+  visual: VisualDNA | null
+  taxonomy?: CreativeTaxonomy
+}
 import { cn } from '@/lib/utils'
 
 const PLATFORMS = [
@@ -46,7 +54,12 @@ const ZONE_ORDER: { zone: LayoutZone; label: string }[] = [
 ]
 
 const MAX_IMAGES = 4
-const MAX_EDGE = 1400
+/**
+ * Claude downsamples anything larger than ~1568px on the long edge, so this is
+ * the most detail that survives the trip. It matters most for a contact sheet:
+ * every pixel spent here is a pixel of headline legibility in a 10-ad grid.
+ */
+const MAX_EDGE = 1568
 const ACCEPTED = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
 
 interface Upload {
@@ -107,11 +120,12 @@ export function SparkAnalyzer() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [notes, setNotes] = useState<string[]>([])
-  const [dna, setDna] = useState<CreativeDNA | null>(null)
-  const [visual, setVisual] = useState<VisualDNA | null>(null)
-  const [taxonomy, setTaxonomy] = useState<CreativeTaxonomy | undefined>(undefined)
+  const [ads, setAds] = useState<AnalyzedAd[]>([])
+  const [active, setActive] = useState(0)
   const [stored, setStored] = useState<boolean | null>(null)
   const fileInput = useRef<HTMLInputElement>(null)
+
+  const current = ads[active] ?? null
 
   const addFiles = useCallback(async (files: File[]) => {
     const images = files.filter((f) => ACCEPTED.includes(f.type))
@@ -151,9 +165,8 @@ export function SparkAnalyzer() {
   const removeUpload = (id: string) => setUploads((prev) => prev.filter((u) => u.id !== id))
 
   const reset = () => {
-    setDna(null)
-    setVisual(null)
-    setTaxonomy(undefined)
+    setAds([])
+    setActive(0)
     setStored(null)
     setNotes([])
     setError(null)
@@ -175,10 +188,9 @@ export function SparkAnalyzer() {
       }).then((r) => r.json())
 
       setNotes(Array.isArray(res.notes) ? res.notes : [])
-      if (res.success && res.dna) {
-        setDna(res.dna as CreativeDNA)
-        setVisual((res.visual as VisualDNA) ?? null)
-        setTaxonomy(res.taxonomy as CreativeTaxonomy | undefined)
+      if (res.success && Array.isArray(res.ads) && res.ads.length) {
+        setAds(res.ads as AnalyzedAd[])
+        setActive(0)
         setStored(Boolean(res.stored))
       } else {
         setError(res.error || 'Analysis failed')
@@ -194,7 +206,8 @@ export function SparkAnalyzer() {
   // out of the URL; the Workbench reads and clears it on mount, then the visual
   // read rides into OPUS's prompt as design direction for the production brief.
   const sendToReactor = () => {
-    if (!dna) return
+    if (!current) return
+    const { dna, visual, taxonomy, label } = current
     try {
       sessionStorage.setItem(
         CLONE_STORAGE_KEY,
@@ -209,7 +222,7 @@ export function SparkAnalyzer() {
           summary: dna.summary,
           taxonomy,
           visual: visual ?? undefined,
-          sourceLabel: `${platform} · ${dna.patternType}`,
+          sourceLabel: `${platform} · ${ads.length > 1 ? `${label} · ` : ''}${dna.patternType}`,
         }),
       )
     } catch {
@@ -228,8 +241,14 @@ export function SparkAnalyzer() {
         icon={<Sparkles size={16} />}
         accent="amber"
         title="SPARK · Winning Creative Intelligence"
-        subtitle="Drop in a winning ad — SPARK reads its design and its words, then stores both as a retrievable pattern."
-        accessory={dna ? <Pill tone="primary">{dna.patternType}</Pill> : undefined}
+        subtitle="Drop in winning ads — SPARK reads each one's design and words, then stores both as retrievable patterns."
+        accessory={
+          ads.length > 1 ? (
+            <Pill tone="primary">{ads.length} ads read</Pill>
+          ) : current ? (
+            <Pill tone="primary">{current.dna.patternType}</Pill>
+          ) : undefined
+        }
       />
 
       <div className="grid gap-4 p-5 lg:grid-cols-2">
@@ -249,10 +268,12 @@ export function SparkAnalyzer() {
             )}
           >
             <ImageIcon size={22} className={cn('mx-auto mb-2', dragging ? 'text-glow' : 'text-white/25')} />
-            <p className="text-sm font-medium text-white/80">Drag an ad in, or paste a screenshot</p>
-            <p className="mx-auto mt-1 max-w-xs text-[11px] leading-relaxed text-white/35">
+            <p className="text-sm font-medium text-white/80">Drag ads in, or paste a screenshot</p>
+            <p className="mx-auto mt-1 max-w-sm text-[11px] leading-relaxed text-white/35">
               JPEG, PNG, WebP or GIF · up to {MAX_IMAGES} images. SPARK reads the colours, the layout,
-              where the headline and hook sit, and what they say.
+              where the headline and hook sit, and what they say. Drop a whole swipe board and every ad
+              on it is separated and dissected on its own — sharpest results come from bigger, clearer
+              screenshots.
             </p>
             <button
               type="button"
@@ -358,11 +379,12 @@ export function SparkAnalyzer() {
 
         {/* ------------------------------ Result side ----------------------------- */}
         <div className="rounded-xl border border-border bg-surface/30 p-4">
-          {!dna && !busy && (
+          {!current && !busy && (
             <div className="grid h-full min-h-[220px] place-items-center text-center">
               <p className="max-w-xs text-sm text-white/35">
                 The teardown appears here — palette, layout map, where each element sits and what it
-                says, plus the pattern, hook, story, CTA and offer structure.
+                says, plus the pattern, hook, story, CTA and offer structure. Drop a board screenshot
+                and every ad on it is dissected separately.
               </p>
             </div>
           )}
@@ -371,27 +393,54 @@ export function SparkAnalyzer() {
             <div className="grid h-full min-h-[220px] place-items-center">
               <span className="flex items-center gap-2 text-sm text-glow">
                 <Loader2 size={16} className="animate-spin" />
-                {uploads.length ? 'Reading the design…' : 'Extracting Creative DNA…'}
+                {uploads.length ? 'Separating and reading each ad…' : 'Extracting Creative DNA…'}
               </span>
             </div>
           )}
 
-          {dna && !busy && (
+          {current && !busy && (
             <div className="space-y-4">
+              {ads.length > 1 && (
+                <div>
+                  <SectionLabel>
+                    {ads.length} ads found — each dissected separately
+                  </SectionLabel>
+                  <div className="flex flex-wrap gap-1.5">
+                    {ads.map((ad, i) => (
+                      <button
+                        key={`${ad.label}-${i}`}
+                        type="button"
+                        onClick={() => setActive(i)}
+                        className={cn(
+                          'min-h-[36px] max-w-full truncate rounded-full border px-3 py-1.5 text-left text-[12px] font-medium transition-colors',
+                          i === active
+                            ? 'border-primary/50 bg-primary/15 text-glow'
+                            : 'border-white/10 bg-white/[0.03] text-white/55 hover:border-white/20 hover:text-white/80',
+                        )}
+                      >
+                        {i + 1}. {ad.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <div className="flex flex-wrap items-center gap-2">
-                <Pill tone="primary">{dna.patternType}</Pill>
-                <Pill>{dna.creativeCategory}</Pill>
-                {visual && <Pill tone="success">Design read</Pill>}
+                <Pill tone="primary">{current.dna.patternType}</Pill>
+                <Pill>{current.dna.creativeCategory}</Pill>
+                {current.visual && <Pill tone="success">Design read</Pill>}
                 {stored ? (
-                  <Pill tone="success">Stored as pattern</Pill>
+                  <Pill tone="success">
+                    {ads.length > 1 ? `${ads.length} patterns stored` : 'Stored as pattern'}
+                  </Pill>
                 ) : (
                   <Pill tone="warning">Not stored — configure Supabase + Voyage</Pill>
                 )}
               </div>
 
-              {taxonomyToTags(taxonomy).length > 0 && (
+              {taxonomyToTags(current.taxonomy).length > 0 && (
                 <div className="flex flex-wrap gap-1.5">
-                  {taxonomyToTags(taxonomy).map((t) => (
+                  {taxonomyToTags(current.taxonomy).map((t) => (
                     <span
                       key={t}
                       className="rounded-full border border-white/10 bg-white/[0.03] px-2 py-0.5 text-[11px] text-white/55"
@@ -402,7 +451,7 @@ export function SparkAnalyzer() {
                 </div>
               )}
 
-              {visual && <VisualTeardown visual={visual} />}
+              {current.visual && <VisualTeardown visual={current.visual} />}
 
               <div>
                 <SectionLabel>Written DNA</SectionLabel>
@@ -412,7 +461,7 @@ export function SparkAnalyzer() {
                       <dt className="text-[10px] font-medium uppercase tracking-wider text-white/35">
                         {row.label}
                       </dt>
-                      <dd className="text-[13px] text-white/75">{dna[row.key]}</dd>
+                      <dd className="text-[13px] text-white/75">{current.dna[row.key]}</dd>
                     </div>
                   ))}
                 </dl>
@@ -426,8 +475,10 @@ export function SparkAnalyzer() {
                 Build a campaign from this ad <ArrowRight size={15} />
               </button>
               <p className="text-center text-[11px] leading-relaxed text-white/35">
-                Sends the structure{visual ? ' and the design' : ''} to the Campaign Reactor as proven
-                direction. OPUS writes fresh TPB copy and can adapt the design where the angle calls for it.
+                Sends {ads.length > 1 ? `“${current.label}”` : 'the'} structure
+                {current.visual ? ' and design' : ''} to the Campaign Reactor as proven direction.
+                {ads.length > 1 ? ' All ' + ads.length + ' are already stored as patterns.' : ''} OPUS
+                writes fresh TPB copy and can adapt the design where the angle calls for it.
               </p>
             </div>
           )}

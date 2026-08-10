@@ -21,6 +21,13 @@ import type { AdImage } from '@/lib/ad-image'
 
 const MODEL = INTELLIGENCE_MODEL
 
+/**
+ * Ceiling on how many distinct ads one read dissects. A board screenshot can
+ * hold dozens; past this the per-ad detail degrades and the response gets long
+ * enough to risk truncation, so the read stays honest about what it covered.
+ */
+export const MAX_ADS_PER_READ = 12
+
 // The repeatable pattern categories SPARK classifies winning creatives into.
 export const CREATIVE_PATTERNS = [
   'Member Win',
@@ -217,18 +224,26 @@ const SYSTEM_BASE = `You are SPARK, the Creative Intelligence layer for The Prof
 function visionSystemPrompt(count: number): string {
   return `${SYSTEM_BASE}
 
-You are looking at ${count > 1 ? `${count} images of winning ad creatives` : 'an image of a winning ad creative'}. Read ${count > 1 ? 'them' : 'it'} the way a senior art director reverse-engineers a competitor's control ad.
+You are looking at ${count > 1 ? `${count} images` : 'an image'} of winning ad creatives. Read them the way a senior art director reverse-engineers a competitor's control ads.
 
-Report what is ACTUALLY THERE — never invent an element you cannot see:
+FIRST, SEPARATE THE ADS. An image may hold ONE ad, or it may be a screenshot of a board, swipe file, ad-library grid or contact sheet holding SEVERAL distinct ads laid out in a grid. Identify every distinct ad creative across everything you are shown, and analyze EACH ONE SEPARATELY.
+- One entry per distinct ad. NEVER merge two different ads into a single entry, and never split one ad into several.
+- A single ad keeps its own panels together: a before/after pair, a multi-panel comparison, or a carousel frame set belongs to ONE ad.
+- Give each entry a short "label" that identifies it by position and a distinguishing feature ("Top-left — orange headline, hard-hat photo") so a human can match the entry to the ad on screen.
+- Work left-to-right, top-to-bottom.
+- Analyze at most ${MAX_ADS_PER_READ} ads. If there are more, take the ${MAX_ADS_PER_READ} most prominent and say so in the last entry's replicationNotes.
+
+THEN, FOR EACH AD, report what is ACTUALLY THERE — never invent an element you cannot see:
 - Transcribe on-ad copy VERBATIM into each element's "text" (headline, hook, bullets, CTA label, badges). If an element is absent, omit it rather than inventing it.
 - Sample real colours as #rrggbb hex and name the job each one does.
 - Locate every element by zone and describe its treatment precisely enough to rebuild the layout without the original.
 - Explain the scroll-stop MECHANISM (contrast, face, colour break, type scale) — not praise.
-${count > 1 ? '- Across multiple images, extract the DOMINANT repeatable pattern they share, and note meaningful variations in replicationNotes.\n' : ''}
-Classify patternType as ONE of: ${CREATIVE_PATTERNS.join(', ')}.
+- If an ad is too small or too low-resolution to read its copy reliably, still report the layout and palette, and say so plainly in that ad's replicationNotes rather than guessing at the words.
+
+Classify each ad's patternType as ONE of: ${CREATIVE_PATTERNS.join(', ')}.
 
 Reply with ONLY a JSON object, no prose, no markdown fences:
-{"dna":${DNA_KEYS},"visual":${VISUAL_KEYS}}`
+{"ads":[{"label":"...","dna":${DNA_KEYS},"visual":${VISUAL_KEYS}}]}`
 }
 
 /* ------------------------------- Normalising -------------------------------- */
@@ -348,65 +363,94 @@ export async function extractCreativeDNA(text: string): Promise<CreativeDNA> {
   }
 }
 
-export interface VisualAnalysis {
+/** One distinct ad creative found in the uploaded images, read on its own. */
+export interface AnalyzedAd {
+  /** Identifies the ad by position + a distinguishing feature. */
+  label: string
   dna: CreativeDNA
   visual: VisualDNA
+}
+
+export interface VisualAnalysis {
+  /** One entry per distinct ad detected. Never empty. */
+  ads: AnalyzedAd[]
   /** False when no API key was configured and the shapes are heuristic. */
   live: boolean
 }
 
 /**
- * SEE a winning ad. Sends the creative(s) to the vision model and returns both
- * the written Creative DNA and the design read in one call, so the copy
- * structure and the layout are extracted from the same evidence.
+ * SEE winning ads. Sends the creative(s) to the vision model and returns the
+ * written Creative DNA and the design read together, extracted from the same
+ * evidence so copy structure and layout can never disagree.
  *
- * `context` is optional supporting text (the strategist's notes, the ad's body
- * copy) that sharpens the read. Never throws.
+ * Handles a board/contact-sheet screenshot holding SEVERAL ads: each distinct
+ * creative is separated and dissected on its own rather than blurred into one
+ * averaged pattern. `context` is optional supporting text that sharpens the
+ * read. Never throws.
  */
 export async function extractVisualDNA(
   images: AdImage[],
   context = '',
 ): Promise<VisualAnalysis> {
-  const fallbackDna = heuristicDNA(context || 'Winning ad creative')
+  const fallback: VisualAnalysis = {
+    ads: [
+      {
+        label: 'Ad 1',
+        dna: heuristicDNA(context || 'Winning ad creative'),
+        visual: heuristicVisualDNA(),
+      },
+    ],
+    live: false,
+  }
 
-  if (!images.length) {
-    return { dna: fallbackDna, visual: heuristicVisualDNA(), live: false }
-  }
-  if (!process.env.ANTHROPIC_API_KEY) {
-    return { dna: fallbackDna, visual: heuristicVisualDNA(), live: false }
-  }
+  if (!images.length || !process.env.ANTHROPIC_API_KEY) return fallback
 
   try {
     const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
-    const content: Anthropic.ContentBlockParam[] = images.map((img) => ({
-      type: 'image',
-      source: { type: 'base64', media_type: img.mediaType, data: img.data },
-    }))
+    const content: Anthropic.ContentBlockParam[] = []
+    images.forEach((img, i) => {
+      // Label each image so the model can cite which one an ad came from when
+      // several sheets are uploaded at once.
+      if (images.length > 1) content.push({ type: 'text', text: `Image ${i + 1}:` })
+      content.push({
+        type: 'image',
+        source: { type: 'base64', media_type: img.mediaType, data: img.data },
+      })
+    })
     content.push({
       type: 'text',
       text: context.trim()
-        ? `Supporting context from the strategist (use it, but the IMAGE is the source of truth for anything visual):\n"""${context.trim().slice(0, 4000)}"""\n\nReturn the JSON object now.`
-        : 'Return the JSON object now.',
+        ? `Supporting context from the strategist (use it, but the IMAGE is the source of truth for anything visual):\n"""${context.trim().slice(0, 4000)}"""\n\nSeparate every distinct ad and return the JSON object now.`
+        : 'Separate every distinct ad and return the JSON object now.',
     })
 
     const response = await anthropic.messages.create({
       model: MODEL,
-      max_tokens: 2400,
+      // Scales with how many ads a sheet can hold — a 12-ad teardown is long.
+      max_tokens: 8000,
       system: visionSystemPrompt(images.length),
       messages: [{ role: 'user', content }],
     })
 
     const out = response.content.find((b): b is Anthropic.TextBlock => b.type === 'text')?.text ?? ''
-    const parsed = parseModelJson<{ dna?: Partial<CreativeDNA>; visual?: Partial<VisualDNA> }>(out)
+    const parsed = parseModelJson<{
+      ads?: { label?: string; dna?: Partial<CreativeDNA>; visual?: Partial<VisualDNA> }[]
+    }>(out)
 
-    return {
-      dna: mergeDNA(parsed?.dna, fallbackDna),
-      visual: normaliseVisual(parsed?.visual),
-      live: true,
-    }
+    const ads: AnalyzedAd[] = Array.isArray(parsed?.ads)
+      ? parsed.ads.slice(0, MAX_ADS_PER_READ).map((a, i) => ({
+          label: str(a?.label, `Ad ${i + 1}`),
+          dna: mergeDNA(a?.dna, heuristicDNA(context || `Winning ad creative ${i + 1}`)),
+          visual: normaliseVisual(a?.visual),
+        }))
+      : []
+
+    // A well-formed response with zero ads means nothing ad-like was found —
+    // fall back rather than hand the UI an empty result.
+    return ads.length ? { ads, live: true } : fallback
   } catch (err) {
     console.error('SPARK visual analysis failed, using heuristic:', err)
-    return { dna: fallbackDna, visual: heuristicVisualDNA(), live: false }
+    return fallback
   }
 }
 
