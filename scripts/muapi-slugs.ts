@@ -24,45 +24,54 @@ const API_BASE = process.env.MUAPI_API_BASE || 'https://api.muapi.ai/api/v1'
 const KEY = process.env.MUAPIAPP_API_KEY || process.env.MUAPI_API_KEY
 
 /**
- * Candidate paths per model, best guess first. Muapi's CLI lists curated names
- * with no suffix (`midjourney`, `seedream`, `flux-kontext-max`) while our one
- * confirmed slug carries `-image`, so both conventions are probed.
+ * Candidate paths per model, best guess first.
+ *
+ * The dashboard's generation log shows endpoints named `<model>-<mode>` —
+ * `gpt-image-2-image-to-image` for editing — which implies `-text-to-image` for
+ * plain generation. Our confirmed slug uses a bare `-image` suffix and the CLI
+ * lists curated names with no suffix at all, so all three conventions are
+ * probed per model, most likely first.
  */
 const CANDIDATES: { envVar: string; label: string; slugs: string[] }[] = [
   {
     envVar: 'MUAPI_MODEL_NANO_BANANA_PRO',
     label: 'Nano Banana Pro',
-    slugs: ['nano-banana-pro', 'nano-banana-pro-image', 'nano-banana-pro-text-to-image', 'gemini-3-pro-image'],
+    slugs: [
+      'nano-banana-pro-text-to-image',
+      'nano-banana-pro-image',
+      'nano-banana-pro',
+      'gemini-3-pro-image-text-to-image',
+    ],
   },
   {
     envVar: 'MUAPI_MODEL_NANO_BANANA_2',
     label: 'Nano Banana 2',
-    slugs: ['nano-banana-2', 'nano-banana-2-image', 'nano-banana', 'nano-banana-text-to-image'],
+    slugs: ['nano-banana-2-text-to-image', 'nano-banana-2-image', 'nano-banana-2', 'nano-banana-text-to-image'],
   },
   {
     envVar: 'MUAPI_MODEL_GPT_IMAGE_2',
     label: 'GPT Image 2',
-    slugs: ['gpt-image-2', 'gpt-image-1', 'gpt4o', 'gpt-image-2-image', 'gpt4o-image'],
+    slugs: ['gpt-image-2-text-to-image', 'gpt-image-2-image', 'gpt-image-2', 'gpt4o-image'],
   },
   {
     envVar: 'MUAPI_MODEL_MIDJOURNEY',
     label: 'Midjourney',
-    slugs: ['midjourney', 'midjourney-image', 'midjourney-v7'],
+    slugs: ['midjourney-text-to-image', 'midjourney-image', 'midjourney'],
   },
   {
     envVar: 'MUAPI_MODEL_SEEDREAM',
     label: 'Seedream 4.0',
-    slugs: ['seedream', 'seedream-4', 'seedream-v4', 'seedream-image'],
+    slugs: ['seedream-text-to-image', 'seedream-image', 'seedream', 'seedream-v4-text-to-image'],
   },
   {
     envVar: 'MUAPI_MODEL_FLUX_KONTEXT_MAX',
     label: 'FLUX Kontext Max',
-    slugs: ['flux-kontext-max', 'flux-kontext-max-image'],
+    slugs: ['flux-kontext-max-text-to-image', 'flux-kontext-max-image', 'flux-kontext-max'],
   },
   {
     envVar: 'MUAPI_MODEL_FLUX_DEV',
     label: 'FLUX.1 Dev (known-good control)',
-    slugs: ['flux-dev-image', 'flux-dev'],
+    slugs: ['flux-dev-image', 'flux-dev-text-to-image', 'flux-dev'],
   },
 ]
 
