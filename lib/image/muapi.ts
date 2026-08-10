@@ -34,24 +34,38 @@ const API_BASE = process.env.MUAPI_API_BASE || 'https://api.muapi.ai/api/v1'
 /**
  * Map our internal muapi model ids → Muapi endpoint slugs (env-overridable).
  *
- * `flux-dev-image` is CONFIRMED working (it rendered). The rest follow Muapi's
- * `<alias>-image` convention but are unverified, because muapi.ai is not
- * reachable from every build environment — which is exactly why each one has
- * its own env override. If a model 404s, set its variable to the slug shown in
- * the Muapi dashboard and the fix ships without a code change. A wrong slug is
- * never fatal: the oven falls through to the next configured model.
+ * The slug is the model's BARE name — Muapi's own docs give
+ * `POST https://api.muapi.ai/api/v1/nano-banana-pro`, and its CLI lists the
+ * curated models the same way (`midjourney`, `seedream`, `flux-kontext-max`).
+ * A mode suffix only appears where a model has more than one mode
+ * (`gpt-image-2-image-to-image` for editing); plain text-to-image is bare.
+ *
+ * These previously all carried an invented `-image` suffix, so every frontier
+ * model 404'd and the oven fell through to FLUX.1 Dev — the weakest text
+ * renderer in the menu — which is what shipped ads with misspelled headlines.
+ * `flux-dev-image` is left as-is because it is the one slug CONFIRMED to render.
+ *
+ * Each entry stays env-overridable: vendor paths drift, and correcting one must
+ * never require a code change. A wrong slug is never fatal — the oven falls
+ * through to the next configured model and reports the substitution.
  */
 const MUAPI_MODEL_ENDPOINTS: Record<string, string> = {
-  'muapi-nano-banana-pro':
-    process.env.MUAPI_MODEL_NANO_BANANA_PRO || 'nano-banana-pro-image',
-  'muapi-nano-banana-2': process.env.MUAPI_MODEL_NANO_BANANA_2 || 'nano-banana-2-image',
-  'muapi-gpt-image-2': process.env.MUAPI_MODEL_GPT_IMAGE_2 || 'gpt-image-2-image',
-  'muapi-midjourney': process.env.MUAPI_MODEL_MIDJOURNEY || 'midjourney-image',
-  'muapi-seedream': process.env.MUAPI_MODEL_SEEDREAM || 'seedream-image',
-  'muapi-flux-kontext-max':
-    process.env.MUAPI_MODEL_FLUX_KONTEXT_MAX || 'flux-kontext-max-image',
+  'muapi-nano-banana-pro': process.env.MUAPI_MODEL_NANO_BANANA_PRO || 'nano-banana-pro',
+  'muapi-nano-banana-2': process.env.MUAPI_MODEL_NANO_BANANA_2 || 'nano-banana-2',
+  'muapi-gpt-image-2': process.env.MUAPI_MODEL_GPT_IMAGE_2 || 'gpt-image-2',
+  'muapi-midjourney': process.env.MUAPI_MODEL_MIDJOURNEY || 'midjourney',
+  'muapi-seedream': process.env.MUAPI_MODEL_SEEDREAM || 'seedream',
+  'muapi-flux-kontext-max': process.env.MUAPI_MODEL_FLUX_KONTEXT_MAX || 'flux-kontext-max',
   'muapi-flux-dev': process.env.MUAPI_MODEL_FLUX_DEV || 'flux-dev-image',
 }
+
+/**
+ * Output resolution. Muapi accepts 1k / 2k / 4k and defaults to 1k — but an ad
+ * headline rendered at 1k is exactly where letterforms go soft, so stills are
+ * requested at 2k. Models that don't take the parameter are handled by the
+ * retry in `startMuapiImage`.
+ */
+const MUAPI_RESOLUTION = process.env.MUAPI_IMAGE_RESOLUTION ?? '2k'
 
 function muapiKey(): string | undefined {
   return process.env.MUAPIAPP_API_KEY || process.env.MUAPI_API_KEY
@@ -146,16 +160,32 @@ export async function startMuapiImage(
   const endpoint = MUAPI_MODEL_ENDPOINTS[modelId]
   if (!endpoint) return { requestId: null, error: `Unknown Muapi model "${modelId}"` }
 
-  try {
+  const submit = async (payload: Record<string, unknown>) => {
     const res = await fetch(`${API_BASE}/${endpoint}`, {
       method: 'POST',
       headers: authHeaders(),
-      body: JSON.stringify({ prompt, aspect_ratio: aspectRatio, num_images: 1 }),
+      body: JSON.stringify(payload),
       cache: 'no-store',
     })
     const body = (await res.json().catch(() => null)) as
       | { request_id?: string; id?: string; error?: string; message?: string }
       | null
+    return { res, body }
+  }
+
+  try {
+    const base: Record<string, unknown> = { prompt, aspect_ratio: aspectRatio, num_images: 1 }
+    let { res, body } = await submit(
+      MUAPI_RESOLUTION ? { ...base, resolution: MUAPI_RESOLUTION } : base,
+    )
+
+    // A model that doesn't accept an optional parameter rejects the whole
+    // request. Retry once with the minimum payload rather than losing the model
+    // to the fallback chain over a field it simply doesn't know about.
+    if (!res.ok && (res.status === 400 || res.status === 422) && MUAPI_RESOLUTION) {
+      ;({ res, body } = await submit(base))
+    }
+
     const requestId = res.ok ? (body?.request_id ?? body?.id) : undefined
     if (requestId) return { requestId }
     return {
