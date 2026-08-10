@@ -26,55 +26,57 @@ const KEY = process.env.MUAPIAPP_API_KEY || process.env.MUAPI_API_KEY
 /**
  * Candidate paths per model, best guess first.
  *
- * Muapi's docs give `POST /api/v1/nano-banana-pro` — the slug is the model's
- * BARE name, which is now the default in `lib/image/muapi.ts`. A mode suffix
- * appears only where a model has several modes (`gpt-image-2-image-to-image`).
- * The old `-image` form is kept as a fallback candidate in case a given model
- * is registered under it.
- *
- * Run this when a model still 404s after a vendor rename — it prints the env
+ * The defaults in `lib/image/muapi.ts` are taken verbatim from Muapi's model
+ * index (muapi.ai/llms.txt) and follow no single convention, so each entry here
+ * leads with the current default and keeps plausible renames behind it. Run
+ * this when a model starts 404ing after a vendor rename — it prints the env
  * override to set.
  */
 const CANDIDATES: { envVar: string; label: string; slugs: string[] }[] = [
   {
     envVar: 'MUAPI_MODEL_NANO_BANANA_PRO',
     label: 'Nano Banana Pro',
-    slugs: [
-      'nano-banana-pro',
-      'nano-banana-pro-text-to-image',
-      'nano-banana-pro-image',
-      'gemini-3-pro-image',
-    ],
-  },
-  {
-    envVar: 'MUAPI_MODEL_NANO_BANANA_2',
-    label: 'Nano Banana 2',
-    slugs: ['nano-banana-2', 'nano-banana-2-text-to-image', 'nano-banana-2-image', 'nano-banana'],
+    slugs: ['nano-banana-pro', 'nano-banana-pro-text-to-image', 'gemini-3-pro-image'],
   },
   {
     envVar: 'MUAPI_MODEL_GPT_IMAGE_2',
     label: 'GPT Image 2',
-    slugs: ['gpt-image-2', 'gpt-image-2-text-to-image', 'gpt-image-2-image', 'gpt4o'],
+    slugs: ['gpt-image-2-text-to-image', 'gpt-image-2', 'gpt4o-text-to-image'],
   },
   {
-    envVar: 'MUAPI_MODEL_MIDJOURNEY',
-    label: 'Midjourney',
-    slugs: ['midjourney', 'midjourney-text-to-image', 'midjourney-image'],
+    envVar: 'MUAPI_MODEL_IMAGEN4_ULTRA',
+    label: 'Imagen 4 Ultra',
+    slugs: ['google-imagen4-ultra', 'google-imagen4', 'google-imagen4-fast'],
+  },
+  {
+    envVar: 'MUAPI_MODEL_NANO_BANANA_2',
+    label: 'Nano Banana 2',
+    slugs: ['nano-banana-2', 'nano-banana-2-lite', 'nano-banana'],
   },
   {
     envVar: 'MUAPI_MODEL_SEEDREAM',
-    label: 'Seedream 4.0',
-    slugs: ['seedream', 'seedream-text-to-image', 'seedream-image', 'seedream-v4'],
+    label: 'Seedream 5.0 Pro',
+    slugs: ['bytedance-seedream-5.0-pro', 'bytedance-seedream-v5.0', 'bytedance-seedream-v4.5', 'bytedance-seedream-v4'],
+  },
+  {
+    envVar: 'MUAPI_MODEL_FLUX_3',
+    label: 'FLUX 3',
+    slugs: ['flux-3-text-to-image', 'flux-3-dev', 'flux-2-pro'],
   },
   {
     envVar: 'MUAPI_MODEL_FLUX_KONTEXT_MAX',
-    label: 'FLUX Kontext Max',
-    slugs: ['flux-kontext-max', 'flux-kontext-max-text-to-image', 'flux-kontext-max-image'],
+    label: 'FLUX Kontext',
+    slugs: ['flux-kontext-dev-t2i', 'flux-kontext-max', 'flux-kontext-pro'],
+  },
+  {
+    envVar: 'MUAPI_MODEL_MIDJOURNEY',
+    label: 'Midjourney V8',
+    slugs: ['midjourney-v8', 'midjourney-v7', 'midjourney'],
   },
   {
     envVar: 'MUAPI_MODEL_FLUX_DEV',
     label: 'FLUX.1 Dev (known-good control)',
-    slugs: ['flux-dev-image', 'flux-dev-text-to-image', 'flux-dev'],
+    slugs: ['flux-dev-image', 'flux-dev', 'flux-schnell'],
   },
 ]
 

@@ -99,22 +99,25 @@ MUAPIAPP_API_KEY             # Muapi unified image + video gateway — CURRENT D
                              #   ovens (on trial). Sandbox keys return mock data instantly and
                              #   spend no credits — use one for integration testing. Remove the
                              #   key and both ovens fall back to Kie/fal/Higgsfield automatically.
-                             #   Endpoint slugs are the model's BARE name per Muapi's docs
-                             #   (POST /api/v1/nano-banana-pro); a mode suffix appears only where a
-                             #   model has several modes. They previously carried an invented
-                             #   "-image" suffix, so every frontier model 404'd and the oven fell
-                             #   through to FLUX.1 Dev — the weakest text renderer — which is what
-                             #   shipped ads with misspelled headlines. `npm run muapi:slugs` probes
-                             #   your key and prints the override to set if one drifts again.
+                             #   Endpoint slugs come VERBATIM from muapi.ai/llms.txt — there is no
+                             #   derivable convention. They previously carried an invented "-image"
+                             #   suffix, so every frontier model 404'd and the oven fell through to
+                             #   FLUX.1 Dev — the weakest text renderer — which is what shipped ads
+                             #   with misspelled headlines. `npm run muapi:slugs` probes your key
+                             #   and prints the override to set if one drifts again.
                              #   Optional overrides (vendor slugs drift; no code change needed):
                              #   MUAPI_API_BASE, MUAPI_POLL_TIMEOUT_MS,
                              #   MUAPI_IMAGE_RESOLUTION (1k/2k/4k, default 2k — 1k is where
                              #     headline letterforms go soft; unsupported by a model = auto-retry
                              #     without it),
-                             #   MUAPI_MODEL_NANO_BANANA_PRO / _NANO_BANANA_2 / _GPT_IMAGE_2 /
-                             #   _MIDJOURNEY / _SEEDREAM / _FLUX_KONTEXT_MAX / _FLUX_DEV (images
-                             #   — only _FLUX_DEV's slug is confirmed; set any that 404 to the
-                             #   slug shown in the Muapi dashboard),
+                             #   MUAPI_MODEL_NANO_BANANA_PRO / _GPT_IMAGE_2 / _IMAGEN4_ULTRA /
+                             #   _NANO_BANANA_2 / _SEEDREAM / _FLUX_3 / _FLUX_KONTEXT_MAX /
+                             #   _MIDJOURNEY / _FLUX_DEV (images — slugs are taken verbatim from
+                             #   muapi.ai/llms.txt and follow NO single convention: bare
+                             #   (nano-banana-pro), mode-suffixed (gpt-image-2-text-to-image),
+                             #   versioned (midjourney-v8), vendor-prefixed
+                             #   (bytedance-seedream-5.0-pro). Never "tidy" one into a pattern —
+                             #   guessing is what caused the misspelled-headline bug),
                              #   MUAPI_VIDEO_VEO3_T2V / _VEO3_I2V / _KLING_T2V / _KLING_I2V /
                              #   _SEEDANCE_T2V / _SEEDANCE_I2V / _WAN_T2V / _WAN_I2V (video)
 PIPEBOARD_API_TOKEN          # Meta Ads MCP (live ad performance) — optional
