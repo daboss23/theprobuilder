@@ -68,7 +68,9 @@ export async function listVisualReferences(limit = 60): Promise<StoredVisualRefe
     const { data, error } = await getSupabaseAdmin()
       .from('knowledge_chunks')
       .select('id, title, category, content, created_at, metadata')
-      .eq('system', 'creative')
+      // `creative` is included for designs banked before the visual section
+      // existed — they carry the same metadata and are still perfectly good.
+      .in('system', ['design', 'creative'])
       .eq('metadata->>visual', 'true')
       .order('created_at', { ascending: false })
       .limit(limit * 3)

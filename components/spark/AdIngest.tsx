@@ -16,6 +16,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   ArrowRight,
+  Check,
   ChevronDown,
   Copy,
   ImageIcon,
@@ -325,10 +326,10 @@ export function AdIngest({ variant = 'studio' }: AdIngestProps) {
       <PanelHeader
         icon={<Sparkles size={16} />}
         accent="amber"
-        title={vault ? 'Ad Design Ingest' : 'SPARK · Winning Creative Intelligence'}
+        title={vault ? 'Ad Design DNA' : 'SPARK · Winning Creative Intelligence'}
         subtitle={
           vault
-            ? 'Drop winning Meta ads in. Every design is read and banked as a retrievable pattern the Reactor pulls from when a brief calls for it.'
+            ? 'The visual section of the Vault. Drop winning Meta ads in — palette, layout, placement and on-ad copy are read and stored as knowledge SPARK and OPUS retrieve when a brief needs a proven design.'
             : 'Drop a winning Meta ad in. SPARK reads its design, banks it, and rebuilds it for your offer.'
         }
         accessory={
@@ -340,7 +341,11 @@ export function AdIngest({ variant = 'studio' }: AdIngestProps) {
         }
       />
 
-      <div className="grid gap-4 p-5 lg:grid-cols-2">
+      {/* The Vault is an INGEST surface, not a workbench: one column, drop box,
+          and a receipt of what was banked. The teardown, the clone and the
+          hand-off to the Reactor live on the Creative page, where you are
+          actually working on an ad rather than filing one. */}
+      <div className={cn('gap-4 p-5', vault ? 'flex flex-col' : 'grid lg:grid-cols-2')}>
         {/* ------------------------------ Input side ------------------------------ */}
         <div className="space-y-3">
           <div
@@ -447,7 +452,15 @@ export function AdIngest({ variant = 'studio' }: AdIngestProps) {
             className="inline-flex min-h-[44px] items-center gap-2 rounded-full border border-primary/40 bg-primary/10 px-5 py-2.5 text-sm font-semibold text-glow transition-colors hover:bg-primary/20 disabled:opacity-50"
           >
             {busy ? <Loader2 size={15} className="animate-spin" /> : <Wand2 size={15} />}
-            {busy ? 'Reading the ad…' : uploads.length ? 'Read this ad' : 'Extract Creative DNA'}
+            {busy
+              ? vault
+                ? 'Ingesting…'
+                : 'Reading the ad…'
+              : vault
+                ? 'Ingest Visual Creative DNA'
+                : uploads.length
+                  ? 'Read this ad'
+                  : 'Extract Creative DNA'}
           </button>
 
           {error && (
@@ -462,7 +475,14 @@ export function AdIngest({ variant = 'studio' }: AdIngestProps) {
           ))}
         </div>
 
+        {/* -------------------- Vault: a receipt, not a teardown ------------------- */}
+        {vault && !live && current && !busy && <SampleWarning reason={reason} />}
+        {vault && ads.length > 0 && live && !busy && (
+          <VaultReceipt ads={ads} stored={stored} />
+        )}
+
         {/* ------------------------------ Result side ----------------------------- */}
+        {!vault && (
         <div className="rounded-xl border border-border bg-surface/30 p-4">
           {!current && !busy && (
             <div className="grid h-full min-h-[220px] place-items-center text-center">
@@ -486,19 +506,7 @@ export function AdIngest({ variant = 'studio' }: AdIngestProps) {
           {current && !busy && (
             <div className="space-y-4">
               {/* A read that didn't happen is never dressed up as one. */}
-              {!live && (
-                <div className="flex gap-2.5 rounded-lg border border-warning/40 bg-warning/[0.07] p-3">
-                  <TriangleAlert size={15} className="mt-0.5 shrink-0 text-warning" />
-                  <div>
-                    <p className="text-[12.5px] font-semibold text-warning">
-                      Sample structure — not a read of your ad
-                    </p>
-                    <p className="mt-0.5 text-[11.5px] leading-relaxed text-white/55">
-                      {reason ?? 'The vision read was unavailable.'} Nothing was stored in the Vault.
-                    </p>
-                  </div>
-                </div>
-              )}
+              {!live && <SampleWarning reason={reason} />}
 
               {ads.length > 1 && (
                 <div>
@@ -611,6 +619,7 @@ export function AdIngest({ variant = 'studio' }: AdIngestProps) {
             </div>
           )}
         </div>
+        )}
       </div>
     </Panel>
   )
@@ -621,6 +630,87 @@ export function AdIngest({ variant = 'studio' }: AdIngestProps) {
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
     <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-white/40">{children}</p>
+  )
+}
+
+/** A read that didn't happen is never dressed up as one. */
+function SampleWarning({ reason }: { reason: string | null }) {
+  return (
+    <div className="flex gap-2.5 rounded-lg border border-warning/40 bg-warning/[0.07] p-3">
+      <TriangleAlert size={15} className="mt-0.5 shrink-0 text-warning" />
+      <div>
+        <p className="text-[12.5px] font-semibold text-warning">
+          Sample structure — not a read of your ad
+        </p>
+        <p className="mt-0.5 text-[11.5px] leading-relaxed text-white/55">
+          {reason ?? 'The vision read was unavailable.'} Nothing was stored in the Vault.
+        </p>
+      </div>
+    </div>
+  )
+}
+
+/**
+ * What the Vault banked. Not a teardown — a receipt: one line per ad, the
+ * colours that were measured, and confirmation that the design is now
+ * retrievable. The full read lives on the Creative page.
+ */
+function VaultReceipt({ ads, stored }: { ads: AnalyzedAd[]; stored: boolean }) {
+  return (
+    <div className="rounded-xl border border-success/25 bg-success/[0.04] p-4">
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <Check size={15} className="text-success" />
+        <p className="text-[13px] font-semibold text-white/85">
+          {ads.length === 1 ? '1 design ingested' : `${ads.length} designs ingested`}
+        </p>
+        {stored ? (
+          <Pill tone="success">Retrievable by every agent</Pill>
+        ) : (
+          <Pill tone="warning">Not banked — configure Supabase + Voyage</Pill>
+        )}
+      </div>
+
+      <ul className="space-y-2">
+        {ads.map((ad, i) => (
+          <li
+            key={`${ad.label}-${i}`}
+            className="flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-lg border border-white/10 bg-white/[0.02] px-3 py-2"
+          >
+            <span className="text-[13px] font-medium text-white/80">{ad.label}</span>
+            <span className="text-[11px] text-white/40">{ad.dna.patternType}</span>
+            {ad.visual && (
+              <>
+                <span className="text-[11px] text-white/40">
+                  {ad.visual.aspectRatio} · {ad.visual.elements.length} placements
+                </span>
+                <span className="flex gap-1">
+                  {ad.visual.palette.slice(0, 6).map((c) => (
+                    <svg key={c.hex} width="14" height="14" viewBox="0 0 14 14" aria-label={c.role}>
+                      <rect x="0" y="0" width="14" height="14" rx="3" fill={c.hex} />
+                      <rect
+                        x="0.5"
+                        y="0.5"
+                        width="13"
+                        height="13"
+                        rx="2.5"
+                        fill="none"
+                        stroke="rgba(255,255,255,0.2)"
+                      />
+                    </svg>
+                  ))}
+                </span>
+              </>
+            )}
+          </li>
+        ))}
+      </ul>
+
+      <p className="mt-3 text-[11.5px] leading-relaxed text-white/45">
+        Palette, layout, element placement and on-ad copy are stored with each design. SPARK and OPUS
+        pull from these when a brief calls for a proven layout — the Reactor builds on the
+        best-fitting one automatically when you haven&apos;t attached a reference.
+      </p>
+    </div>
   )
 }
 

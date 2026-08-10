@@ -597,7 +597,10 @@ export async function storeCreativeDNA(
     .join('\n')
 
   return ingestKnowledge({
-    system: 'creative',
+    // A read that SAW the ad is design knowledge and files under `design`; a
+    // text-only read of a script is creative knowledge and stays in `creative`.
+    // SPARK consults both, so nothing is lost either way.
+    system: visual ? 'design' : 'creative',
     category: dna.patternType,
     title,
     content,
