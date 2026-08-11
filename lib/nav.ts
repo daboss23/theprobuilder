@@ -4,12 +4,9 @@ import {
   Database,
   Radar,
   Sparkles,
-  Type,
-  Network,
+  BookOpen,
   Atom,
   LineChart,
-  Target,
-  BarChart3,
   Boxes,
   Copy,
 } from 'lucide-react'
@@ -23,15 +20,14 @@ export interface NavItem {
 
 export const navItems: NavItem[] = [
   { label: 'Dashboard', href: '/', icon: LayoutDashboard },
-  { label: 'Knowledge Vault', href: '/knowledge-vault', icon: Database, system: '01' },
   { label: 'Research Intelligence', href: '/research', icon: Radar, system: '02' },
   { label: 'Creative Intelligence', href: '/creative', icon: Sparkles, system: '03' },
-  { label: 'Copy Intelligence', href: '/copy', icon: Type, system: '04' },
-  { label: 'Strategic Memory', href: '/patterns', icon: Network, system: '05' },
-  { label: 'Campaign Reactor', href: '/campaign-reactor', icon: Atom, system: '06' },
+  { label: 'Playbook', href: '/playbook', icon: BookOpen, system: '04' },
+  { label: 'Campaign Reactor', href: '/campaign-reactor', icon: Atom, system: '05' },
   { label: 'Ad Library', href: '/ad-library', icon: Copy },
-  { label: 'Performance Intelligence', href: '/learnings', icon: LineChart, system: '07' },
-  { label: 'Agent Network', href: '/network', icon: Boxes, system: '08' },
-  { label: 'Recommendations', href: '/recommendations', icon: Target, system: '09' },
-  { label: 'Meta Intelligence', href: '/meta', icon: BarChart3, system: '10' },
+  { label: 'Performance Intelligence', href: '/performance', icon: LineChart, system: '06' },
+  { label: 'Agent Network', href: '/network', icon: Boxes, system: '07' },
+  // The Vault is the foundation everything is built on — it gets a dedicated
+  // launcher pinned to the foot of the sidebar, so it is deliberately LAST.
+  { label: 'Knowledge Vault', href: '/knowledge-vault', icon: Database, system: '01' },
 ]

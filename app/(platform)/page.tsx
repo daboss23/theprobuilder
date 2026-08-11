@@ -8,7 +8,6 @@ import {
   Clapperboard,
   Clock3,
   Crosshair,
-  Cpu,
   FolderOpen,
   FileText,
   Hexagon,
@@ -32,10 +31,8 @@ import {
   accentClass,
   type Accent,
 } from '@/components/reactor/ui'
-import { WinRateDonut } from '@/components/reactor/charts/WinRateDonut'
 import { recommendations } from '@/lib/reactor-data'
 import { getDashboardData, winningAngles } from '@/lib/dashboard-data'
-import { AGENT_NETWORK, type AgentId } from '@/lib/agents'
 import { cn } from '@/lib/utils'
 
 export const dynamic = 'force-dynamic'
@@ -67,17 +64,6 @@ const activityIcons: Record<string, LucideIcon> = {
   outcome: Trophy,
 }
 
-// Agent network identity — each codename maps to one neon channel + a glyph.
-// Icons are restricted to the set already proven in this bundle.
-const agentIdentity: Record<AgentId, { accent: Accent; icon: LucideIcon }> = {
-  opus: { accent: 'amber', icon: Cpu },
-  atlas: { accent: 'blue', icon: FolderOpen },
-  nova: { accent: 'violet', icon: Crosshair },
-  spark: { accent: 'cyan', icon: Sparkles },
-  echo: { accent: 'emerald', icon: FileText },
-  oracle: { accent: 'pink', icon: Hexagon },
-}
-
 const kpiStagger = [
   'stagger-1',
   'stagger-2',
@@ -101,18 +87,6 @@ function timeAgo(iso: string): string {
 
 export default async function ReactorDashboard() {
   const data = await getDashboardData()
-
-  // Fuel per agent = the live signal volume in the knowledge systems it reads.
-  // OPUS synthesises the whole network, so it carries the total.
-  const systemCount: Record<string, number> = {}
-  for (const s of data.systemLoad) systemCount[s.system] = s.count
-  const totalFuel = data.systemLoad.reduce((sum, s) => sum + s.count, 0)
-  const agentFuel = (id: AgentId): number => {
-    const agent = AGENT_NETWORK.find((a) => a.id === id)
-    if (!agent || id === 'opus') return totalFuel
-    return agent.systems.reduce((sum, sys) => sum + (systemCount[sys] ?? 0), 0)
-  }
-  const onlineCount = AGENT_NETWORK.filter((a) => a.id === 'opus' || agentFuel(a.id) > 0).length
 
   return (
     <>
@@ -155,33 +129,8 @@ export default async function ReactorDashboard() {
           })}
         </section>
 
-        {/* Hero analytics: concept win rate */}
-        <div className="grid grid-cols-1 gap-3">
-          <Panel>
-            <PanelHeader
-              icon={<Trophy size={16} />}
-              accent="emerald"
-              title="Concept Win Rate"
-              subtitle="Outcomes from generated campaigns"
-            />
-            <div className="p-5">
-              <WinRateDonut outcomes={data.outcomes} />
-              {data.outcomes.metrics.length > 0 && (
-                <div className="mt-4 grid grid-cols-3 gap-2 border-t border-border pt-4">
-                  {data.outcomes.metrics.map((m) => (
-                    <div key={m.name} className="text-center">
-                      <p className="font-display text-lg font-bold tabular text-glow">{m.value}</p>
-                      <p className="text-[10px] uppercase tracking-wider text-white/40">{m.name}</p>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </Panel>
-        </div>
-
-        {/* Intelligence panels: angles · agent network · activity */}
-        <div className="grid grid-cols-1 gap-3 xl:grid-cols-3">
+        {/* Intelligence panels: winning angles · recent activity */}
+        <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
           {/* Top winning angles */}
           <Panel>
             <PanelHeader
@@ -210,53 +159,7 @@ export default async function ReactorDashboard() {
                 )
               })}
             </div>
-            <PanelFooterLink href="/patterns">View All Angles</PanelFooterLink>
-          </Panel>
-
-          {/* Agent network — OPUS orchestrating the five intelligence layers */}
-          <Panel>
-            <PanelHeader
-              icon={<Cpu size={16} className="animate-pulse-glow" />}
-              accent="violet"
-              title="Agent Network"
-              subtitle="OPUS orchestrating the intelligence layers"
-              accessory={<Pill tone="success">{onlineCount}/6 online</Pill>}
-            />
-            <div className="agent-spine space-y-2 p-5">
-              {AGENT_NETWORK.map((agent) => {
-                const id = agentIdentity[agent.id]
-                const Icon = id.icon
-                const isLead = agent.id === 'opus'
-                const fuel = agentFuel(agent.id)
-                const active = isLead || fuel > 0
-                return (
-                  <div
-                    key={agent.id}
-                    className={cn('agent-node', isLead && 'agent-node--lead', accentClass[id.accent])}
-                  >
-                    <span className="agent-icon">
-                      <Icon size={16} />
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-baseline gap-2">
-                        <span className="font-display text-sm font-bold tracking-tight text-white">
-                          {agent.codename}
-                        </span>
-                        <span className="truncate text-[11px] text-white/40">{agent.role}</span>
-                      </div>
-                      <p className="truncate text-[11px] tabular text-white/35">
-                        {fuel.toLocaleString()} signals {isLead ? 'synthesised' : 'fueling'}
-                      </p>
-                    </div>
-                    <span className={cn('agent-status', !active && 'agent-status--idle')}>
-                      <span className="agent-status__dot" />
-                      {isLead ? 'Online' : active ? 'Active' : 'Standby'}
-                    </span>
-                  </div>
-                )
-              })}
-            </div>
-            <PanelFooterLink href="/network">View Agent Network</PanelFooterLink>
+            <PanelFooterLink href="/playbook">View the Playbook</PanelFooterLink>
           </Panel>
 
           {/* Recent activity — live pulse of the reactor */}
@@ -333,7 +236,7 @@ export default async function ReactorDashboard() {
                     </span>
                   ))}
                 </div>
-                <a href="/recommendations" className="brief-cta mt-auto">
+                <a href="/performance" className="brief-cta mt-auto">
                   Open Brief
                   <ArrowUpRight size={14} />
                 </a>
@@ -369,7 +272,6 @@ export default async function ReactorDashboard() {
           ))}
         </section>
       </div>
-
     </>
   )
 }
