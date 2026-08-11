@@ -8,13 +8,28 @@ import {
   metaPlacementBreakdown,
   metaAgentInsights,
   metaLearningStats,
+  metaResultMix,
+  metaPrimaryResultType,
+  metaRevenueConnected,
+  metaThresholds,
+  metaSpendTotal,
+  money,
   type MetaKpi,
   type MetaMetric,
   type MetaAd,
   type SpendWeek,
   type BreakdownRow,
   type AgentInsight,
+  type ResultSlice,
+  type CreativeTrend,
 } from '@/lib/meta-data'
+import {
+  RESULT_LABELS,
+  costLabel,
+  evaluateStatus,
+  type PrimaryResultType,
+  type StatusThresholds,
+} from '@/lib/creative-status'
 
 /**
  * Meta Marketing API client (direct Graph API).
@@ -102,6 +117,43 @@ export type InsightRow = {
   date_stop?: string
   actions?: { action_type: string; value: string }[]
   purchase_roas?: { action_type: string; value: string }[]
+  video_3_sec_watched_actions?: { action_type: string; value: string }[]
+  outbound_clicks_ctr?: { action_type: string; value: string }[]
+}
+
+/**
+ * Meta action types mapped onto the result vocabulary the platform speaks.
+ * Deliberately explicit: a booked call is not a lead, a registration is not an
+ * application, and nothing here rolls them into one "conversions" number.
+ */
+const RESULT_ACTION_TYPES: Record<PrimaryResultType, string[]> = {
+  lead: ['lead', 'offsite_conversion.fb_pixel_lead', 'onsite_conversion.lead_grouped'],
+  application: ['submit_application', 'offsite_conversion.fb_pixel_submit_application'],
+  booked_call: ['schedule', 'offsite_conversion.fb_pixel_schedule', 'onsite_conversion.schedule'],
+  registration: ['complete_registration', 'offsite_conversion.fb_pixel_complete_registration'],
+  purchase: ['purchase', 'offsite_conversion.fb_pixel_purchase'],
+  custom: ['offsite_conversion.fb_pixel_custom'],
+}
+
+/** Count one result type on an insight row. */
+export function resultCount(row: InsightRow, type: PrimaryResultType): number {
+  const wanted = new Set(RESULT_ACTION_TYPES[type])
+  return (row.actions ?? [])
+    .filter((a) => wanted.has(a.action_type))
+    .reduce((sum, a) => sum + num(a.value), 0)
+}
+
+/** The full result mix on a row — every type counted separately. */
+export function resultMix(row: InsightRow): ResultSlice[] {
+  return (Object.keys(RESULT_ACTION_TYPES) as PrimaryResultType[])
+    .map((type) => ({ type, count: Math.round(resultCount(row, type)) }))
+    .filter((s) => s.count > 0)
+    .sort((a, b) => b.count - a.count)
+}
+
+/** The dominant result type — what an account-wide cost figure is the cost OF. */
+export function dominantResult(mix: ResultSlice[]): PrimaryResultType {
+  return mix[0]?.type ?? 'lead'
 }
 
 const CONVERSION_ACTIONS = new Set([
@@ -127,10 +179,6 @@ export function roas(row: InsightRow): number {
   return num(row.purchase_roas?.[0]?.value)
 }
 
-function money(n: number): string {
-  return `$${Math.round(n).toLocaleString()}`
-}
-
 /* ------------------------------ live pulls -------------------------------- */
 
 export async function listAccountIds(): Promise<string[]> {
@@ -151,92 +199,238 @@ async function accountInsights(accountId: string): Promise<InsightRow | null> {
 async function topAds(accountId: string): Promise<InsightRow[]> {
   const json = (await graphGet(`act_${accountId}/insights`, {
     level: 'ad',
-    fields: 'ad_name,spend,ctr,actions,purchase_roas',
+    fields:
+      'ad_id,ad_name,spend,ctr,impressions,frequency,actions,purchase_roas,video_3_sec_watched_actions,outbound_clicks_ctr,date_start,date_stop',
     sort: 'spend_descending',
     limit: '6',
   })) as { data?: InsightRow[] }
   return json.data ?? []
 }
 
-async function monthlySpend(accountId: string): Promise<{ month: string; spend: number; roas: number }[]> {
+/**
+ * Creative thumbnails for the ads we are about to render. The insights edge
+ * carries no imagery, so the ad objects are pulled separately and joined by id.
+ * A miss is not an error — the table falls back to a format tile.
+ */
+async function adThumbnails(accountId: string): Promise<Record<string, string>> {
+  const json = (await graphGet(`act_${accountId}/ads`, {
+    fields: 'id,creative{thumbnail_url,object_story_spec}',
+    limit: '50',
+  })) as { data?: { id?: string; creative?: { thumbnail_url?: string } }[] }
+  const map: Record<string, string> = {}
+  for (const ad of json.data ?? []) {
+    if (ad.id && ad.creative?.thumbnail_url) map[ad.id] = ad.creative.thumbnail_url
+  }
+  return map
+}
+
+async function monthlySpend(
+  accountId: string,
+): Promise<{ month: string; spend: number; results: number; roas: number }[]> {
   const json = (await graphGet(`act_${accountId}/insights`, {
-    fields: 'spend,purchase_roas',
+    fields: 'spend,purchase_roas,actions',
     date_preset: 'last_year',
     time_increment: 'monthly',
   })) as { data?: InsightRow[] }
   return (json.data ?? []).map((r) => ({
     month: (r.date_start ?? '').slice(0, 7),
     spend: num(r.spend),
+    results: resultMix(r).reduce((s, x) => s + x.count, 0),
     roas: roas(r),
   }))
 }
 
 /* ------------------------------ live mapping ------------------------------ */
 
-const STATUS_BY_ROAS = (r: number): MetaAd['status'] =>
-  r >= 5 ? 'Scaling' : r >= 4 ? 'Winner' : r >= 3 ? 'Stable' : r > 0 ? 'Testing' : 'Fatiguing'
-
 const metricAccents = metaMetrics.map((m) => m.accent)
 const heroAccents = metaHeroKpis.map((k) => k.accent)
 
-function buildHeroKpis(totals: InsightRow, blendedRoas: number): MetaKpi[] {
-  const conv = conversions(totals)
+/** Live thresholds. Env-overridable so a brand can set its own evaluation gates. */
+function liveThresholds(costPerResult: number): StatusThresholds {
+  const target = Number(process.env.META_TARGET_COST_PER_RESULT)
+  return {
+    ...metaThresholds,
+    targetCostPerResult:
+      Number.isFinite(target) && target > 0
+        ? target
+        : costPerResult > 0
+          ? Math.round(costPerResult) // no configured target → the account's own average
+          : undefined,
+  }
+}
+
+function buildHeroKpis(
+  totals: InsightRow,
+  mix: ResultSlice[],
+  blendedRoas: number,
+  thresholds: StatusThresholds,
+): MetaKpi[] {
+  const spend = num(totals.spend)
+  const results = mix.reduce((s, r) => s + r.count, 0)
+  const type = dominantResult(mix)
+  const cpr = results > 0 ? spend / results : 0
+  const target = thresholds.targetCostPerResult
+  const mixed = mix.length > 1
+
+  const efficiency: MetaKpi =
+    blendedRoas > 0
+      ? {
+          label: 'ROAS',
+          value: `${blendedRoas.toFixed(1)}x`,
+          sub: 'revenue connected via purchase value',
+          delta: '',
+          trend: 'flat',
+          accent: heroAccents[3],
+          definition: 'Purchase ROAS reported by Meta. Shown because real revenue is connected.',
+        }
+      : {
+          label: 'Result Efficiency',
+          value:
+            target && cpr > 0
+              ? `${Math.abs(Math.round(((cpr - target) / target) * 100))}% ${cpr <= target ? 'under' : 'over'} target`
+              : 'Insufficient data',
+          sub: target ? `$${cpr.toFixed(2)} vs $${target} ${costLabel(type)} target` : 'no target set',
+          delta: '',
+          trend: 'flat',
+          accent: heroAccents[3],
+          definition:
+            'Cost per result against target. ROAS is hidden because no revenue or defensible conversion value is connected to this account.',
+        }
+
   return [
-    { label: 'Ad Spend', value: money(num(totals.spend)), sub: 'all-time', delta: '', trend: 'flat', accent: heroAccents[0] },
-    { label: 'Blended ROAS', value: blendedRoas > 0 ? `${blendedRoas.toFixed(1)}x` : '—', sub: 'return on ad spend', delta: '', trend: 'flat', accent: heroAccents[1] },
-    { label: 'Conversions', value: conv > 0 ? Math.round(conv).toLocaleString() : '—', sub: 'leads + purchases', delta: '', trend: 'flat', accent: heroAccents[2] },
-    { label: 'Avg CTR', value: `${num(totals.ctr).toFixed(2)}%`, sub: 'all active campaigns', delta: '', trend: 'flat', accent: heroAccents[3] },
+    {
+      label: 'Ad Spend',
+      value: money(spend),
+      sub: 'all-time',
+      delta: '',
+      trend: 'flat',
+      accent: heroAccents[0],
+      definition: 'Total amount spent across the connected ad accounts.',
+    },
+    {
+      label: 'Primary Results',
+      value: results > 0 ? results.toLocaleString() : 'Insufficient data',
+      sub: mixed ? 'mixed result types — see the split' : RESULT_LABELS[type].many,
+      delta: '',
+      trend: 'flat',
+      accent: heroAccents[1],
+      definition:
+        'The optimisation result each campaign was buying, counted per type. Leads, registrations, applications, booked calls and purchases are never blended.',
+      breakdown: mix,
+    },
+    {
+      label: 'Cost per Result',
+      value: cpr > 0 ? `$${cpr.toFixed(2)}` : 'Insufficient data',
+      sub: `Current result: ${RESULT_LABELS[type].one}`,
+      delta: '',
+      trend: 'flat',
+      accent: heroAccents[2],
+      definition: mixed
+        ? 'Spend over the dominant result type. The account mixes result types — use the split rather than reading this as one blended cost.'
+        : `Spend divided by ${RESULT_LABELS[type].many}.`,
+    },
+    efficiency,
   ]
 }
 
-function buildMetrics(totals: InsightRow): MetaMetric[] {
-  const conv = conversions(totals)
-  const cpa = conv > 0 ? num(totals.spend) / conv : 0
-  const rows: { label: string; value: string; metric: string; pct: number }[] = [
-    { label: 'CPC', value: `$${num(totals.cpc).toFixed(2)}`, metric: 'cost per click', pct: 70 },
-    { label: 'CPM', value: `$${num(totals.cpm).toFixed(2)}`, metric: 'cost per 1k impressions', pct: 60 },
-    { label: 'CPA', value: cpa > 0 ? `$${cpa.toFixed(2)}` : '—', metric: 'cost per acquisition', pct: 65 },
-    { label: 'Reach', value: Math.round(num(totals.reach)).toLocaleString(), metric: 'unique people', pct: 80 },
-    { label: 'Frequency', value: num(totals.frequency).toFixed(1), metric: 'avg impressions / person', pct: 45 },
-    { label: 'Impressions', value: Math.round(num(totals.impressions)).toLocaleString(), metric: 'total served', pct: 62 },
-    { label: 'Clicks', value: Math.round(num(totals.clicks)).toLocaleString(), metric: 'link + post clicks', pct: 54 },
-    { label: 'CTR', value: `${num(totals.ctr).toFixed(2)}%`, metric: 'click-through rate', pct: 71 },
+function buildMetrics(totals: InsightRow, mix: ResultSlice[]): MetaMetric[] {
+  const results = mix.reduce((s, r) => s + r.count, 0)
+  const cpr = results > 0 ? num(totals.spend) / results : 0
+  const type = dominantResult(mix)
+  const rows: { label: string; value: string; metric: string; pct: number; definition: string }[] = [
+    { label: 'CPC', value: `$${num(totals.cpc).toFixed(2)}`, metric: 'cost per link click', pct: 70, definition: 'Spend divided by link clicks.' },
+    { label: 'CPM', value: `$${num(totals.cpm).toFixed(2)}`, metric: 'cost per 1k impressions', pct: 60, definition: 'Delivery cost, not a performance verdict.' },
+    {
+      label: costLabel(type),
+      value: cpr > 0 ? `$${cpr.toFixed(2)}` : 'N/A',
+      metric: `cost per ${RESULT_LABELS[type].one.toLowerCase()}`,
+      pct: 65,
+      definition: `Spend divided by ${RESULT_LABELS[type].many} — the result this account optimises for.`,
+    },
+    { label: 'Reach', value: Math.round(num(totals.reach)).toLocaleString(), metric: 'unique people', pct: 80, definition: 'Unique people who saw an ad at least once.' },
+    { label: 'Frequency', value: num(totals.frequency).toFixed(1), metric: 'avg impressions / person', pct: 45, definition: 'Rising frequency alongside falling CTR is the primary fatigue signal.' },
+    { label: 'Impressions', value: Math.round(num(totals.impressions)).toLocaleString(), metric: 'total served', pct: 62, definition: 'Times an ad was rendered, including repeats to the same person.' },
+    { label: 'Clicks', value: Math.round(num(totals.clicks)).toLocaleString(), metric: 'link + post clicks', pct: 54, definition: 'All clicks, including engagement clicks that never leave Meta.' },
+    { label: 'Outbound CTR', value: `${num(totals.ctr).toFixed(2)}%`, metric: 'clicks over impressions', pct: 71, definition: 'Click-through rate. Never proof of a commercial winner on its own.' },
   ]
   return rows.map((r, i) => ({ ...r, accent: metricAccents[i] ?? 'blue' }))
 }
 
-/**
- * Hook (thumb-stop) rate, held in the 23–40% band. The Graph insight rows we
- * pull don't carry 3-sec-view data, so derive a stable per-ad value from the
- * ad name — the same ad always reads the same rate across renders (no
- * flicker), and distinct ads fluctuate across the band.
- */
-function hookRateFor(seed: string): string {
-  let h = 0
-  for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0
-  return `${23 + (h % 18)}%` // 23–40 inclusive
+/** Hook rate from real 3-sec views. `null` when the ad carries no video data. */
+function hookRateFrom(row: InsightRow): number | null {
+  const views = num(row.video_3_sec_watched_actions?.[0]?.value)
+  const impressions = num(row.impressions)
+  if (views <= 0 || impressions <= 0) return null
+  return Number(((views / impressions) * 100).toFixed(1))
 }
 
-function buildTopAds(rows: InsightRow[]): MetaAd[] {
+function daysBetween(start?: string, stop?: string): number {
+  if (!start) return 0
+  const a = new Date(start).getTime()
+  const b = stop ? new Date(stop).getTime() : Date.now()
+  return Math.max(1, Math.round((b - a) / 86_400_000))
+}
+
+function buildTopAds(
+  rows: InsightRow[],
+  thumbs: Record<string, string>,
+  thresholds: StatusThresholds,
+): MetaAd[] {
   return rows.map((r) => {
-    const r2 = roas(r)
+    const mix = resultMix(r)
+    const type = dominantResult(mix)
+    const results = mix.reduce((s, x) => s + x.count, 0)
+    const spend = num(r.spend)
+    const cpr = results > 0 ? spend / results : 0
+    const frequency = num(r.frequency)
+    const purchaseRoas = roas(r)
+    const daysLive = daysBetween(r.date_start, r.date_stop)
+    // Without a stored prior period, movement is unknown — the evaluator is
+    // handed zeros rather than an invented trend, so it can only conclude
+    // fatigue from evidence we actually have.
+    const verdict = evaluateStatus(
+      {
+        spend,
+        results,
+        daysLive,
+        costPerResult: cpr,
+        frequency,
+        costTrendPct: 0,
+        ctrTrendPct: 0,
+      },
+      thresholds,
+    )
     return {
+      id: r.ad_id || r.ad_name || 'ad',
       name: r.ad_name || 'Untitled ad',
       format: 'Meta Ad',
-      spend: money(num(r.spend)),
-      roas: Number(r2.toFixed(1)),
-      hookRate: hookRateFor(r.ad_name || 'Untitled ad'),
-      ctr: `${num(r.ctr).toFixed(2)}%`,
-      cpa: '—',
-      status: STATUS_BY_ROAS(r2),
+      thumbnailUrl: r.ad_id ? thumbs[r.ad_id] : undefined,
+      spend,
+      primaryResults: results,
+      resultType: type,
+      costPerResult: Number(cpr.toFixed(2)),
+      hookRate: hookRateFrom(r),
+      ctr: Number(num(r.ctr).toFixed(2)),
+      frequency: Number(frequency.toFixed(1)),
+      trend: 'Stable' as CreativeTrend,
+      roas: purchaseRoas > 0 ? Number(purchaseRoas.toFixed(1)) : null,
+      status: verdict.status,
+      statusReason: verdict.reason,
+      daysLive,
     }
   })
 }
 
-function buildSpendTrend(months: { month: string; spend: number; roas: number }[]): SpendWeek[] {
-  return months
-    .slice(-8)
-    .map((m) => ({ week: m.month.slice(5) || m.month, spend: Math.round(m.spend), roas: Number(m.roas.toFixed(1)) }))
+function buildSpendTrend(
+  months: { month: string; spend: number; results: number; roas: number }[],
+  revenueConnected: boolean,
+): SpendWeek[] {
+  return months.slice(-8).map((m) => ({
+    week: m.month.slice(5) || m.month,
+    spend: Math.round(m.spend),
+    costPerResult: m.results > 0 ? Number((m.spend / m.results).toFixed(2)) : 0,
+    roas: revenueConnected ? Number(m.roas.toFixed(1)) : null,
+  }))
 }
 
 /* ------------------------------ public API -------------------------------- */
@@ -251,6 +445,16 @@ export interface MetaDashboard {
   placementBreakdown: BreakdownRow[]
   agentInsights: AgentInsight[]
   learningStats: typeof metaLearningStats
+  /** Every result type counted separately — never one blended "conversions". */
+  resultMix: ResultSlice[]
+  /** The dominant result type an account-wide cost figure refers to. */
+  primaryResultType: PrimaryResultType
+  /** ROAS is only shown when this is true. */
+  revenueConnected: boolean
+  /** The evaluation gates every status on this account was assigned under. */
+  thresholds: StatusThresholds
+  /** Total spend in the window, for evidence lines. */
+  spendTotal: number
 }
 
 const DEMO_DASHBOARD: MetaDashboard = {
@@ -263,6 +467,11 @@ const DEMO_DASHBOARD: MetaDashboard = {
   placementBreakdown: metaPlacementBreakdown,
   agentInsights: metaAgentInsights,
   learningStats: metaLearningStats,
+  resultMix: metaResultMix,
+  primaryResultType: metaPrimaryResultType,
+  revenueConnected: metaRevenueConnected,
+  thresholds: metaThresholds,
+  spendTotal: metaSpendTotal,
 }
 
 /**
@@ -309,26 +518,59 @@ export async function resolveMetaDashboard(): Promise<MetaDashboard> {
 
     const allMonths = (await Promise.all(accountIds.map((id) => monthlySpend(id).catch(() => []))))
       .flat()
-      .reduce<Record<string, { spend: number; roas: number; n: number }>>((acc, m) => {
-        if (!m.month) return acc
-        const cur = acc[m.month] ?? { spend: 0, roas: 0, n: 0 }
-        acc[m.month] = { spend: cur.spend + m.spend, roas: cur.roas + m.roas, n: cur.n + 1 }
-        return acc
-      }, {})
+      .reduce<Record<string, { spend: number; results: number; roas: number; n: number }>>(
+        (acc, m) => {
+          if (!m.month) return acc
+          const cur = acc[m.month] ?? { spend: 0, results: 0, roas: 0, n: 0 }
+          acc[m.month] = {
+            spend: cur.spend + m.spend,
+            results: cur.results + m.results,
+            roas: cur.roas + m.roas,
+            n: cur.n + 1,
+          }
+          return acc
+        },
+        {},
+      )
     const months = Object.entries(allMonths)
       .sort(([a], [b]) => a.localeCompare(b))
-      .map(([month, v]) => ({ month, spend: v.spend, roas: v.n ? v.roas / v.n : 0 }))
+      .map(([month, v]) => ({
+        month,
+        spend: v.spend,
+        results: v.results,
+        roas: v.n ? v.roas / v.n : 0,
+      }))
+
+    // Thumbnails are best-effort: a failed or empty lookup degrades to format
+    // tiles rather than taking the dashboard down.
+    const thumbs = Object.assign(
+      {},
+      ...(await Promise.all(accountIds.map((id) => adThumbnails(id).catch(() => ({}))))),
+    ) as Record<string, string>
+
+    const mix = resultMix(totals)
+    const totalResults = mix.reduce((s, r) => s + r.count, 0)
+    const thresholds = liveThresholds(totalResults > 0 ? totalSpend / totalResults : 0)
+    // ROAS is only real when Meta reports a purchase value. A lead account with
+    // no revenue feedback shows result efficiency instead — never an invented
+    // return built from assigned lead values.
+    const revenueConnected = blendedRoas > 0
 
     return {
       source: 'live',
-      heroKpis: buildHeroKpis(totals, blendedRoas),
-      metrics: buildMetrics(totals),
-      topAds: allAds.length ? buildTopAds(allAds) : metaTopAds,
-      spendTrend: months.length ? buildSpendTrend(months) : metaSpendTrend,
+      heroKpis: buildHeroKpis(totals, mix, revenueConnected ? blendedRoas : 0, thresholds),
+      metrics: buildMetrics(totals, mix),
+      topAds: allAds.length ? buildTopAds(allAds, thumbs, thresholds) : metaTopAds,
+      spendTrend: months.length ? buildSpendTrend(months, revenueConnected) : metaSpendTrend,
       audienceBreakdown: metaAudienceBreakdown,
       placementBreakdown: metaPlacementBreakdown,
       agentInsights: metaAgentInsights,
       learningStats: metaLearningStats,
+      resultMix: mix.length ? mix : metaResultMix,
+      primaryResultType: dominantResult(mix),
+      revenueConnected,
+      thresholds,
+      spendTotal: totalSpend,
     }
   } catch {
     return DEMO_DASHBOARD

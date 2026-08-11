@@ -1,4 +1,13 @@
 import type { Accent } from '@/components/reactor/ui'
+import {
+  DEFAULT_THRESHOLDS,
+  RESULT_LABELS,
+  costLabel,
+  evaluateStatus,
+  type CreativeStatus,
+  type PrimaryResultType,
+  type StatusThresholds,
+} from '@/lib/creative-status'
 
 /**
  * Demo Meta Ads intelligence. Mirrors the shape a live Pipeboard / Meta Ads
@@ -6,6 +15,12 @@ import type { Accent } from '@/components/reactor/ui'
  * agent) can read from one contract. When PIPEBOARD_API_TOKEN is configured the
  * page can swap these for live figures; until then this curated set keeps the
  * surface fully populated.
+ *
+ * Semantics matter more than the numbers here. A "conversion" is never a
+ * blended total — every result carries its TYPE (lead / registration /
+ * application / booked call / purchase), every cost names the result it is the
+ * cost OF, and ROAS only exists when real revenue is connected. Anything
+ * seeded for demonstration is labelled DEMO DATA in the UI.
  */
 
 export interface MetaKpi {
@@ -15,14 +30,94 @@ export interface MetaKpi {
   delta: string
   trend: 'up' | 'down' | 'flat'
   accent: Accent
+  /** What this number means and how it is calculated — surfaced as a tooltip. */
+  definition?: string
+  /** Result-type split for a mixed, account-wide total. */
+  breakdown?: ResultSlice[]
 }
+
+/** One result type inside an account-wide mixed total. */
+export interface ResultSlice {
+  type: PrimaryResultType
+  count: number
+}
+
+/** The account-wide result mix. Never collapsed into one "conversions" figure. */
+export const metaResultMix: ResultSlice[] = [
+  { type: 'lead', count: 920 },
+  { type: 'registration', count: 214 },
+  { type: 'application', count: 102 },
+  { type: 'booked_call', count: 48 },
+]
+
+export const metaResultTotal = metaResultMix.reduce((s, r) => s + r.count, 0)
+
+/**
+ * The account's dominant result type — what an account-wide cost figure is the
+ * cost of, and the label shown beneath it.
+ */
+export const metaPrimaryResultType: PrimaryResultType = 'lead'
+
+/**
+ * Whether real revenue (or a defensible conversion value) is connected. Lead
+ * campaigns with no revenue feedback must NOT display ROAS — the dashboard
+ * shows result efficiency instead.
+ */
+export const metaRevenueConnected = false
+
+/** Campaign-level evaluation gates. Configurable per brand/campaign. */
+export const metaThresholds: StatusThresholds = {
+  ...DEFAULT_THRESHOLDS,
+  minSpend: 1500,
+  minDays: 5,
+  minResults: 20,
+  targetCostPerResult: 45,
+}
+
+export const metaSpendTotal = 148_320
 
 // Hero performance — the numbers a media buyer scans first.
 export const metaHeroKpis: MetaKpi[] = [
-  { label: 'Ad Spend', value: '$148,320', sub: 'last 30 days', delta: '+12%', trend: 'up', accent: 'blue' },
-  { label: 'Blended ROAS', value: '4.7x', sub: 'return on ad spend', delta: '+0.4x', trend: 'up', accent: 'emerald' },
-  { label: 'Conversions', value: '1,284', sub: 'leads + booked calls', delta: '+9%', trend: 'up', accent: 'violet' },
-  { label: 'Avg CTR', value: '2.34%', sub: 'all active campaigns', delta: '+0.3pp', trend: 'up', accent: 'cyan' },
+  {
+    label: 'Ad Spend',
+    value: '$148,320',
+    sub: 'last 30 days',
+    delta: '+12%',
+    trend: 'up',
+    accent: 'blue',
+    definition: 'Total amount spent across active campaigns in the selected date range.',
+  },
+  {
+    label: 'Primary Results',
+    value: metaResultTotal.toLocaleString(),
+    sub: 'mixed result types — see the split',
+    delta: '+9%',
+    trend: 'up',
+    accent: 'violet',
+    definition:
+      'The optimisation result each campaign was actually buying. Types are counted separately and never treated as equivalent.',
+    breakdown: metaResultMix,
+  },
+  {
+    label: 'Cost per Result',
+    value: '$42.10',
+    sub: `Current result: ${RESULT_LABELS[metaPrimaryResultType].one}`,
+    delta: '−6%',
+    trend: 'up',
+    accent: 'emerald',
+    definition:
+      'Spend divided by primary results for the dominant result type. Mixed date ranges are broken out rather than blended.',
+  },
+  {
+    label: 'Result Efficiency',
+    value: '6% under target',
+    sub: `$42.10 vs $45 ${costLabel(metaPrimaryResultType)} target`,
+    delta: '+6pp',
+    trend: 'up',
+    accent: 'cyan',
+    definition:
+      'Cost per result against the campaign target. Shown in place of ROAS because no revenue or defensible conversion value is connected to these lead campaigns.',
+  },
 ]
 
 export interface MetaMetric {
@@ -31,56 +126,203 @@ export interface MetaMetric {
   metric: string
   pct: number
   accent: Accent
+  definition?: string
 }
 
 // Secondary efficiency + creative-quality read-outs (pct drives the gauge).
 export const metaMetrics: MetaMetric[] = [
-  { label: 'CPC', value: '$0.82', metric: 'cost per click', pct: 74, accent: 'blue' },
-  { label: 'CPM', value: '$19.40', metric: 'cost per 1k impressions', pct: 61, accent: 'cyan' },
-  { label: 'CPA', value: '$42.10', metric: 'cost per acquisition', pct: 68, accent: 'violet' },
-  { label: 'Reach', value: '612K', metric: 'unique people', pct: 82, accent: 'emerald' },
-  { label: 'Frequency', value: '1.8', metric: 'avg impressions / person', pct: 45, accent: 'pink' },
-  { label: 'Hook Rate', value: '31%', metric: '3s video views', pct: 62, accent: 'amber' },
-  { label: 'Hold Rate', value: '18%', metric: 'thru-play to 15s', pct: 54, accent: 'cyan' },
-  { label: 'Landing CVR', value: '9.2%', metric: 'page → lead', pct: 71, accent: 'emerald' },
+  { label: 'CPC', value: '$0.82', metric: 'cost per link click', pct: 74, accent: 'blue', definition: 'Spend divided by link clicks.' },
+  { label: 'CPM', value: '$19.40', metric: 'cost per 1k impressions', pct: 61, accent: 'cyan', definition: 'Delivery cost, not a performance verdict.' },
+  { label: 'Outbound CTR', value: '2.34%', metric: 'clicks leaving Meta', pct: 68, accent: 'violet', definition: 'Outbound clicks over impressions — the click that actually reaches the landing page.' },
+  { label: 'Reach', value: '612K', metric: 'unique people', pct: 82, accent: 'emerald', definition: 'Unique people who saw an ad at least once.' },
+  { label: 'Frequency', value: '1.8', metric: 'avg impressions / person', pct: 45, accent: 'pink', definition: 'Rising frequency alongside falling CTR is the primary fatigue signal.' },
+  { label: 'Hook Rate', value: '31%', metric: '3s views / impressions', pct: 62, accent: 'amber', definition: 'Video only. Not applicable to static creatives, and never proof of a commercial winner on its own.' },
+  { label: 'Hold Rate', value: '18%', metric: 'thru-play to 15s', pct: 54, accent: 'cyan', definition: 'Video only. Attention retained past the hook.' },
+  { label: 'Landing CVR', value: '9.2%', metric: 'page → result', pct: 71, accent: 'emerald', definition: 'Share of landing page visits that produced the campaign primary result.' },
 ]
 
+export type CreativeTrend = 'Improving' | 'Stable' | 'Declining'
+
 export interface MetaAd {
+  id: string
   name: string
   format: string
-  spend: string
-  roas: number
-  /** Thumb-stop / hook rate — 3-sec views over impressions, e.g. "34%". */
-  hookRate: string
-  ctr: string
-  cpa: string
-  status: 'Scaling' | 'Winner' | 'Stable' | 'Testing' | 'Fatiguing'
+  /** Creative thumbnail / video still. Absent → the UI renders a format tile. */
+  thumbnailUrl?: string
+  spend: number
+  /** How many of the campaign's primary result this creative produced. */
+  primaryResults: number
+  resultType: PrimaryResultType
+  costPerResult: number
+  /** Thumb-stop rate. `null` = Not applicable (e.g. a static ad). */
+  hookRate: number | null
+  /** Outbound CTR, percent. */
+  ctr: number
+  frequency: number
+  trend: CreativeTrend
+  /** Only present when real revenue is connected to the campaign. */
+  roas: number | null
+  status: CreativeStatus
+  /** Evidence sentence behind the status — required, never a bare colour. */
+  statusReason: string
+  daysLive: number
+}
+
+/** Money and rate formatters used across both dashboards. */
+export function money(n: number): string {
+  return `$${Math.round(n).toLocaleString()}`
+}
+
+export function compactMoney(n: number): string {
+  return n >= 1000 ? `$${(n / 1000).toFixed(1)}k` : `$${Math.round(n)}`
+}
+
+export function pctLabel(n: number | null): string {
+  return n === null ? 'N/A' : `${n.toFixed(1)}%`
+}
+
+const demoAds: Omit<MetaAd, 'status' | 'statusReason'>[] = [
+  {
+    id: 'ad_profit_leak',
+    name: 'The Profit Leak — Founder Cut',
+    format: 'Founder Video',
+    spend: 24100,
+    primaryResults: 861,
+    resultType: 'lead',
+    costPerResult: 28,
+    hookRate: 38,
+    ctr: 3.1,
+    frequency: 2.2,
+    trend: 'Improving',
+    roas: null,
+    daysLive: 26,
+  },
+  {
+    id: 'ad_45_hour',
+    name: '45-Hour Owner — UGC',
+    format: 'UGC Video',
+    spend: 18640,
+    primaryResults: 565,
+    resultType: 'lead',
+    costPerResult: 33,
+    hookRate: 35,
+    ctr: 2.8,
+    frequency: 2.0,
+    trend: 'Improving',
+    roas: null,
+    daysLive: 21,
+  },
+  {
+    id: 'ad_member_win_jason',
+    name: 'Member Win — Jason',
+    format: 'Testimonial',
+    spend: 8210,
+    primaryResults: 191,
+    resultType: 'booked_call',
+    costPerResult: 43,
+    hookRate: 33,
+    ctr: 2.6,
+    frequency: 1.7,
+    trend: 'Stable',
+    roas: null,
+    daysLive: 14,
+  },
+  {
+    id: 'ad_margin_math',
+    name: 'Margin Math',
+    format: 'Static',
+    spend: 12300,
+    primaryResults: 267,
+    resultType: 'lead',
+    costPerResult: 46,
+    hookRate: null,
+    ctr: 2.2,
+    frequency: 2.4,
+    trend: 'Stable',
+    roas: null,
+    daysLive: 19,
+  },
+  {
+    id: 'ad_stop_scaling',
+    name: 'Stop Scaling — VSL Opener',
+    format: 'VSL',
+    spend: 980,
+    primaryResults: 17,
+    resultType: 'lead',
+    costPerResult: 58,
+    hookRate: 26,
+    ctr: 1.9,
+    frequency: 1.2,
+    trend: 'Stable',
+    roas: null,
+    daysLive: 3,
+  },
+  {
+    id: 'ad_systems_before_scale',
+    name: 'Systems Before Scale',
+    format: 'Carousel',
+    spend: 6450,
+    primaryResults: 91,
+    resultType: 'lead',
+    costPerResult: 71,
+    hookRate: null,
+    ctr: 1.6,
+    frequency: 3.4,
+    trend: 'Declining',
+    roas: null,
+    daysLive: 31,
+  },
+]
+
+/**
+ * Status is DERIVED, never hand-written: the same evaluator both dashboards use
+ * runs over each creative's signals, so a demo row and a live row are graded by
+ * exactly the same rules and thresholds.
+ */
+function grade(ad: Omit<MetaAd, 'status' | 'statusReason'>, opts?: { scaling?: boolean; costTrendPct?: number; ctrTrendPct?: number }): MetaAd {
+  const verdict = evaluateStatus(
+    {
+      spend: ad.spend,
+      results: ad.primaryResults,
+      daysLive: ad.daysLive,
+      costPerResult: ad.costPerResult,
+      frequency: ad.frequency,
+      costTrendPct: opts?.costTrendPct ?? (ad.trend === 'Declining' ? 18 : ad.trend === 'Improving' ? -9 : 2),
+      ctrTrendPct: opts?.ctrTrendPct ?? (ad.trend === 'Declining' ? -21 : ad.trend === 'Improving' ? 12 : 1),
+      scaling: opts?.scaling,
+    },
+    metaThresholds,
+  )
+  return { ...ad, status: verdict.status, statusReason: verdict.reason }
 }
 
 export const metaTopAds: MetaAd[] = [
-  { name: 'The Profit Leak — Founder Cut', format: 'Founder Video', spend: '$24,100', roas: 6.2, hookRate: '38%', ctr: '3.1%', cpa: '$28', status: 'Scaling' },
-  { name: '45-Hour Owner — UGC', format: 'UGC Video', spend: '$18,640', roas: 5.4, hookRate: '35%', ctr: '2.8%', cpa: '$33', status: 'Winner' },
-  { name: 'Member Win — Jason', format: 'Testimonial', spend: '$8,210', roas: 4.8, hookRate: '33%', ctr: '2.6%', cpa: '$37', status: 'Winner' },
-  { name: 'Margin Math', format: 'Static', spend: '$12,300', roas: 4.1, hookRate: '29%', ctr: '2.2%', cpa: '$46', status: 'Stable' },
-  { name: 'Stop Scaling — VSL Opener', format: 'VSL', spend: '$9,820', roas: 3.6, hookRate: '26%', ctr: '1.9%', cpa: '$58', status: 'Testing' },
-  { name: 'Systems Before Scale', format: 'Carousel', spend: '$6,450', roas: 2.9, hookRate: '24%', ctr: '1.6%', cpa: '$71', status: 'Fatiguing' },
+  grade(demoAds[0], { scaling: true }),
+  grade(demoAds[1]),
+  grade(demoAds[2]),
+  grade(demoAds[3]),
+  grade(demoAds[4]),
+  grade(demoAds[5]),
 ]
 
 export interface SpendWeek {
   week: string
   spend: number
-  roas: number
+  /** Cost per result for the week — the efficiency line every account has. */
+  costPerResult: number
+  /** Only when revenue is connected. */
+  roas: number | null
 }
 
 export const metaSpendTrend: SpendWeek[] = [
-  { week: 'W1', spend: 28200, roas: 3.9 },
-  { week: 'W2', spend: 31100, roas: 4.1 },
-  { week: 'W3', spend: 29800, roas: 4.0 },
-  { week: 'W4', spend: 34500, roas: 4.4 },
-  { week: 'W5', spend: 33200, roas: 4.6 },
-  { week: 'W6', spend: 38900, roas: 4.5 },
-  { week: 'W7', spend: 41200, roas: 4.8 },
-  { week: 'W8', spend: 44300, roas: 5.0 },
+  { week: 'W1', spend: 28200, costPerResult: 51.2, roas: null },
+  { week: 'W2', spend: 31100, costPerResult: 49.4, roas: null },
+  { week: 'W3', spend: 29800, costPerResult: 48.1, roas: null },
+  { week: 'W4', spend: 34500, costPerResult: 46.0, roas: null },
+  { week: 'W5', spend: 33200, costPerResult: 44.7, roas: null },
+  { week: 'W6', spend: 38900, costPerResult: 44.1, roas: null },
+  { week: 'W7', spend: 41200, costPerResult: 43.0, roas: null },
+  { week: 'W8', spend: 44300, costPerResult: 42.1, roas: null },
 ]
 
 export interface BreakdownRow {
@@ -90,12 +332,13 @@ export interface BreakdownRow {
   accent: Accent
 }
 
-// Where spend lands and how each slice performs.
+// Where spend lands and how each slice performs. Cold and retargeting are shown
+// side by side but never compared as equivalent cohorts.
 export const metaAudienceBreakdown: BreakdownRow[] = [
-  { label: 'Retargeting', share: 22, metric: '7.1x ROAS', accent: 'emerald' },
-  { label: 'Lookalike 1–3%', share: 31, metric: '4.6x ROAS', accent: 'blue' },
-  { label: 'Cold Interest', share: 34, metric: '3.2x ROAS', accent: 'cyan' },
-  { label: 'Re-engagement', share: 13, metric: '5.3x ROAS', accent: 'violet' },
+  { label: 'Retargeting', share: 22, metric: '$26 CPL', accent: 'emerald' },
+  { label: 'Lookalike 1–3%', share: 31, metric: '$39 CPL', accent: 'blue' },
+  { label: 'Cold Interest', share: 34, metric: '$48 CPL', accent: 'cyan' },
+  { label: 'Re-engagement', share: 13, metric: '$31 CPL', accent: 'violet' },
 ]
 
 export const metaPlacementBreakdown: BreakdownRow[] = [
@@ -114,24 +357,24 @@ export interface AgentInsight {
 // What the reactor agent extracts from this data to brief the next campaign.
 export const metaAgentInsights: AgentInsight[] = [
   {
-    insight: 'Founder-led video drives 38% lower CPA than static across cold audiences.',
+    insight: 'Founder-led video is associated with a 38% lower cost per lead than static across cold audiences.',
     action: 'Prioritise Founder Concepts for cold prospecting in the next run.',
-    lift: '−38% CPA',
+    lift: '−38% CPL',
   },
   {
-    insight: '8–12 word hooks hold attention 22% longer than 13+ word hooks.',
+    insight: '8–12 word hooks outperformed 13+ word hooks on hold rate in this sample.',
     action: 'Constrain hook length when drafting Copy + VSL openers.',
     lift: '+22% hold',
   },
   {
-    insight: 'Retargeting ROAS (7.1x) is 2.2x cold (3.2x), yet only gets 22% of spend.',
+    insight: 'Retargeting produces leads at $26 vs $48 cold, yet takes only 22% of spend.',
     action: 'Shift 15% of budget to retargeting creative; deepen objection-handling angles.',
-    lift: '+0.4x ROAS',
+    lift: '−46% CPL',
   },
   {
-    insight: 'Reels outperform Feed for UGC by 1.6x ROAS.',
+    insight: 'Reels outperform Feed for UGC on cost per lead — a promising pattern, not yet confirmed.',
     action: 'Default UGC + testimonial concepts to 9:16 for Reels placement.',
-    lift: '+1.6x ROAS',
+    lift: '−19% CPL',
   },
 ]
 
