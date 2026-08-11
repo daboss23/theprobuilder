@@ -47,6 +47,8 @@ import {
   type CloneReference,
 } from '@/lib/taxonomy'
 import { bestVisualReferenceFor } from '@/lib/visual-library'
+import { getConnectedWebsite } from '@/lib/website-intelligence'
+import { websiteBrandBrief } from '@/lib/brand-context'
 
 // ORACLE strategic memory injected into OPUS at fire time — past winning
 // configurations matching the brief, so generation reuses what worked.
@@ -1420,6 +1422,30 @@ export async function POST(request: NextRequest) {
         const tools = buildTools(useImage, useVideo, Boolean(mcpServer))
         const inputBlocks = buildInputBlocks(body.reactorInputs)
 
+        // Brand Intelligence → the ads. When On Brand is enabled we pull the
+        // REAL brand profile ATLAS extracted from the connected website (voice,
+        // offer, audience language, proof, colours, logo) and inject it as an
+        // authoritative on-brand block. Falls back silently to the static brand
+        // settings already in inputBlocks when no site is connected.
+        let brandBlock = ''
+        if (body.reactorInputs?.onBrandEnabled) {
+          try {
+            const site = await getConnectedWebsite()
+            if (site) {
+              const brief = websiteBrandBrief(site)
+              if (brief) {
+                brandBlock = BLOCK_SEP + brief
+                sse(controller, {
+                  type: 'step',
+                  text: `Brand Intelligence applied — pulled voice, offer, audience & colours from ${site.domain} into every concept.`,
+                })
+              }
+            }
+          } catch {
+            /* brand enrichment is best-effort — never fail a run over it */
+          }
+        }
+
         const ri = body.reactorInputs
 
         // The run is live from the first byte — these announce the configured
@@ -1540,7 +1566,7 @@ export async function POST(request: NextRequest) {
             imageModels: availableImageModels,
             preferredVideoModel: body.videoModel ?? null,
             preferredImageModel: body.imageModel ?? null,
-          }) + inputBlocks + oracleMemory + cloneClause + isolationClause
+          }) + inputBlocks + brandBlock + oracleMemory + cloneClause + isolationClause
 
         // One test ID per isolation run — stamped onto every submitted concept so
         // outcomes attribute back to which single variable was under test.

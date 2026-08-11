@@ -1103,8 +1103,9 @@ export function ReactorModal({ open, onClose, onFire, form }: ReactorModalProps)
                 <div className="min-w-0 flex-1">
                   <p className="font-display text-lg font-semibold text-white">On Brand</p>
                   <p className="mt-1 text-sm leading-relaxed text-white/45">
-                    Brand voice, tone, and compliance are pulled from Settings and applied across
-                    every concept the reactor writes.
+                    Pulls your real brand — voice, offer, audience language, proof and colours —
+                    from your Brand Intelligence tab and applies it to every concept the reactor
+                    writes.
                   </p>
                 </div>
                 <span
@@ -1121,7 +1122,7 @@ export function ReactorModal({ open, onClose, onFire, form }: ReactorModalProps)
               </button>
               <p className="px-1 text-sm leading-relaxed text-white/40">
                 {form.onBrand
-                  ? 'The agent applies your brand voice, tone, and compliance rules throughout every concept.'
+                  ? 'The reactor pulls your connected brand profile (voice, offer, audience, proof, colours) into every concept. Connect a site on the Brand Intelligence tab to enrich this; without one it applies your default brand voice.'
                   : 'Concepts will be generated without brand anchoring — the brief and inputs only.'}
               </p>
             </div>
