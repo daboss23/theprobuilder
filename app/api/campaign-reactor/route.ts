@@ -10,6 +10,7 @@ import {
   INTELLIGENCE_MODEL as TIER_INTELLIGENCE_MODEL,
 } from '@/lib/models'
 import { generateImageWith, imageConfigured, listImageModels, type AspectRatio } from '@/lib/image'
+import { enforceSingleFrame } from '@/lib/render-prompt'
 import {
   startVideoJob,
   listVideoModels,
@@ -1814,7 +1815,10 @@ export async function POST(request: NextRequest) {
                 type: 'step',
                 text: `Generating still creative via ${model ?? 'default model'}${conceptType ? ` · ${conceptType}` : ''}…`,
               })
-              const result = await generateImageWith(model, prompt, aspectRatio ?? '1:1')
+              // OPUS wrote this prompt itself, so it never met the compiler's
+              // rules. Enforce the single-frame discipline here or the tool
+              // path can still return a filmstrip. See lib/render-prompt.ts.
+              const result = await generateImageWith(model, enforceSingleFrame(prompt), aspectRatio ?? '1:1')
               if (!result) {
                 return {
                   type: 'tool_result',
