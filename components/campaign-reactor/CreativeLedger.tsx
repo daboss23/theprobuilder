@@ -18,6 +18,7 @@
 import { useMemo, useState } from 'react'
 import { Film, ImageIcon, Layers, Trash2, Wand2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { modelDisplayName } from '@/lib/model-menu'
 import { Panel, PanelHeader, Pill } from '@/components/reactor/ui'
 import { useReactorRun, type Concept } from '@/components/campaign-reactor/ReactorRunContext'
 import { groupByDay, type LedgerEntry } from '@/lib/creative-ledger'
@@ -183,7 +184,7 @@ function LedgerCard({
           </span>
           <span className="block truncate text-[10px] text-white/30">
             {time}
-            {entry.model ? ` · ${entry.model}` : ''}
+            {modelDisplayName(entry.model) ? ` · ${modelDisplayName(entry.model)}` : ''}
           </span>
         </span>
       </button>

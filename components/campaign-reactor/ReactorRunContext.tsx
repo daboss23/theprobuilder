@@ -522,7 +522,7 @@ export function ReactorRunProvider({ children }: { children: ReactNode }) {
             [c.text]: {
               status: 'error',
               message:
-                'Render is taking unusually long. The credit was charged at Kie, so the image likely finished — check your Kie dashboard.',
+                'Render is taking unusually long. The job was accepted by the render provider, so the image most likely finished — try generating again or check back shortly.',
             },
           }))
           return
