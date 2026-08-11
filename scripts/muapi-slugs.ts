@@ -86,47 +86,53 @@ const CANDIDATES: { envVar: string; label: string; slugs: string[] }[] = [
  * 404'd the whole clip failed — the Reactor was told video was unavailable and
  * shipped a STILL for a UGC video ad. The oven now falls across providers, but
  * that costs you the model you asked for, so resolve the real slugs here.
+ *
+ * The lead slug in each list is CONFIRMED against Muapi's own model index
+ * (muapi.ai/llms.txt, pulled 2026-08-11) and is what `lib/video/registry.ts`
+ * now defaults to — the invented `veo3` / `kling-pro` / `seedance-pro` /
+ * `wan2.2` slugs that shipped a still instead of a UGC video are gone.
+ * Remaining entries are plausible renames kept as a safety net for drift.
  */
 const VIDEO_CANDIDATES: { envVar: string; label: string; slugs: string[] }[] = [
   {
     envVar: 'MUAPI_VIDEO_VEO3_T2V',
     label: 'Veo 3 · text-to-video',
-    slugs: ['veo3', 'veo3-text-to-video', 'google-veo3', 'veo-3-text-to-video', 'veo3-fast'],
+    slugs: ['veo3-text-to-video', 'veo3-fast-text-to-video', 'veo3'],
   },
   {
     envVar: 'MUAPI_VIDEO_VEO3_I2V',
     label: 'Veo 3 · image-to-video',
-    slugs: ['veo3-image-to-video', 'google-veo3-image-to-video', 'veo-3-image-to-video'],
+    slugs: ['veo3-image-to-video', 'veo3-fast-image-to-video'],
   },
   {
     envVar: 'MUAPI_VIDEO_KLING_T2V',
     label: 'Kling · text-to-video',
-    slugs: ['kling-pro', 'kling-v2.5-text-to-video', 'kling-text-to-video', 'kling-v2-master'],
+    slugs: ['kling-v2.5-turbo-pro-t2v', 'kling-v2.6-pro-t2v', 'kling-pro'],
   },
   {
     envVar: 'MUAPI_VIDEO_KLING_I2V',
     label: 'Kling · image-to-video',
-    slugs: ['kling-pro-image-to-video', 'kling-v2.5-image-to-video', 'kling-image-to-video'],
+    slugs: ['kling-v2.5-turbo-pro-i2v', 'kling-v2.6-pro-i2v', 'kling-pro-image-to-video'],
   },
   {
     envVar: 'MUAPI_VIDEO_SEEDANCE_T2V',
     label: 'Seedance · text-to-video',
-    slugs: ['seedance-pro', 'bytedance-seedance-pro', 'seedance-v1-pro-text-to-video'],
+    slugs: ['seedance-pro-t2v', 'seedance-v1.5-pro-t2v', 'seedance-pro'],
   },
   {
     envVar: 'MUAPI_VIDEO_SEEDANCE_I2V',
     label: 'Seedance · image-to-video',
-    slugs: ['seedance-pro-image-to-video', 'bytedance-seedance-pro-image-to-video'],
+    slugs: ['seedance-pro-i2v', 'seedance-v1.5-pro-i2v', 'seedance-pro-image-to-video'],
   },
   {
     envVar: 'MUAPI_VIDEO_WAN_T2V',
     label: 'Wan · text-to-video',
-    slugs: ['wan2.2', 'wan-2.2-text-to-video', 'wan2.2-text-to-video'],
+    slugs: ['wan2.2-text-to-video', 'wan2.5-text-to-video', 'wan2.2'],
   },
   {
     envVar: 'MUAPI_VIDEO_WAN_I2V',
     label: 'Wan · image-to-video',
-    slugs: ['wan2.2-image-to-video', 'wan-2.2-image-to-video'],
+    slugs: ['wan2.2-image-to-video', 'wan2.5-image-to-video'],
   },
 ]
 

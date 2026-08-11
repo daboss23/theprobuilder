@@ -23,7 +23,7 @@ export const VIDEO_MODELS: VideoModel[] = [
     label: 'Veo 3',
     provider: 'muapi',
     endpoints: {
-      'text-to-video': env('MUAPI_VIDEO_VEO3_T2V', 'veo3'),
+      'text-to-video': env('MUAPI_VIDEO_VEO3_T2V', 'veo3-text-to-video'),
       'image-to-video': env('MUAPI_VIDEO_VEO3_I2V', 'veo3-image-to-video'),
     },
     modes: ['text-to-video', 'image-to-video'],
@@ -38,8 +38,8 @@ export const VIDEO_MODELS: VideoModel[] = [
     label: 'Kling Pro',
     provider: 'muapi',
     endpoints: {
-      'text-to-video': env('MUAPI_VIDEO_KLING_T2V', 'kling-pro'),
-      'image-to-video': env('MUAPI_VIDEO_KLING_I2V', 'kling-pro-image-to-video'),
+      'text-to-video': env('MUAPI_VIDEO_KLING_T2V', 'kling-v2.5-turbo-pro-t2v'),
+      'image-to-video': env('MUAPI_VIDEO_KLING_I2V', 'kling-v2.5-turbo-pro-i2v'),
     },
     modes: ['text-to-video', 'image-to-video'],
     maxDurationSec: 10,
@@ -53,8 +53,8 @@ export const VIDEO_MODELS: VideoModel[] = [
     label: 'Seedance Pro',
     provider: 'muapi',
     endpoints: {
-      'text-to-video': env('MUAPI_VIDEO_SEEDANCE_T2V', 'seedance-pro'),
-      'image-to-video': env('MUAPI_VIDEO_SEEDANCE_I2V', 'seedance-pro-image-to-video'),
+      'text-to-video': env('MUAPI_VIDEO_SEEDANCE_T2V', 'seedance-pro-t2v'),
+      'image-to-video': env('MUAPI_VIDEO_SEEDANCE_I2V', 'seedance-pro-i2v'),
     },
     modes: ['text-to-video', 'image-to-video'],
     maxDurationSec: 12,
@@ -68,7 +68,7 @@ export const VIDEO_MODELS: VideoModel[] = [
     label: 'Wan 2.2',
     provider: 'muapi',
     endpoints: {
-      'text-to-video': env('MUAPI_VIDEO_WAN_T2V', 'wan2.2'),
+      'text-to-video': env('MUAPI_VIDEO_WAN_T2V', 'wan2.2-text-to-video'),
       'image-to-video': env('MUAPI_VIDEO_WAN_I2V', 'wan2.2-image-to-video'),
     },
     modes: ['text-to-video', 'image-to-video'],
