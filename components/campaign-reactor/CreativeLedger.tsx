@@ -98,7 +98,9 @@ export function CreativeLedger({ onOpen }: { onOpen: (c: Concept) => void }) {
                     onOpen(
                       entry.imageUrl
                         ? { ...entry.concept, imageUrl: entry.imageUrl }
-                        : entry.concept,
+                        : entry.videoUrl
+                          ? { ...entry.concept, videoUrl: entry.videoUrl }
+                          : entry.concept,
                     )
                   }
                   onRemove={() => removeLedgerEntry(entry.id)}

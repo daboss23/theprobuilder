@@ -267,10 +267,22 @@ export function ConceptResultCard({
       {/* The ad creative is the hero — the system renders it automatically once
           the run lands, so the finished ad is the first thing on the card. */}
       {image && (
-        <div className="relative mt-2">
+        <div className="group/creative relative mt-2">
           <ProviderChip model={imageMeta?.model} provider={imageMeta?.provider} />
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={image} alt={c.type} className="w-full rounded-lg border border-border" />
+          {/* The ad itself is the shortcut: clicking the creative opens it in
+              the Studio with this exact render already loaded as the ad image. */}
+          <button
+            type="button"
+            onClick={onConfigureInStudio}
+            title="Open this creative in the Studio"
+            className="block w-full overflow-hidden rounded-lg border border-border transition-colors hover:border-glow/50 focus:outline-none focus-visible:border-glow"
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={image} alt={c.type} className="w-full" />
+            <span className="pointer-events-none absolute inset-x-0 bottom-0 flex items-center justify-center gap-1.5 bg-gradient-to-t from-black/85 to-transparent px-3 pb-3 pt-8 text-[12px] font-semibold text-white opacity-0 transition-opacity group-hover/creative:opacity-100">
+              <Wand2 size={12} /> Open in Studio
+            </span>
+          </button>
         </div>
       )}
       {/* A render that did not run on the model it was meant to — or ran on one
