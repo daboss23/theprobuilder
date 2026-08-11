@@ -10,6 +10,7 @@ import {
   Target,
   Boxes,
   Copy,
+  Fingerprint,
 } from 'lucide-react'
 
 export interface NavItem {
@@ -29,6 +30,7 @@ export const navItems: NavItem[] = [
   { label: 'Meta Intelligence', href: '/meta', icon: BarChart3, system: '06' },
   { label: 'Recommendations', href: '/recommendations', icon: Target, system: '07' },
   { label: 'Agent Network', href: '/network', icon: Boxes, system: '08' },
+  { label: 'Brand Intelligence', href: '/brand', icon: Fingerprint, system: '09' },
   // The Vault is the foundation everything is built on — it gets a dedicated
   // launcher pinned to the foot of the sidebar, so it is deliberately LAST.
   { label: 'Knowledge Vault', href: '/knowledge-vault', icon: Database, system: '01' },
