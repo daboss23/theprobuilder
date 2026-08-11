@@ -4,6 +4,7 @@ import {
   ArrowRight,
   ArrowUpRight,
   Brain,
+  CalendarDays,
   Database,
   FlaskConical,
   FolderOpen,
@@ -42,6 +43,7 @@ import { buildCreativeOps, type PulseCard, type WinIndexEntry } from '@/lib/crea
 import { resolveMetaDashboard } from '@/lib/meta-graph'
 import { money } from '@/lib/meta-data'
 import { listOutcomes, patternConfidence } from '@/lib/outcomes'
+import { rangeLabel, rangeQuery, resolveRange } from '@/lib/date-range'
 import { cn } from '@/lib/utils'
 import { MetaSyncButton } from './MetaSyncButton'
 
@@ -85,7 +87,7 @@ function timeAgo(iso: string): string {
 
 function SectionLabel({ children, hint }: { children: React.ReactNode; hint?: string }) {
   return (
-    <h2 className="mb-1 mt-2 flex items-center gap-1.5 px-1 font-display text-sm font-semibold uppercase tracking-wider text-white/50">
+    <h2 className="mb-1.5 mt-3 flex items-center gap-1.5 px-1 font-display text-[15px] font-semibold uppercase tracking-[0.14em] text-white/70">
       {children}
       {hint && <InfoTip label="About this section">{hint}</InfoTip>}
     </h2>
@@ -100,7 +102,7 @@ function PulseTile({ card, index }: { card: PulseCard; index: number }) {
     <Link
       href={card.href}
       className={cn(
-        'kpi-card group animate-fade-up block p-4',
+        'kpi-card group animate-fade-up block p-5',
         accentClass[card.accent],
         stagger[index % stagger.length],
       )}
@@ -113,13 +115,13 @@ function PulseTile({ card, index }: { card: PulseCard; index: number }) {
         </span>
         <TrendBadge trend={card.trend} value={card.delta} />
       </div>
-      <p className="relative mt-3 flex min-h-[1.6em] items-center gap-1 text-[9.5px] font-semibold uppercase leading-tight tracking-[0.12em] text-white/75">
+      <p className="relative mt-3.5 flex min-h-[2.2em] items-start gap-1 text-[11.5px] font-semibold uppercase leading-tight tracking-[0.1em] text-white/85">
         {card.label}
       </p>
-      <span className="count-up relative mt-1 block font-display text-[2.2rem] font-bold leading-none tracking-tight tabular text-white">
+      <span className="count-up relative mt-1 block font-display text-[2.35rem] font-bold leading-none tracking-tight tabular text-white">
         {card.count}
       </span>
-      <p className="relative mt-1.5 flex items-center gap-1 text-[11px] text-white/45">
+      <p className="relative mt-2 flex items-center gap-1.5 text-[12.5px] text-white/60">
         {card.state}
         <InfoTip label={card.label}>{card.definition}</InfoTip>
       </p>
@@ -131,15 +133,15 @@ function PulseTile({ card, index }: { card: PulseCard; index: number }) {
 
 function WinRow({ entry }: { entry: WinIndexEntry }) {
   return (
-    <div className={cn('telemetry-row rounded-lg px-2 py-2.5', accentClass[entry.accent])}>
+    <div className={cn('telemetry-row rounded-lg px-2.5 py-3', accentClass[entry.accent])}>
       <div className="flex items-center gap-3">
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-medium text-white">{entry.name}</p>
+          <p className="mb-1.5 truncate text-[14.5px] font-semibold text-white">{entry.name}</p>
           <ProgressBar value={entry.winIndex} />
         </div>
         <span className="w-16 shrink-0 text-right">
-          <span className="font-display text-sm font-bold tabular text-white">{entry.winIndex}</span>
-          <span className="ml-1 text-[10px] uppercase tracking-wider text-white/35">idx</span>
+          <span className="font-display text-[17px] font-bold tabular text-white">{entry.winIndex}</span>
+          <span className="ml-1 text-[11px] uppercase tracking-wider text-white/50">idx</span>
         </span>
       </div>
       <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -187,10 +189,26 @@ function WinPanel({
 
 /* --------------------------------- page ----------------------------------- */
 
-export default async function ReactorDashboard() {
+export default async function ReactorDashboard({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>
+}) {
+  const params = await searchParams
+  const first = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v)
+  // The dashboard reads the same window Meta Intelligence does, and carries it
+  // into every link — arriving back on the evidence page never silently
+  // switches the period being discussed.
+  const range = resolveRange({
+    from: first(params.from),
+    to: first(params.to),
+    preset: first(params.preset),
+    tz: first(params.tz),
+  })
+
   const [data, meta, memory, outcomes] = await Promise.all([
     getDashboardData(),
-    resolveMetaDashboard(),
+    resolveMetaDashboard(range),
     patternConfidence(),
     listOutcomes(12),
   ])
@@ -226,7 +244,7 @@ export default async function ReactorDashboard() {
           <h1 className="mt-2.5 font-display text-3xl font-bold tracking-tight text-white md:text-[2.6rem] md:leading-[1.05]">
             Reactor Dashboard
           </h1>
-          <p className="mt-2.5 max-w-2xl text-sm leading-relaxed text-white/55">
+          <p className="mt-3 max-w-2xl text-[15px] leading-relaxed text-white/65">
             The state of every creative in market, the three moves that matter most, and what the
             reactor has learned. The detailed performance record lives in{' '}
             <Link href="/meta" className="text-glow hover:underline">
@@ -236,7 +254,15 @@ export default async function ReactorDashboard() {
           </p>
           <div className="hero-scanline" />
         </div>
-        {!live && <DemoBadge />}
+        <div className="flex flex-wrap items-center gap-2">
+          <Link href={`/meta?${rangeQuery(range)}`} className="no-underline">
+            <Pill tone="primary">
+              <CalendarDays size={12} />
+              {rangeLabel(range)} · change on Meta Intelligence
+            </Pill>
+          </Link>
+          {!live && <DemoBadge />}
+        </div>
       </div>
 
       <div className="dashboard-console">
@@ -271,11 +297,14 @@ export default async function ReactorDashboard() {
             icon={<Trophy size={16} />}
             accent="amber"
             title="Creative Leaderboard"
-            subtitle="Top and at-risk creatives — the compact decision view"
+            subtitle={`Top and at-risk creatives over ${rangeLabel(range).toLowerCase()} — the compact decision view`}
             accessory={
               <div className="flex items-center gap-2">
                 {!live && <DemoBadge />}
-                <Link href="/meta" className="brief-cta !mt-0 !px-3 !py-1.5 !text-[11px]">
+                <Link
+                  href={`/meta?${rangeQuery(range)}`}
+                  className="brief-cta !mt-0 !px-3.5 !py-2 !text-[12px]"
+                >
                   Full detail
                   <ArrowUpRight size={12} />
                 </Link>
@@ -287,9 +316,11 @@ export default async function ReactorDashboard() {
             thresholds={meta.thresholds}
             revenueConnected={meta.revenueConnected}
             variant="compact"
-            hrefFor={(ad) => `/meta?creative=${encodeURIComponent(ad.id)}&range=last_30d`}
+            hrefFor={(ad) => `/meta?${rangeQuery(range)}&creative=${encodeURIComponent(ad.id)}`}
           />
-          <PanelFooterLink href="/meta">Open the full performance record</PanelFooterLink>
+          <PanelFooterLink href={`/meta?${rangeQuery(range)}`}>
+            Open the full performance record
+          </PanelFooterLink>
         </Panel>
 
         {/* ── 4 · Winning intelligence ───────────────────────────────────── */}
@@ -340,11 +371,11 @@ export default async function ReactorDashboard() {
               {memory.map((m) => (
                 <div key={m.pattern} className="rounded-lg border border-border bg-surface/40 p-3">
                   <div className="mb-1.5 flex items-center justify-between gap-3">
-                    <span className="flex items-center gap-2 text-sm font-medium text-white">
+                    <span className="flex items-center gap-2 text-[14.5px] font-semibold text-white">
                       <Sparkles size={13} className="text-glow" />
                       {m.pattern}
                     </span>
-                    <span className="text-[11px] text-white/45">
+                    <span className="text-[12.5px] text-white/60">
                       {m.wins}/{m.total} wins ·{' '}
                       <span className="font-semibold text-success">{m.confidence}% confidence</span>
                     </span>
@@ -364,9 +395,9 @@ export default async function ReactorDashboard() {
             title="Creative Lifecycle"
             subtitle="Idea → production → test → winner or fatigue"
           />
-          <div className="flex flex-wrap items-stretch gap-2 p-4 sm:flex-nowrap">
+          <div className="flex flex-wrap items-stretch gap-2 p-4 xl:flex-nowrap">
             {ops.lifecycle.map((stage, i) => (
-              <div key={stage.label} className="flex flex-1 items-center gap-2">
+              <div key={stage.label} className="flex flex-1 basis-[11rem] items-center gap-2">
                 <Link
                   href={stage.href}
                   title={stage.action}
@@ -375,18 +406,18 @@ export default async function ReactorDashboard() {
                     accentClass[stage.accent],
                   )}
                 >
-                  <span className="font-display text-xl font-bold tabular text-[color:rgb(var(--acc-hi))]">
+                  <span className="font-display text-[1.6rem] font-bold tabular text-[color:rgb(var(--acc-hi))]">
                     {stage.count}
                   </span>
                   <span className="min-w-0">
-                    <span className="block truncate text-[11px] font-medium text-white">
+                    <span className="block truncate text-[13px] font-semibold text-white">
                       {stage.label}
                     </span>
-                    <span className="block truncate text-[10px] text-white/35">{stage.action}</span>
+                    <span className="block truncate text-[11.5px] text-white/50">{stage.action}</span>
                   </span>
                 </Link>
                 {i < ops.lifecycle.length - 1 && (
-                  <ArrowRight size={14} className="hidden shrink-0 text-white/20 sm:block" />
+                  <ArrowRight size={15} className="hidden shrink-0 text-white/25 xl:block" />
                 )}
               </div>
             ))}
@@ -421,10 +452,10 @@ export default async function ReactorDashboard() {
                 key={s.label}
                 className={cn('rounded-xl border border-border bg-surface/40 p-3.5', accentClass[s.accent])}
               >
-                <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-white/45">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-white/60">
                   {s.label}
                 </p>
-                <p className="mt-1.5 font-display text-xl font-bold tabular text-white">{s.value}</p>
+                <p className="mt-2 font-display text-[1.55rem] font-bold tabular text-white">{s.value}</p>
               </div>
             ))}
           </div>
@@ -441,28 +472,28 @@ export default async function ReactorDashboard() {
                   </span>
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-start justify-between gap-2">
-                      <p className="text-sm font-medium text-white">{l.finding}</p>
+                      <p className="text-[15px] font-semibold leading-snug text-white">{l.finding}</p>
                       <ConfidenceChip level={l.confidence} />
                     </div>
                     <div className="mt-2 grid grid-cols-1 gap-2 lg:grid-cols-2">
                       <div className="rounded-lg border border-border bg-background/40 p-3">
-                        <p className="mb-1 text-[10px] font-medium uppercase tracking-wider text-white/35">
+                        <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-white/55">
                           Evidence
                         </p>
-                        <p className="text-[12px] leading-relaxed text-white/65">{l.evidence}</p>
+                        <p className="text-[13px] leading-relaxed text-white/75">{l.evidence}</p>
                       </div>
                       <div className="rounded-lg border border-success/20 bg-success/[0.04] p-3">
-                        <p className="mb-1 text-[10px] font-medium uppercase tracking-wider text-success/80">
+                        <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-success/90">
                           Agent response
                         </p>
-                        <p className="flex items-start gap-1.5 text-[12px] leading-relaxed text-white/75">
+                        <p className="flex items-start gap-1.5 text-[13px] leading-relaxed text-white/80">
                           <ArrowRight size={13} className="mt-0.5 shrink-0 text-success" />
                           {l.agentResponse}
                         </p>
                       </div>
                     </div>
-                    <p className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-white/40">
-                      <span className="text-white/30">Observed result:</span>
+                    <p className="mt-2.5 flex flex-wrap items-center gap-2 text-[12.5px] text-white/55">
+                      <span className="text-white/45">Observed result:</span>
                       {l.observedResult ?? 'No influenced creative has finished its evaluation window yet.'}
                       <span className="text-white/15">·</span>
                       {l.influencedCreatives} creatives generated under this rule
@@ -473,7 +504,7 @@ export default async function ReactorDashboard() {
             ))}
           </div>
 
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-border px-5 py-4 text-[11px] leading-relaxed text-white/40">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-border px-5 py-4 text-[12.5px] leading-relaxed text-white/55">
             <span className="flex items-center gap-1.5 text-white/55">
               Create
               <ArrowRight size={11} /> Launch
@@ -506,14 +537,14 @@ export default async function ReactorDashboard() {
                   const Icon = activityIcons[e.kind] ?? Sparkles
                   return (
                     <li key={i} className="flex items-start gap-3">
-                      <span className={cn('angle-tile h-7 w-7 shrink-0', accentClass[e.accent])}>
-                        <Icon size={12} />
+                      <span className={cn('angle-tile h-8 w-8 shrink-0', accentClass[e.accent])}>
+                        <Icon size={13} />
                       </span>
                       <div className="min-w-0 flex-1">
-                        <p className="truncate text-xs font-medium text-white">{e.label}</p>
-                        <p className="truncate text-[11px] text-white/40">{e.detail}</p>
+                        <p className="truncate text-[13.5px] font-semibold text-white">{e.label}</p>
+                        <p className="truncate text-[12px] text-white/55">{e.detail}</p>
                       </div>
-                      <span className="shrink-0 text-[10px] tabular text-white/30">
+                      <span className="shrink-0 text-[11.5px] tabular text-white/45">
                         {timeAgo(e.at)}
                       </span>
                     </li>
@@ -533,10 +564,10 @@ export default async function ReactorDashboard() {
                   <Database size={16} />
                 </span>
                 <span>
-                  <span className="block font-display text-sm font-semibold text-white">
+                  <span className="block font-display text-[15px] font-semibold text-white">
                     Creative Intelligence Base
                   </span>
-                  <span className="block text-xs text-white/40">
+                  <span className="block text-[12.5px] text-white/55">
                     The corpus every agent retrieves from
                   </span>
                 </span>
@@ -546,26 +577,26 @@ export default async function ReactorDashboard() {
               </Pill>
             </div>
             <div className="mt-5 flex flex-wrap items-baseline gap-x-4 gap-y-2">
-              <span className="font-display text-2xl font-bold tabular text-white">
+              <span className="font-display text-[1.9rem] font-bold tabular text-white">
                 {ops.base.assets.toLocaleString()}
-                <span className="ml-1.5 text-[11px] font-medium uppercase tracking-wider text-white/40">
+                <span className="ml-1.5 text-[12px] font-medium uppercase tracking-wider text-white/55">
                   assets
                 </span>
               </span>
-              <span className="font-display text-lg font-bold tabular text-white/80">
+              <span className="font-display text-[1.4rem] font-bold tabular text-white/85">
                 {ops.base.frameworks}
-                <span className="ml-1.5 text-[11px] font-medium uppercase tracking-wider text-white/40">
+                <span className="ml-1.5 text-[12px] font-medium uppercase tracking-wider text-white/55">
                   frameworks
                 </span>
               </span>
-              <span className="font-display text-lg font-bold tabular text-white/80">
+              <span className="font-display text-[1.4rem] font-bold tabular text-white/85">
                 {ops.base.sops}
-                <span className="ml-1.5 text-[11px] font-medium uppercase tracking-wider text-white/40">
+                <span className="ml-1.5 text-[12px] font-medium uppercase tracking-wider text-white/55">
                   SOPs
                 </span>
               </span>
             </div>
-            <p className="mt-3 flex items-center gap-1.5 text-[11px] text-white/40">
+            <p className="mt-4 flex items-center gap-1.5 text-[12.5px] text-white/55">
               Updated {ops.base.updatedLabel}
               <ArrowUpRight size={12} className="text-glow" />
               <span className="text-glow/80">Open the Knowledge Vault</span>

@@ -46,7 +46,7 @@ export function NextMoves({ moves }: { moves: NextMove[] }) {
     return (
       <div className="grid place-items-center px-6 py-14 text-center">
         <Check size={30} className="mb-3 text-success/40" />
-        <p className="max-w-sm text-sm text-white/45">
+        <p className="max-w-sm text-[14px] text-white/60">
           Every move is actioned. New priorities appear as the next results land — or fire the
           Reactor to generate fresh concepts now.
         </p>
@@ -73,31 +73,31 @@ export function NextMoves({ moves }: { moves: NextMove[] }) {
                 <span className="angle-tile h-7 w-7">
                   <Icon size={13} />
                 </span>
-                <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-white/70">
+                <span className="text-[11.5px] font-semibold uppercase tracking-[0.14em] text-white/85">
                   {m.type}
                 </span>
               </span>
               <span className="flex items-center gap-1.5">
-                <span className="font-display text-[11px] font-bold tabular text-white/35">
+                <span className="font-display text-[12px] font-bold tabular text-white/50">
                   #{i + 1}
                 </span>
                 <ConfidenceChip level={m.confidence} />
               </span>
             </div>
 
-            <h3 className="font-display text-base font-semibold leading-snug text-white">
+            <h3 className="font-display text-[17px] font-semibold leading-snug text-white">
               {m.title}
             </h3>
-            <p className="mt-1.5 text-xs leading-relaxed text-white/50">{m.rationale}</p>
+            <p className="mt-2 text-[13px] leading-relaxed text-white/65">{m.rationale}</p>
 
             <div className="mt-3 rounded-lg border border-border bg-background/40 p-3">
-              <p className="mb-1.5 flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-wider text-white/35">
+              <p className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-white/55">
                 <BarChart3 size={11} />
                 Evidence
               </p>
               <ul className="space-y-1">
                 {m.evidence.map((e) => (
-                  <li key={e} className="flex gap-1.5 text-[11px] leading-relaxed text-white/65">
+                  <li key={e} className="flex gap-2 text-[12.5px] leading-relaxed text-white/80">
                     <span className="mt-[0.45rem] h-1 w-1 shrink-0 rounded-full bg-[color:rgb(var(--acc))]" />
                     {e}
                   </li>
@@ -114,7 +114,7 @@ export function NextMoves({ moves }: { moves: NextMove[] }) {
               <Link
                 href={m.evidenceHref}
                 hidden={m.primaryCta.href === m.evidenceHref}
-                className="flex-1 rounded-lg border border-border bg-background/40 px-2 py-2 text-center text-[11px] font-medium text-white/60 transition-colors hover:border-primary/40 hover:text-glow"
+                className="flex-1 rounded-lg border border-border bg-background/40 px-2 py-2.5 text-center text-[12.5px] font-medium text-white/75 transition-colors hover:border-primary/40 hover:text-glow"
               >
                 Open evidence
               </Link>
@@ -143,7 +143,7 @@ export function NextMoves({ moves }: { moves: NextMove[] }) {
             </div>
 
             {approved && (
-              <p className="mt-2 flex items-center justify-center gap-1.5 text-[11px] text-success">
+              <p className="mt-2 flex items-center justify-center gap-1.5 text-[12.5px] font-medium text-success">
                 <Check size={12} /> Approved — queued for the next run
               </p>
             )}
@@ -153,7 +153,7 @@ export function NextMoves({ moves }: { moves: NextMove[] }) {
       {visible.length < 3 && (
         <div className="grid place-items-center rounded-xl border border-dashed border-border p-6 text-center">
           <Pill tone="default">Slot open</Pill>
-          <p className="mt-2 max-w-[15rem] text-[11px] leading-relaxed text-white/35">
+          <p className="mt-2 max-w-[15rem] text-[12px] leading-relaxed text-white/50">
             A new priority takes this slot as soon as the next evaluation window closes.
           </p>
         </div>

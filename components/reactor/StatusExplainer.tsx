@@ -74,7 +74,7 @@ export function StatusExplainer({
                 <div className="mb-1 flex items-center gap-2">
                   <Pill tone={def.tone}>{def.label}</Pill>
                 </div>
-                <p className="font-display text-sm font-semibold text-white">{creativeName}</p>
+                <p className="font-display text-[15px] font-semibold text-white">{creativeName}</p>
               </div>
               <button
                 type="button"
@@ -88,34 +88,34 @@ export function StatusExplainer({
 
             <div className="space-y-3 p-5">
               <div>
-                <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-white/35">
+                <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-white/55">
                   What it means
                 </p>
                 <p className="text-sm leading-relaxed text-white/70">{def.meaning}</p>
               </div>
               <div className="rounded-lg border border-border bg-surface/40 p-3">
-                <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-white/35">
+                <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-white/55">
                   Evidence
                 </p>
                 <p className="text-sm leading-relaxed text-white/80">{reason}</p>
               </div>
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                 <div className="rounded-lg border border-border bg-background/40 p-3">
-                  <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-white/35">
+                  <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-white/55">
                     Thresholds
                   </p>
-                  <p className="text-[12px] leading-relaxed text-white/65">
+                  <p className="text-[13px] leading-relaxed text-white/75">
                     {thresholdSummary(thresholds)}
                   </p>
                 </div>
                 <div className="rounded-lg border border-border bg-background/40 p-3">
-                  <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-white/35">
+                  <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-white/55">
                     Comparison period
                   </p>
-                  <p className="text-[12px] leading-relaxed text-white/65">{comparisonPeriod}</p>
+                  <p className="text-[13px] leading-relaxed text-white/75">{comparisonPeriod}</p>
                 </div>
               </div>
-              <p className="text-[11px] leading-relaxed text-white/35">
+              <p className="text-[12.5px] leading-relaxed text-white/50">
                 Thresholds are configurable per brand and campaign. No creative is called a winner
                 or a loser until minimum spend, time live and result count have all cleared.
               </p>

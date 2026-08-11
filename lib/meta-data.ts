@@ -1,26 +1,25 @@
 import type { Accent } from '@/components/reactor/ui'
 import {
   DEFAULT_THRESHOLDS,
-  RESULT_LABELS,
-  costLabel,
-  evaluateStatus,
   type CreativeStatus,
   type PrimaryResultType,
   type StatusThresholds,
 } from '@/lib/creative-status'
+import type { DateRange } from '@/lib/date-range'
 
 /**
- * Demo Meta Ads intelligence. Mirrors the shape a live Pipeboard / Meta Ads
- * pull would return so the Meta Intelligence page (and, later, the reactor
- * agent) can read from one contract. When PIPEBOARD_API_TOKEN is configured the
- * page can swap these for live figures; until then this curated set keeps the
- * surface fully populated.
+ * The Meta analytics contract, plus the curated baseline the demo dataset is
+ * generated from.
  *
  * Semantics matter more than the numbers here. A "conversion" is never a
  * blended total — every result carries its TYPE (lead / registration /
  * application / booked call / purchase), every cost names the result it is the
  * cost OF, and ROAS only exists when real revenue is connected. Anything
  * seeded for demonstration is labelled DEMO DATA in the UI.
+ *
+ * Nothing in here is fixed to a window. The baseline describes a 30-day period;
+ * `lib/meta-demo.ts` projects it onto whatever range the user has selected, and
+ * the live path in `lib/meta-graph.ts` asks the Graph API for that same range.
  */
 
 export interface MetaKpi {
@@ -42,84 +41,6 @@ export interface ResultSlice {
   count: number
 }
 
-/** The account-wide result mix. Never collapsed into one "conversions" figure. */
-export const metaResultMix: ResultSlice[] = [
-  { type: 'lead', count: 920 },
-  { type: 'registration', count: 214 },
-  { type: 'application', count: 102 },
-  { type: 'booked_call', count: 48 },
-]
-
-export const metaResultTotal = metaResultMix.reduce((s, r) => s + r.count, 0)
-
-/**
- * The account's dominant result type — what an account-wide cost figure is the
- * cost of, and the label shown beneath it.
- */
-export const metaPrimaryResultType: PrimaryResultType = 'lead'
-
-/**
- * Whether real revenue (or a defensible conversion value) is connected. Lead
- * campaigns with no revenue feedback must NOT display ROAS — the dashboard
- * shows result efficiency instead.
- */
-export const metaRevenueConnected = false
-
-/** Campaign-level evaluation gates. Configurable per brand/campaign. */
-export const metaThresholds: StatusThresholds = {
-  ...DEFAULT_THRESHOLDS,
-  minSpend: 1500,
-  minDays: 5,
-  minResults: 20,
-  targetCostPerResult: 45,
-}
-
-export const metaSpendTotal = 148_320
-
-// Hero performance — the numbers a media buyer scans first.
-export const metaHeroKpis: MetaKpi[] = [
-  {
-    label: 'Ad Spend',
-    value: '$148,320',
-    sub: 'last 30 days',
-    delta: '+12%',
-    trend: 'up',
-    accent: 'blue',
-    definition: 'Total amount spent across active campaigns in the selected date range.',
-  },
-  {
-    label: 'Primary Results',
-    value: metaResultTotal.toLocaleString(),
-    sub: 'mixed result types — see the split',
-    delta: '+9%',
-    trend: 'up',
-    accent: 'violet',
-    definition:
-      'The optimisation result each campaign was actually buying. Types are counted separately and never treated as equivalent.',
-    breakdown: metaResultMix,
-  },
-  {
-    label: 'Cost per Result',
-    value: '$42.10',
-    sub: `Current result: ${RESULT_LABELS[metaPrimaryResultType].one}`,
-    delta: '−6%',
-    trend: 'up',
-    accent: 'emerald',
-    definition:
-      'Spend divided by primary results for the dominant result type. Mixed date ranges are broken out rather than blended.',
-  },
-  {
-    label: 'Result Efficiency',
-    value: '6% under target',
-    sub: `$42.10 vs $45 ${costLabel(metaPrimaryResultType)} target`,
-    delta: '+6pp',
-    trend: 'up',
-    accent: 'cyan',
-    definition:
-      'Cost per result against the campaign target. Shown in place of ROAS because no revenue or defensible conversion value is connected to these lead campaigns.',
-  },
-]
-
 export interface MetaMetric {
   label: string
   value: string
@@ -128,18 +49,6 @@ export interface MetaMetric {
   accent: Accent
   definition?: string
 }
-
-// Secondary efficiency + creative-quality read-outs (pct drives the gauge).
-export const metaMetrics: MetaMetric[] = [
-  { label: 'CPC', value: '$0.82', metric: 'cost per link click', pct: 74, accent: 'blue', definition: 'Spend divided by link clicks.' },
-  { label: 'CPM', value: '$19.40', metric: 'cost per 1k impressions', pct: 61, accent: 'cyan', definition: 'Delivery cost, not a performance verdict.' },
-  { label: 'Outbound CTR', value: '2.34%', metric: 'clicks leaving Meta', pct: 68, accent: 'violet', definition: 'Outbound clicks over impressions — the click that actually reaches the landing page.' },
-  { label: 'Reach', value: '612K', metric: 'unique people', pct: 82, accent: 'emerald', definition: 'Unique people who saw an ad at least once.' },
-  { label: 'Frequency', value: '1.8', metric: 'avg impressions / person', pct: 45, accent: 'pink', definition: 'Rising frequency alongside falling CTR is the primary fatigue signal.' },
-  { label: 'Hook Rate', value: '31%', metric: '3s views / impressions', pct: 62, accent: 'amber', definition: 'Video only. Not applicable to static creatives, and never proof of a commercial winner on its own.' },
-  { label: 'Hold Rate', value: '18%', metric: 'thru-play to 15s', pct: 54, accent: 'cyan', definition: 'Video only. Attention retained past the hook.' },
-  { label: 'Landing CVR', value: '9.2%', metric: 'page → result', pct: 71, accent: 'emerald', definition: 'Share of landing page visits that produced the campaign primary result.' },
-]
 
 export type CreativeTrend = 'Improving' | 'Stable' | 'Declining'
 
@@ -165,10 +74,77 @@ export interface MetaAd {
   status: CreativeStatus
   /** Evidence sentence behind the status — required, never a bare colour. */
   statusReason: string
+  /**
+   * LIFECYCLE METADATA — the creative's own age, not the analysed window.
+   * Always labelled as such in the UI so it can never be mistaken for a
+   * range-scoped figure.
+   */
   daysLive: number
+  /** Lifecycle metadata: when this creative first delivered. */
+  launchedOn?: string
 }
 
-/** Money and rate formatters used across both dashboards. */
+export interface TrendPoint {
+  /** Axis label derived from the selected range, never a fixed "W1". */
+  label: string
+  from: string
+  to: string
+  spend: number
+  costPerResult: number
+  /** Only when revenue is connected. */
+  roas: number | null
+}
+
+export interface BreakdownRow {
+  label: string
+  share: number
+  metric: string
+  accent: Accent
+}
+
+export interface AgentInsight {
+  insight: string
+  action: string
+  lift: string
+}
+
+export interface LearningStats {
+  signalsIngested: number
+  winnersLogged: number
+  patternsUpdated: number
+  lastSync: string
+}
+
+/** Everything both dashboards render for one date range. */
+export interface MetaDashboard {
+  source: 'live' | 'demo'
+  /** The single window every figure below was computed over. */
+  range: DateRange
+  /** The equally long window immediately before it, used for every delta. */
+  comparison: DateRange
+  heroKpis: MetaKpi[]
+  metrics: MetaMetric[]
+  topAds: MetaAd[]
+  spendTrend: TrendPoint[]
+  audienceBreakdown: BreakdownRow[]
+  placementBreakdown: BreakdownRow[]
+  agentInsights: AgentInsight[]
+  learningStats: LearningStats
+  /** Every result type counted separately — never one blended "conversions". */
+  resultMix: ResultSlice[]
+  /** The dominant result type an account-wide cost figure refers to. */
+  primaryResultType: PrimaryResultType
+  /** ROAS is only shown when this is true. */
+  revenueConnected: boolean
+  /** The evaluation gates every status in this payload was assigned under. */
+  thresholds: StatusThresholds
+  spendTotal: number
+  /** Set when the live API is configured but could not be read. Surfaced in UI. */
+  error?: string
+}
+
+/* -------------------------------- formatters ------------------------------- */
+
 export function money(n: number): string {
   return `$${Math.round(n).toLocaleString()}`
 }
@@ -181,156 +157,90 @@ export function pctLabel(n: number | null): string {
   return n === null ? 'N/A' : `${n.toFixed(1)}%`
 }
 
-const demoAds: Omit<MetaAd, 'status' | 'statusReason'>[] = [
-  {
-    id: 'ad_profit_leak',
-    name: 'The Profit Leak — Founder Cut',
-    format: 'Founder Video',
-    spend: 24100,
-    primaryResults: 861,
-    resultType: 'lead',
-    costPerResult: 28,
-    hookRate: 38,
-    ctr: 3.1,
-    frequency: 2.2,
-    trend: 'Improving',
-    roas: null,
-    daysLive: 26,
-  },
-  {
-    id: 'ad_45_hour',
-    name: '45-Hour Owner — UGC',
-    format: 'UGC Video',
-    spend: 18640,
-    primaryResults: 565,
-    resultType: 'lead',
-    costPerResult: 33,
-    hookRate: 35,
-    ctr: 2.8,
-    frequency: 2.0,
-    trend: 'Improving',
-    roas: null,
-    daysLive: 21,
-  },
-  {
-    id: 'ad_member_win_jason',
-    name: 'Member Win — Jason',
-    format: 'Testimonial',
-    spend: 8210,
-    primaryResults: 191,
-    resultType: 'booked_call',
-    costPerResult: 43,
-    hookRate: 33,
-    ctr: 2.6,
-    frequency: 1.7,
-    trend: 'Stable',
-    roas: null,
-    daysLive: 14,
-  },
-  {
-    id: 'ad_margin_math',
-    name: 'Margin Math',
-    format: 'Static',
-    spend: 12300,
-    primaryResults: 267,
-    resultType: 'lead',
-    costPerResult: 46,
-    hookRate: null,
-    ctr: 2.2,
-    frequency: 2.4,
-    trend: 'Stable',
-    roas: null,
-    daysLive: 19,
-  },
-  {
-    id: 'ad_stop_scaling',
-    name: 'Stop Scaling — VSL Opener',
-    format: 'VSL',
-    spend: 980,
-    primaryResults: 17,
-    resultType: 'lead',
-    costPerResult: 58,
-    hookRate: 26,
-    ctr: 1.9,
-    frequency: 1.2,
-    trend: 'Stable',
-    roas: null,
-    daysLive: 3,
-  },
-  {
-    id: 'ad_systems_before_scale',
-    name: 'Systems Before Scale',
-    format: 'Carousel',
-    spend: 6450,
-    primaryResults: 91,
-    resultType: 'lead',
-    costPerResult: 71,
-    hookRate: null,
-    ctr: 1.6,
-    frequency: 3.4,
-    trend: 'Declining',
-    roas: null,
-    daysLive: 31,
-  },
-]
+/* --------------------------------- baseline -------------------------------- */
+
+/** The window the curated baseline describes. Everything scales from here. */
+export const BASELINE_DAYS = 30
 
 /**
- * Status is DERIVED, never hand-written: the same evaluator both dashboards use
- * runs over each creative's signals, so a demo row and a live row are graded by
- * exactly the same rules and thresholds.
+ * Whether real revenue (or a defensible conversion value) is connected. Lead
+ * campaigns with no revenue feedback must NOT display ROAS — the dashboard
+ * shows result efficiency instead.
  */
-function grade(ad: Omit<MetaAd, 'status' | 'statusReason'>, opts?: { scaling?: boolean; costTrendPct?: number; ctrTrendPct?: number }): MetaAd {
-  const verdict = evaluateStatus(
-    {
-      spend: ad.spend,
-      results: ad.primaryResults,
-      daysLive: ad.daysLive,
-      costPerResult: ad.costPerResult,
-      frequency: ad.frequency,
-      costTrendPct: opts?.costTrendPct ?? (ad.trend === 'Declining' ? 18 : ad.trend === 'Improving' ? -9 : 2),
-      ctrTrendPct: opts?.ctrTrendPct ?? (ad.trend === 'Declining' ? -21 : ad.trend === 'Improving' ? 12 : 1),
-      scaling: opts?.scaling,
-    },
-    metaThresholds,
-  )
-  return { ...ad, status: verdict.status, statusReason: verdict.reason }
+export const metaRevenueConnected = false
+
+/** Campaign-level evaluation gates. Configurable per brand/campaign. */
+export const metaThresholds: StatusThresholds = {
+  ...DEFAULT_THRESHOLDS,
+  minSpend: 1500,
+  minDays: 5,
+  minResults: 20,
+  targetCostPerResult: 45,
 }
 
-export const metaTopAds: MetaAd[] = [
-  grade(demoAds[0], { scaling: true }),
-  grade(demoAds[1]),
-  grade(demoAds[2]),
-  grade(demoAds[3]),
-  grade(demoAds[4]),
-  grade(demoAds[5]),
-]
+export const metaPrimaryResultType: PrimaryResultType = 'lead'
 
-export interface SpendWeek {
-  week: string
+export interface MetaBaseline {
   spend: number
-  /** Cost per result for the week — the efficiency line every account has. */
-  costPerResult: number
-  /** Only when revenue is connected. */
-  roas: number | null
+  resultMix: ResultSlice[]
+  cpc: number
+  cpm: number
+  ctr: number
+  reach: number
+  impressions: number
+  clicks: number
+  frequency: number
+  hookRate: number
+  holdRate: number
+  landingCvr: number
 }
 
-export const metaSpendTrend: SpendWeek[] = [
-  { week: 'W1', spend: 28200, costPerResult: 51.2, roas: null },
-  { week: 'W2', spend: 31100, costPerResult: 49.4, roas: null },
-  { week: 'W3', spend: 29800, costPerResult: 48.1, roas: null },
-  { week: 'W4', spend: 34500, costPerResult: 46.0, roas: null },
-  { week: 'W5', spend: 33200, costPerResult: 44.7, roas: null },
-  { week: 'W6', spend: 38900, costPerResult: 44.1, roas: null },
-  { week: 'W7', spend: 41200, costPerResult: 43.0, roas: null },
-  { week: 'W8', spend: 44300, costPerResult: 42.1, roas: null },
+/** Curated 30-day baseline for the demo account. */
+export const metaBaseline: MetaBaseline = {
+  spend: 148_320,
+  resultMix: [
+    { type: 'lead', count: 2530 },
+    { type: 'registration', count: 590 },
+    { type: 'application', count: 280 },
+    { type: 'booked_call', count: 130 },
+  ],
+  cpc: 0.82,
+  cpm: 19.4,
+  ctr: 2.34,
+  reach: 612_000,
+  impressions: 7_645_000,
+  clicks: 178_900,
+  frequency: 1.8,
+  hookRate: 31,
+  holdRate: 18,
+  landingCvr: 9.2,
+}
+
+/** The demo creatives, expressed over the 30-day baseline window. */
+export interface BaselineAd {
+  id: string
+  name: string
+  format: string
+  spend: number
+  primaryResults: number
+  resultType: PrimaryResultType
+  hookRate: number | null
+  ctr: number
+  frequency: number
+  trend: CreativeTrend
+  /** Lifecycle metadata — independent of the analysed window. */
+  daysLive: number
+  scaling?: boolean
+}
+
+export const baselineAds: BaselineAd[] = [
+  { id: 'ad_profit_leak', name: 'The Profit Leak — Founder Cut', format: 'Founder Video', spend: 24100, primaryResults: 861, resultType: 'lead', hookRate: 38, ctr: 3.1, frequency: 2.2, trend: 'Improving', daysLive: 26, scaling: true },
+  { id: 'ad_45_hour', name: '45-Hour Owner — UGC', format: 'UGC Video', spend: 18640, primaryResults: 565, resultType: 'lead', hookRate: 35, ctr: 2.8, frequency: 2.0, trend: 'Improving', daysLive: 21 },
+  { id: 'ad_member_win_jason', name: 'Member Win — Jason', format: 'Testimonial', spend: 8210, primaryResults: 191, resultType: 'booked_call', hookRate: 33, ctr: 2.6, frequency: 1.7, trend: 'Stable', daysLive: 14 },
+  { id: 'ad_margin_math', name: 'Margin Math', format: 'Static', spend: 12300, primaryResults: 267, resultType: 'lead', hookRate: null, ctr: 2.2, frequency: 2.4, trend: 'Stable', daysLive: 19 },
+  { id: 'ad_stop_scaling', name: 'Stop Scaling — VSL Opener', format: 'VSL', spend: 2940, primaryResults: 51, resultType: 'lead', hookRate: 26, ctr: 1.9, frequency: 1.2, trend: 'Stable', daysLive: 8 },
+  { id: 'ad_systems_before_scale', name: 'Systems Before Scale', format: 'Carousel', spend: 6450, primaryResults: 91, resultType: 'lead', hookRate: null, ctr: 1.6, frequency: 3.4, trend: 'Declining', daysLive: 31 },
 ]
-
-export interface BreakdownRow {
-  label: string
-  share: number
-  metric: string
-  accent: Accent
-}
 
 // Where spend lands and how each slice performs. Cold and retargeting are shown
 // side by side but never compared as equivalent cohorts.
@@ -348,11 +258,18 @@ export const metaPlacementBreakdown: BreakdownRow[] = [
   { label: 'Advantage+', share: 12, metric: '2.4% CTR', accent: 'emerald' },
 ]
 
-export interface AgentInsight {
-  insight: string
-  action: string
-  lift: string
-}
+/** Accent channels for the hero and efficiency cards, in render order. */
+export const heroAccents: Accent[] = ['blue', 'violet', 'emerald', 'cyan']
+export const metricAccents: Accent[] = [
+  'blue',
+  'cyan',
+  'violet',
+  'emerald',
+  'pink',
+  'amber',
+  'cyan',
+  'emerald',
+]
 
 // What the reactor agent extracts from this data to brief the next campaign.
 export const metaAgentInsights: AgentInsight[] = [
@@ -379,7 +296,7 @@ export const metaAgentInsights: AgentInsight[] = [
 ]
 
 // Headline figures for the learning-loop strip.
-export const metaLearningStats = {
+export const metaLearningStats: LearningStats = {
   signalsIngested: 6420,
   winnersLogged: 38,
   patternsUpdated: 17,

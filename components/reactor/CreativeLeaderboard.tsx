@@ -34,7 +34,7 @@ function Th({
   return (
     <th
       className={cn(
-        'whitespace-nowrap pb-2 text-[10px] font-medium uppercase tracking-wider text-white/35',
+        'whitespace-nowrap pb-3 text-[11px] font-semibold uppercase tracking-wider text-white/55',
         align === 'left' && 'text-left',
         align === 'right' && 'text-right',
         align === 'center' && 'text-center',
@@ -78,7 +78,7 @@ export function CreativeLeaderboard({
   if (ads.length === 0) {
     return (
       <div className="grid place-items-center px-6 py-12 text-center">
-        <p className="max-w-sm text-sm text-white/40">
+        <p className="max-w-sm text-[14px] text-white/55">
           No creatives have cleared the minimum evaluation window yet ({thresholdSummary(thresholds)}
           ). Nothing is ranked from a weak sample.
         </p>
@@ -87,8 +87,8 @@ export function CreativeLeaderboard({
   }
 
   return (
-    <div className="overflow-x-auto p-5">
-      <table className={cn('w-full text-sm', variant === 'full' ? 'min-w-[860px]' : 'min-w-[760px]')}>
+    <div className="overflow-x-auto px-5 pb-5 pt-4">
+      <table className={cn('w-full text-[13.5px]', variant === 'full' ? 'min-w-[860px]' : 'min-w-[760px]')}>
         <thead>
           <tr>
             <Th align="left">Creative</Th>
@@ -150,7 +150,7 @@ export function CreativeLeaderboard({
             const label = RESULT_LABELS[ad.resultType]
             return (
               <tr key={ad.id} className="text-white/80">
-                <td className="py-2.5 pr-3">
+                <td className="py-3.5 pr-3">
                   <div className="flex items-center gap-3">
                     <CreativeThumb
                       format={ad.format}
@@ -162,39 +162,39 @@ export function CreativeLeaderboard({
                       {href ? (
                         <Link
                           href={href}
-                          className="truncate font-medium text-white transition-colors hover:text-glow"
+                          className="truncate text-[14.5px] font-semibold text-white transition-colors hover:text-glow"
                         >
                           {ad.name}
                         </Link>
                       ) : (
-                        <p className="truncate font-medium text-white">{ad.name}</p>
+                        <p className="truncate text-[14.5px] font-semibold text-white">{ad.name}</p>
                       )}
-                      <p className="text-[11px] text-white/35">
+                      <p className="text-[12px] text-white/50">
                         {ad.format} · {ad.daysLive}d live
                       </p>
                     </div>
                   </div>
                 </td>
-                <td className="whitespace-nowrap py-2.5 text-right tabular">
+                <td className="whitespace-nowrap py-3.5 text-right tabular">
                   {variant === 'full' ? money(ad.spend) : compactMoney(ad.spend)}
                 </td>
-                <td className="whitespace-nowrap py-2.5 text-right tabular">
+                <td className="whitespace-nowrap py-3.5 text-right tabular">
                   {ad.primaryResults.toLocaleString()}{' '}
-                  <span className="text-[11px] text-white/40">
+                  <span className="text-[12px] text-white/55">
                     {ad.primaryResults === 1 ? label.one.toLowerCase() : label.many}
                   </span>
                 </td>
-                <td className="whitespace-nowrap py-2.5 text-right font-display font-bold tabular text-glow">
+                <td className="whitespace-nowrap py-3.5 text-right font-display font-bold tabular text-glow">
                   ${ad.costPerResult.toFixed(0)}{' '}
                   <span
                     title={label.cost}
-                    className="font-sans text-[10px] font-medium uppercase tracking-wider text-white/35"
+                    className="font-sans text-[11px] font-medium uppercase tracking-wider text-white/55"
                   >
                     {label.short}
                   </span>
                 </td>
                 {revenueConnected && (
-                  <td className="whitespace-nowrap py-2.5 text-right tabular">
+                  <td className="whitespace-nowrap py-3.5 text-right tabular">
                     {ad.roas === null ? (
                       <NotApplicable why="No revenue or conversion value is connected to this campaign." />
                     ) : (
@@ -202,22 +202,22 @@ export function CreativeLeaderboard({
                     )}
                   </td>
                 )}
-                <td className="py-2.5 text-center tabular text-cyan">
+                <td className="py-3.5 text-center tabular text-cyan">
                   {ad.hookRate === null ? (
                     <NotApplicable why={`Hook rate is a video metric. ${ad.format} creatives have no 3-second view.`} />
                   ) : (
                     `${ad.hookRate}%`
                   )}
                 </td>
-                <td className="py-2.5 text-right tabular">{ad.ctr.toFixed(1)}%</td>
-                <td className="py-2.5 text-right tabular">{ad.frequency.toFixed(1)}</td>
-                <td className="py-2.5 text-center">
-                  <span className={cn('inline-flex items-center gap-1 text-[11px]', trend.cls)}>
+                <td className="py-3.5 text-right tabular">{ad.ctr.toFixed(1)}%</td>
+                <td className="py-3.5 text-right tabular">{ad.frequency.toFixed(1)}</td>
+                <td className="py-3.5 text-center">
+                  <span className={cn('inline-flex items-center gap-1 text-[12.5px] font-medium', trend.cls)}>
                     <TrendIcon size={12} />
                     {ad.trend}
                   </span>
                 </td>
-                <td className="py-2.5 text-right">
+                <td className="py-3.5 text-right">
                   {interactiveStatus ? (
                     <StatusExplainer
                       status={ad.status}

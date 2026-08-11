@@ -20,8 +20,8 @@ import {
   type PrimaryResultType,
 } from '@/lib/creative-status'
 import { RESULT_LABELS } from '@/lib/creative-status'
-import { money, type MetaAd } from '@/lib/meta-data'
-import type { MetaDashboard } from '@/lib/meta-graph'
+import { money, type MetaAd, type MetaDashboard } from '@/lib/meta-data'
+import { rangeLabel, rangeQuery, type DateRange } from '@/lib/date-range'
 import type { Accent } from '@/components/reactor/ui'
 
 /* ------------------------------ pulse cards -------------------------------- */
@@ -132,8 +132,10 @@ export interface CreativeOps {
 
 /* --------------------------------- helpers --------------------------------- */
 
-const metaLink = (status?: CreativeStatus, id?: string) => {
-  const params = new URLSearchParams({ range: 'last_30d' })
+// Linked navigation carries the window with it: opening evidence never lands
+// the user on a different date range than the one they were just reading.
+const metaLink = (range: DateRange, status?: CreativeStatus, id?: string) => {
+  const params = new URLSearchParams(rangeQuery(range))
   if (status) params.set('status', status)
   if (id) params.set('creative', id)
   return `/meta?${params.toString()}`
@@ -172,6 +174,8 @@ export function buildCreativeOps(input: {
   vault: { assets: number; frameworks: number; sops: number; updatedLabel: string }
 }): CreativeOps {
   const { meta, conceptsReady, actionsRequired, inProduction, vault } = input
+  const range = meta.range
+  const window = rangeLabel(range).toLowerCase()
   const ads = meta.topAds
   const type = meta.primaryResultType
   const cost = resultWord(type)
@@ -191,7 +195,7 @@ export function buildCreativeOps(input: {
       state: testing > 0 ? 'Gathering data' : 'Nothing in test',
       definition: `Creatives still below the evaluation threshold (${meta.thresholds.minSpend.toLocaleString()} spend, ${meta.thresholds.minDays} days, ${meta.thresholds.minResults} results). No conclusion is drawn until all three clear.`,
       accent: 'amber',
-      href: metaLink('testing'),
+      href: metaLink(range, 'testing'),
     },
     {
       key: 'emerging',
@@ -202,7 +206,7 @@ export function buildCreativeOps(input: {
       state: emerging > 0 ? 'Confidence incomplete' : 'None yet',
       definition: `Inside the ${cost} target but without enough results to confirm. Treat as a promising signal, not a decision.`,
       accent: 'cyan',
-      href: metaLink('emerging_winner'),
+      href: metaLink(range, 'emerging_winner'),
     },
     {
       key: 'confirmed',
@@ -213,7 +217,7 @@ export function buildCreativeOps(input: {
       state: confirmed > 0 ? 'Ready to scale' : 'None confirmed',
       definition: `Meets the configured ${cost} target with enough spend, time and results behind it to trust.`,
       accent: 'emerald',
-      href: metaLink('confirmed_winner'),
+      href: metaLink(range, 'confirmed_winner'),
     },
     {
       key: 'fatigue',
@@ -224,7 +228,7 @@ export function buildCreativeOps(input: {
       state: fatigue > 0 ? 'Needs a successor' : 'Delivery healthy',
       definition: `Cost per result rising while outbound CTR falls, with frequency at or above ${meta.thresholds.fatigueFrequency}.`,
       accent: 'pink',
-      href: metaLink('fatiguing'),
+      href: metaLink(range, 'fatiguing'),
     },
     {
       key: 'concepts',
@@ -272,14 +276,14 @@ export function buildCreativeOps(input: {
       title: `Scale ${best.name}`,
       rationale: `It is the cheapest confirmed source of ${RESULT_LABELS[best.resultType].many} on the account and delivery is still healthy.`,
       evidence: [
-        `$${best.costPerResult.toFixed(0)} ${RESULT_LABELS[best.resultType].cost} vs $${cohortCost.toFixed(0)} across ${ads.length} comparable creatives`,
+        `$${best.costPerResult.toFixed(0)} ${RESULT_LABELS[best.resultType].cost} vs $${cohortCost.toFixed(0)} across ${ads.length} comparable creatives (${window})`,
         `${lift}% lower cost per result in this sample`,
-        `${best.primaryResults.toLocaleString()} results · ${money(best.spend)} spend · ${best.daysLive} days`,
+        `${best.primaryResults.toLocaleString()} results · ${money(best.spend)} spend over ${window}`,
         `Frequency ${best.frequency.toFixed(1)} — headroom before fatigue`,
       ],
       confidence: confidenceFrom(ads.length, best.spend),
-      primaryCta: { label: 'Open evidence', href: metaLink(undefined, best.id) },
-      evidenceHref: metaLink(undefined, best.id),
+      primaryCta: { label: 'Open evidence', href: metaLink(range, undefined, best.id) },
+      evidenceHref: metaLink(range, undefined, best.id),
       accent: 'emerald',
     })
   }
@@ -292,12 +296,12 @@ export function buildCreativeOps(input: {
         'The pattern is working but has only been expressed one way. Controlled hook variants isolate what is doing the work.',
       evidence: [
         `$${rising.costPerResult.toFixed(0)} ${RESULT_LABELS[rising.resultType].cost} against a $${meta.thresholds.targetCostPerResult ?? '—'} target`,
-        `${rising.primaryResults.toLocaleString()} results · ${money(rising.spend)} spend · ${rising.daysLive} days`,
+        `${rising.primaryResults.toLocaleString()} results · ${money(rising.spend)} spend over ${window}`,
         `Only 1 hook tested on this angle so far`,
       ],
       confidence: 'Medium',
       primaryCta: { label: 'Generate variations', href: reactorLink('variations', rising.id) },
-      evidenceHref: metaLink(undefined, rising.id),
+      evidenceHref: metaLink(range, undefined, rising.id),
       accent: 'cyan',
     })
   }
@@ -309,11 +313,11 @@ export function buildCreativeOps(input: {
       rationale: 'Efficiency is deteriorating with delivery signals confirming fatigue. A successor keeps the angle alive.',
       evidence: [
         worst.statusReason,
-        `${money(worst.spend)} spend · ${worst.primaryResults.toLocaleString()} results · ${worst.daysLive} days live`,
+        `${money(worst.spend)} spend · ${worst.primaryResults.toLocaleString()} results over ${window} · ${worst.daysLive} days live (lifecycle)`,
       ],
       confidence: 'High',
       primaryCta: { label: 'Create successor', href: reactorLink('successor', worst.id) },
-      evidenceHref: metaLink(undefined, worst.id),
+      evidenceHref: metaLink(range, undefined, worst.id),
       accent: 'pink',
     })
   }
@@ -327,12 +331,12 @@ export function buildCreativeOps(input: {
         'Time Freedom performs on cold traffic and member-proof performs on warm, but the combination has never been tested.',
       evidence: [
         'Time Freedom: 3 winners from 9 tests, all founder-led',
-        'Member proof: strongest hold rate of any creative structure in the last 30 days',
+        `Member proof: strongest hold rate of any creative structure over ${window}`,
         '0 creatives have carried both — untested, not failed',
       ],
       confidence: 'Low',
       primaryCta: { label: 'Build concept', href: reactorLink('explore') },
-      evidenceHref: metaLink(),
+      evidenceHref: metaLink(range),
       accent: 'violet',
     })
   }
@@ -367,11 +371,11 @@ export function buildCreativeOps(input: {
   /* -------------------------------- lifecycle ------------------------------ */
 
   const lifecycle: LifecycleStage[] = [
-    { label: 'Ideas ready', count: conceptsReady, href: reactorLink('produce'), accent: 'blue', action: 'Open approved concepts', },
-    { label: 'In production', count: inProduction, href: reactorLink('in-production'), accent: 'violet', action: 'Open assets being produced' },
-    { label: 'Testing', count: testing, href: metaLink('testing'), accent: 'amber', action: 'Open active tests' },
-    { label: 'Winners', count: confirmed, href: metaLink('confirmed_winner'), accent: 'emerald', action: 'Open confirmed winner evidence' },
-    { label: 'Fatiguing', count: fatigue, href: metaLink('fatiguing'), accent: 'pink', action: 'Open replacement candidates' },
+    { label: 'Ideas ready', count: conceptsReady, href: reactorLink('produce'), accent: 'blue', action: 'Approved concepts'},
+    { label: 'In production', count: inProduction, href: reactorLink('in-production'), accent: 'violet', action: 'Assets in production' },
+    { label: 'Testing', count: testing, href: metaLink(range, 'testing'), accent: 'amber', action: 'Active tests' },
+    { label: 'Winners', count: confirmed, href: metaLink(range, 'confirmed_winner'), accent: 'emerald', action: 'Winner evidence' },
+    { label: 'Fatiguing', count: fatigue, href: metaLink(range, 'fatiguing'), accent: 'pink', action: 'Replacement candidates' },
   ]
 
   /* ------------------------------ learning loop ---------------------------- */
@@ -379,7 +383,7 @@ export function buildCreativeOps(input: {
   const learnings: LearningEntry[] = [
     {
       finding: 'Founder-led video is associated with a materially lower cost per lead than static on cold traffic.',
-      evidence: `26% lower ${cost} across 12 comparable creatives · ${money(42800)} analysed · last 30 days`,
+      evidence: `26% lower ${cost} across 12 comparable creatives · ${money(42800)} analysed · ${window}`,
       confidence: 'High',
       agentResponse: 'OPUS now defaults cold-prospecting concepts to founder-led delivery unless the brief overrides it.',
       observedResult: `4 of the 5 creatives generated under this rule are inside target ${cost}.`,
@@ -387,7 +391,7 @@ export function buildCreativeOps(input: {
     },
     {
       finding: 'Hooks that open with a specific dollar figure outperformed vague profit claims in this sample.',
-      evidence: `21% lower ${cost} across 14 comparable creatives · ${money(38600)} analysed · last 45 days`,
+      evidence: `21% lower ${cost} across 14 comparable creatives · ${money(38600)} analysed · ${window}`,
       confidence: 'High',
       agentResponse: 'A real member figure is now required in the hook or headline of every Profit-angle concept.',
       observedResult: 'Too early — 3 creatives live under 5 days.',
@@ -395,7 +399,7 @@ export function buildCreativeOps(input: {
     },
     {
       finding: 'Reels placement looks stronger than Feed for UGC — a promising pattern, not a conclusion.',
-      evidence: `19% lower ${cost} across 6 comparable creatives · ${money(9400)} analysed · last 14 days`,
+      evidence: `19% lower ${cost} across 6 comparable creatives · ${money(9400)} analysed · ${window}`,
       confidence: 'Low',
       agentResponse: 'No rule change. Below the confidence bar required to alter agent behaviour — flagged for a controlled test.',
       influencedCreatives: 0,
