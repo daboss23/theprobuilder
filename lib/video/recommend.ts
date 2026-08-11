@@ -6,7 +6,10 @@ import type { ModelAvailability } from './types'
  *
  * Heuristic, in priority order:
  *  - Anything where a person speaks (Testimonial / UGC / talking-head) → a model
- *    with native audio (Veo 3.1) so the dialogue is generated, not silent.
+ *    with native audio so the dialogue is generated, not silent. Seedance 2.0
+ *    leads: it carries native audio like Veo but runs to 15s against Veo's 8s,
+ *    and a UGC ad that has to land a hook, a claim and a CTA does not fit in
+ *    eight seconds. Veo 3.1 stays directly behind it for pure dialogue work.
  *  - Cinematic action / B-roll (Video / Founder Concept) → a flagship realism
  *    model (Seedance 2.0, then Kling 3.0).
  *  - Otherwise → the cheapest flagship-or-budget option for volume.
@@ -54,10 +57,21 @@ export function recommendVideoModel(
   // no key for, flagged unusable, with an equivalent sitting right there.
   const preference: { id: string; reason: string }[] = wantsSpeech
     ? [
+        {
+          id: 'muapi-seedance-2.0',
+          reason: 'people speaking with native audio, at 15s — room for hook, claim and CTA in one clip',
+        },
+        {
+          id: 'seedance-2.0',
+          reason: 'people speaking with native audio, at 15s — room for hook, claim and CTA in one clip',
+        },
         { id: 'muapi-veo3.1', reason: 'people speaking with native audio (UGC / testimonials)' },
         { id: 'veo-3.1', reason: 'people speaking with native audio (UGC / testimonials)' },
-        { id: 'muapi-seedance-2.0', reason: 'cinematic realism with native synchronized audio' },
-        { id: 'seedance-2.0', reason: 'cinematic realism with native synchronized audio' },
+        {
+          id: 'muapi-seedance-2.0-fast',
+          reason: 'same native-audio UGC at volume speed and cost',
+        },
+        { id: 'seedance-2.0-fast', reason: 'same native-audio UGC at volume speed and cost' },
         { id: 'muapi-veo4', reason: 'photorealistic dialogue on the newest Veo tier' },
         { id: 'veo-3', reason: 'native-audio dialogue' },
         { id: 'kling-3.0', reason: 'strong lip-sync-friendly motion for talking-head UGC' },
