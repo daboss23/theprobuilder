@@ -227,3 +227,19 @@ export const DEFAULT_VIDEO_MODEL = 'muapi-veo3'
 export function getVideoModel(id: string): VideoModel | undefined {
   return VIDEO_MODELS.find((m) => m.id === id)
 }
+
+/**
+ * The model FAMILY behind an id — 'muapi-veo3', 'veo-3.1' and 'veo-3' are all
+ * `veo`. The oven uses this to keep a fallback in the same family: a Veo
+ * request that can't reach one gateway's Veo goes to another gateway's Veo
+ * before it considers a different model entirely.
+ */
+export function modelFamily(id: string): string {
+  const s = id.toLowerCase()
+  if (s.includes('veo')) return 'veo'
+  if (s.includes('kling')) return 'kling'
+  if (s.includes('seedance')) return 'seedance'
+  if (s.includes('wan')) return 'wan'
+  if (s.includes('higgsfield') || s.includes('dop')) return 'dop'
+  return s
+}
