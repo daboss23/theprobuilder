@@ -17,6 +17,7 @@ import {
   ImageIcon,
   Layers,
   Loader2,
+  Plus,
   Radio,
   ShieldCheck,
   SlidersHorizontal,
@@ -568,12 +569,18 @@ export function ReactorModal({ open, onClose, onFire, form }: ReactorModalProps)
   // Two ways in: Quick Launch (one input → fire, everything auto-decided) and
   // the guided five-step flow. New sessions land on Quick Launch.
   const [mode, setMode] = useState<'quick' | 'guided'>('quick')
+  // "No variations" collapses the variation picker entirely and pins the run to
+  // one ad per creative. Purely a display state — the count itself stays in
+  // form.variations, which the collapse sets to 1.
+  const [variationsOpen, setVariationsOpen] = useState(form.variations > 1)
 
   useEffect(() => {
     if (open) {
       setStep(1)
       setMode('quick')
+      setVariationsOpen(form.variations > 1)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
 
   const dirty = useMemo(
@@ -980,37 +987,74 @@ export function ReactorModal({ open, onClose, onFire, form }: ReactorModalProps)
                     )
                   })}
 
-                  {/* How many distinct versions of every creative the reactor makes */}
+                  {/* How many distinct versions of every creative the reactor makes.
+                      "No variations" hides the picker entirely and pins the run
+                      to one ad per creative; a subtle button brings it back. */}
                   <div className="border-t border-white/10 pt-4">
-                    <SectionLabel>Variations per creative</SectionLabel>
-                    <p className="-mt-1 mb-3 text-sm text-white/60">
-                      The reactor creates this many distinct versions of every image and video
-                      creative — different hook, pattern, and proof on each.
-                    </p>
-                    <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
-                      {[1, 2, 3, 4].map((n) => {
-                        const on = form.variations === n
-                        return (
-                          <button
-                            key={n}
-                            type="button"
-                            onClick={() => form.setVariations(n)}
-                            aria-pressed={on}
-                            className={`pick-card flex flex-col items-center gap-1 p-3 text-center ${on ? 'is-on' : ''}`}
-                          >
-                            <span className="font-display text-xl font-bold text-white">×{n}</span>
-                            <span className="text-[11px] text-white/65">
-                              {n === 1 ? 'Single' : `${n} versions`}
-                            </span>
-                            {n === 2 && (
-                              <span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-[#38E8FF]">
-                                <Sparkles size={9} /> Recommended
+                    {!variationsOpen ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setVariationsOpen(true)
+                          if (form.variations < 2) form.setVariations(2)
+                        }}
+                        className="group flex w-full items-center gap-2 rounded-lg px-1 py-1.5 text-left text-xs text-white/45 transition hover:text-white/80"
+                      >
+                        <Plus size={12} className="shrink-0" />
+                        <span>
+                          No variations — one ad per creative.{' '}
+                          <span className="underline decoration-white/25 underline-offset-2 group-hover:decoration-white/60">
+                            Add variations
+                          </span>
+                        </span>
+                      </button>
+                    ) : (
+                      <>
+                      <div className="flex items-start justify-between gap-3">
+                        <SectionLabel>Variations per creative</SectionLabel>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            form.setVariations(1)
+                            setVariationsOpen(false)
+                          }}
+                          aria-label="No variations — one ad per creative"
+                          title="No variations — one ad per creative"
+                          className="-mt-0.5 inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.03] px-2.5 py-1 text-[11px] font-semibold text-white/60 transition hover:border-white/25 hover:bg-white/[0.06] hover:text-white"
+                        >
+                          <X size={11} strokeWidth={3} /> No variations
+                        </button>
+                      </div>
+                      <p className="-mt-1 mb-3 text-sm text-white/60">
+                        The reactor creates this many distinct versions of every image and video
+                        creative — different hook, pattern, and proof on each.
+                      </p>
+                      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+                        {[1, 2, 3, 4].map((n) => {
+                          const on = form.variations === n
+                          return (
+                            <button
+                              key={n}
+                              type="button"
+                              onClick={() => form.setVariations(n)}
+                              aria-pressed={on}
+                              className={`pick-card flex flex-col items-center gap-1 p-3 text-center ${on ? 'is-on' : ''}`}
+                            >
+                              <span className="font-display text-xl font-bold text-white">×{n}</span>
+                              <span className="text-[11px] text-white/65">
+                                {n === 1 ? 'Single' : `${n} versions`}
                               </span>
-                            )}
-                          </button>
-                        )
-                      })}
-                    </div>
+                              {n === 2 && (
+                                <span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-[#38E8FF]">
+                                  <Sparkles size={9} /> Recommended
+                                </span>
+                              )}
+                            </button>
+                          )
+                        })}
+                      </div>
+                      </>
+                    )}
                   </div>
 
                   {form.outputs.some((o) => /ugc/i.test(o)) && (
